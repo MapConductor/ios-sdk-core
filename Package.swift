@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "MapConductor Core For SwiftUI",
+    name: "mapconductor-ios-sdk",
     platforms: [
         .iOS(.v15),
     ],
