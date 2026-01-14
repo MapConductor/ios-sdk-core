@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "mapconductor-ios-sdk",
+    name: "mapconductor-core",
     platforms: [
         .iOS(.v15),
     ],
