@@ -5,6 +5,8 @@ public struct RasterLayerFingerPrint: Equatable, Hashable {
     public let source: Int
     public let opacity: Int
     public let visible: Int
+    public let userAgent: Int
+    public let extraHeaders: Int
     public let extra: Int
 }
 
@@ -24,12 +26,16 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     @Published public var source: RasterSource
     @Published public var opacity: Double
     @Published public var visible: Bool
+    @Published public var userAgent: String?
+    @Published public var extraHeaders: [String: String]?
     @Published public var extra: Any?
 
     public init(
         source: RasterSource,
         opacity: Double = 1.0,
         visible: Bool = true,
+        userAgent: String? = nil,
+        extraHeaders: [String: String]? = nil,
         id: String? = nil,
         extra: Any? = nil
     ) {
@@ -37,12 +43,16 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
             source: source,
             opacity: opacity,
             visible: visible,
+            userAgent: userAgent,
+            extraHeaders: extraHeaders,
             extra: extra
         )
         self.id = resolvedId
         self.source = source
         self.opacity = opacity
         self.visible = visible
+        self.userAgent = userAgent
+        self.extraHeaders = extraHeaders
         self.extra = extra
     }
 
@@ -50,6 +60,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         source: RasterSource? = nil,
         opacity: Double? = nil,
         visible: Bool? = nil,
+        userAgent: String? = nil,
+        extraHeaders: [String: String]? = nil,
         id: String? = nil,
         extra: Any? = nil
     ) -> RasterLayerState {
@@ -57,6 +69,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
             source: source ?? self.source,
             opacity: opacity ?? self.opacity,
             visible: visible ?? self.visible,
+            userAgent: userAgent ?? self.userAgent,
+            extraHeaders: extraHeaders ?? self.extraHeaders,
             id: id ?? self.id,
             extra: extra ?? self.extra
         )
@@ -68,19 +82,26 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
             source: javaHash(source),
             opacity: javaHash(opacity),
             visible: javaHash(visible),
+            userAgent: javaHash(userAgent),
+            extraHeaders: javaHash(extraHeaders),
             extra: javaHash(extra)
         )
     }
 
     public func asFlow() -> AnyPublisher<RasterLayerFingerPrint, Never> {
-        let combined = Publishers.CombineLatest3($source, $opacity, $visible)
-        return combined
-            .map { [id] source, opacity, visible in
-                RasterLayerFingerPrint(
+        Publishers
+            .CombineLatest3($source, $opacity, $visible)
+            .combineLatest($userAgent)
+            .combineLatest($extraHeaders)
+            .map { [id] combined, extraHeaders in
+                let ((source, opacity, visible), userAgent) = combined
+                return RasterLayerFingerPrint(
                     id: javaHash(id),
                     source: javaHash(source),
                     opacity: javaHash(opacity),
                     visible: javaHash(visible),
+                    userAgent: javaHash(userAgent),
+                    extraHeaders: javaHash(extraHeaders),
                     extra: 0
                 )
             }
@@ -91,6 +112,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
                     source: finger.source,
                     opacity: finger.opacity,
                     visible: finger.visible,
+                    userAgent: finger.userAgent,
+                    extraHeaders: finger.extraHeaders,
                     extra: javaHash(extra)
                 )
             }
@@ -110,6 +133,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         var result: Int32 = Int32(truncatingIfNeeded: javaHash(source))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(opacity))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(visible))
+        result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(userAgent))
+        result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(extraHeaders))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(extra))
         return Int(result)
     }
@@ -118,12 +143,16 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         source: RasterSource,
         opacity: Double,
         visible: Bool,
+        userAgent: String?,
+        extraHeaders: [String: String]?,
         extra: Any?
     ) -> String {
         let hashCodes = [
             javaHash(source),
             javaHash(opacity),
             javaHash(visible),
+            javaHash(userAgent),
+            javaHash(extraHeaders),
             javaHash(extra)
         ]
         return rasterLayerId(hashCodes: hashCodes)
@@ -219,6 +248,24 @@ private func javaHash(_ source: RasterSource) -> Int {
 private func javaHash(_ value: Int?) -> Int {
     guard let value else { return 0 }
     return Int(Int32(truncatingIfNeeded: value))
+}
+
+private func javaHash(_ value: String?) -> Int {
+    guard let value else { return 0 }
+    return javaHash(value)
+}
+
+private func javaHash(_ value: [String: String]?) -> Int {
+    guard let value else { return 0 }
+
+    // Java Map#hashCode: sum(entry.hashCode), where entryHash = keyHash ^ valueHash.
+    // Use wrapping arithmetic to match Java's overflow behavior.
+    var result: Int32 = 0
+    for (key, val) in value {
+        let entry = javaHash(key) ^ javaHash(val)
+        result = result &+ Int32(truncatingIfNeeded: entry)
+    }
+    return Int(result)
 }
 
 private func listHashCode(_ values: [Int]) -> Int {
