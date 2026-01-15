@@ -44,45 +44,51 @@ public final class PolylineManager<ActualPolyline>: PolylineManagerProtocol {
 
     public init() {}
 
+    private func checkNotDestroyedLocked() {
+        if destroyed {
+            preconditionFailure("PolylineManager has been destroyed")
+        }
+    }
+
     public func registerEntity(_ entity: PolylineEntity<ActualPolyline>) {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities[entity.state.id] = entity
     }
 
     public func removeEntity(_ id: String) -> PolylineEntity<ActualPolyline>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         return entities.removeValue(forKey: id)
     }
 
     public func getEntity(_ id: String) -> PolylineEntity<ActualPolyline>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         return entities[id]
     }
 
     public func hasEntity(_ id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return false }
+        checkNotDestroyedLocked()
         return entities[id] != nil
     }
 
     public func allEntities() -> [PolylineEntity<ActualPolyline>] {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return [] }
+        checkNotDestroyedLocked()
         return Array(entities.values)
     }
 
     public func clear() {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities.removeAll()
     }
 

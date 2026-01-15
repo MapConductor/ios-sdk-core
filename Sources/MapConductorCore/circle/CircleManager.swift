@@ -19,45 +19,51 @@ public final class CircleManager<ActualCircle>: CircleManagerProtocol {
 
     public init() {}
 
+    private func checkNotDestroyedLocked() {
+        if destroyed {
+            preconditionFailure("CircleManager has been destroyed")
+        }
+    }
+
     public func registerEntity(_ entity: CircleEntity<ActualCircle>) {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities[entity.state.id] = entity
     }
 
     public func removeEntity(_ id: String) -> CircleEntity<ActualCircle>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         return entities.removeValue(forKey: id)
     }
 
     public func getEntity(_ id: String) -> CircleEntity<ActualCircle>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         return entities[id]
     }
 
     public func hasEntity(_ id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return false }
+        checkNotDestroyedLocked()
         return entities[id] != nil
     }
 
     public func allEntities() -> [CircleEntity<ActualCircle>] {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return [] }
+        checkNotDestroyedLocked()
         return Array(entities.values)
     }
 
     public func clear() {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities.removeAll()
     }
 

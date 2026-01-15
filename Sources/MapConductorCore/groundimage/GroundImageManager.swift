@@ -21,10 +21,16 @@ public final class GroundImageManager<ActualGroundImage>: GroundImageManagerProt
 
     public init() {}
 
+    private func checkNotDestroyedLocked() {
+        if destroyed {
+            preconditionFailure("GroundImageManager has been destroyed")
+        }
+    }
+
     public func registerEntity(_ entity: GroundImageEntity<ActualGroundImage>) {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         if registrationOrder[entity.state.id] == nil {
             registrationCounter += 1
             registrationOrder[entity.state.id] = registrationCounter
@@ -35,7 +41,7 @@ public final class GroundImageManager<ActualGroundImage>: GroundImageManagerProt
     public func removeEntity(_ id: String) -> GroundImageEntity<ActualGroundImage>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         registrationOrder.removeValue(forKey: id)
         return entities.removeValue(forKey: id)
     }
@@ -43,28 +49,28 @@ public final class GroundImageManager<ActualGroundImage>: GroundImageManagerProt
     public func getEntity(_ id: String) -> GroundImageEntity<ActualGroundImage>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         return entities[id]
     }
 
     public func hasEntity(_ id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return false }
+        checkNotDestroyedLocked()
         return entities[id] != nil
     }
 
     public func allEntities() -> [GroundImageEntity<ActualGroundImage>] {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return [] }
+        checkNotDestroyedLocked()
         return Array(entities.values)
     }
 
     public func clear() {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities.removeAll()
         registrationOrder.removeAll()
     }
@@ -85,11 +91,12 @@ public final class GroundImageManager<ActualGroundImage>: GroundImageManagerProt
     }
 
     public func find(position: GeoPointProtocol) -> GroundImageEntity<ActualGroundImage>? {
-        let candidates = allEntities().filter { $0.state.bounds.contains(point: position) }
-        guard !candidates.isEmpty else { return nil }
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
+
+        let candidates = entities.values.filter { $0.state.bounds.contains(point: position) }
+        guard !candidates.isEmpty else { return nil }
 
         var best: GroundImageEntity<ActualGroundImage>?
         var bestOrder = Int.min

@@ -19,45 +19,51 @@ public final class PolygonManager<ActualPolygon>: PolygonManagerProtocol {
 
     public init() {}
 
+    private func checkNotDestroyedLocked() {
+        if destroyed {
+            preconditionFailure("PolygonManager has been destroyed")
+        }
+    }
+
     public func registerEntity(_ entity: PolygonEntity<ActualPolygon>) {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities[entity.state.id] = entity
     }
 
     public func removeEntity(_ id: String) -> PolygonEntity<ActualPolygon>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         return entities.removeValue(forKey: id)
     }
 
     public func getEntity(_ id: String) -> PolygonEntity<ActualPolygon>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         return entities[id]
     }
 
     public func hasEntity(_ id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return false }
+        checkNotDestroyedLocked()
         return entities[id] != nil
     }
 
     public func allEntities() -> [PolygonEntity<ActualPolygon>] {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return [] }
+        checkNotDestroyedLocked()
         return Array(entities.values)
     }
 
     public func clear() {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities.removeAll()
     }
 
