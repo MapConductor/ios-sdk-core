@@ -40,6 +40,11 @@ public final class LocalTileServer {
         "\(baseUrl)/tiles/\(routeId)/\(tileSize)/{z}/{x}/{y}.png"
     }
 
+    @available(*, deprecated, message: "`version` is ignored. Use `urlTemplate(routeId:tileSize:)` instead.")
+    public func urlTemplate(routeId: String, version: Int64) -> String {
+        urlTemplate(routeId: routeId, tileSize: RasterSource.defaultTileSize)
+    }
+
     public func stop() {
         listener.cancel()
     }
