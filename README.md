@@ -50,6 +50,7 @@ provider-specific driver implementations built on top of this core.
 MapConductor follows a layered architecture that separates
 map semantics from rendering and provider-specific behavior.
 
+```text
 ┌────────────────────────────────────────────┐
 │ Application / App Logic                    │
 ├────────────────────────────────────────────┤
@@ -69,6 +70,7 @@ map semantics from rendering and provider-specific behavior.
 ├────────────────────────────────────────────┤
 │ Concrete Map SDKs (Vendor SDKs)            │
 └────────────────────────────────────────────┘
+```
 
 The unified API is currently expressed primarily through SwiftUI bindings,
 but the underlying semantics are not tied to any specific UI framework.
