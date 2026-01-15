@@ -8,7 +8,8 @@ private enum PolylineEarth {
 public func calculateMetersPerPixel(
     latitude: Double,
     zoom: Double,
-    tileSize: Double = Double(RasterSource.defaultTileSize)
+    // Match Android/Web Mercator convention where zoom is defined against a 256px tile.
+    tileSize: Double = 256.0
 ) -> Double {
     let metersPerPixelAtEquator = PolylineEarth.circumferenceMeters / tileSize
     let metersPerPixelAtZoom = metersPerPixelAtEquator / pow(2.0, zoom)

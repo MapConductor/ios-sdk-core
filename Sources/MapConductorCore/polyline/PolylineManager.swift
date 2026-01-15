@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 public struct PolylineHitResult<ActualPolyline> {
     public let entity: PolylineEntity<ActualPolyline>
@@ -11,7 +12,13 @@ private struct DistanceResult {
 }
 
 private enum PolylineDefaults {
-    static let tapTolerance: Double = 14.0
+    // Android uses `Settings.Default.tapTolerance = 14.dp` and then multiplies by screen density (dp -> px).
+    // On iOS, treat "dp" as points and convert to pixels by multiplying by the screen scale.
+    static let tapToleranceDp: Double = 14.0
+
+    static func tapTolerancePx(screenScale: Double = Double(UIScreen.main.scale)) -> Double {
+        tapToleranceDp * max(1.0, screenScale)
+    }
 }
 
 public protocol PolylineManagerProtocol {
@@ -99,7 +106,8 @@ public final class PolylineManager<ActualPolyline>: PolylineManagerProtocol {
     ) -> PolylineHitResult<ActualPolyline>? {
         let visibleRegion = cameraPosition?.visibleRegion?.bounds
         let zoom = cameraPosition?.zoom ?? 0.0
-        let threshold = calculateMetersPerPixel(latitude: position.latitude, zoom: zoom) * PolylineDefaults.tapTolerance
+        let fingerSizePx = PolylineDefaults.tapTolerancePx()
+        let threshold = calculateMetersPerPixel(latitude: position.latitude, zoom: zoom) * fingerSizePx
 
         var candidates: [(PolylineEntity<ActualPolyline>, GeoPointProtocol, Double)] = []
 
