@@ -1,0 +1,33 @@
+# MapConductor iOS Core (ios-sdk-core)
+
+## Summary
+MapConductor iOS Core provides provider-agnostic domain models and state/behavior for maps on iOS. It does not render maps or depend on any map SDKs or UI frameworks; those live in higher-level modules and provider drivers.
+
+## Key Concepts
+- Provider-independent map semantics and state
+- Shared domain models (coordinates, camera, overlays, interaction semantics)
+- Contracts for higher-level APIs and provider-specific drivers
+
+## What This Module Does
+- Defines core map domain models and interaction behaviors
+- Provides abstract state used by map views and drivers
+- Serves as the contract between UI layers and provider drivers
+
+## What This Module Does Not Do
+- Render maps or overlays
+- Depend on MapKit/Google Maps/MapLibre/etc.
+- Provide SwiftUI/UIView components
+
+## Source Layout
+- `Sources/MapConductorCore/` core models, state, controllers, overlays
+- `Package.swift` Swift Package definition
+- `README.md` architecture and philosophy overview
+
+## Build/Integration
+- Swift Package Manager module name: `MapConductorCore`
+- Minimum platform: iOS 15 (see `Package.swift`)
+
+## Notes for LLMs
+- This module is framework-agnostic; avoid introducing SDK-specific logic here.
+- Provider drivers and UI bindings should live outside this package.
+- When adding functionality, keep APIs generic and composable.
