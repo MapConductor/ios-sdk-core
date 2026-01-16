@@ -40,6 +40,10 @@ public final class LocalTileServer {
         "\(baseUrl)/tiles/\(routeId)/\(tileSize)/{z}/{x}/{y}.png"
     }
 
+    public func urlTemplate(routeId: String, tileSize: Int, cacheKey: String) -> String {
+        "\(baseUrl)/tiles/\(routeId)/\(tileSize)/\(cacheKey)/{z}/{x}/{y}.png"
+    }
+
     @available(*, deprecated, message: "`version` is ignored. Use `urlTemplate(routeId:tileSize:)` instead.")
     public func urlTemplate(routeId: String, version: Int64) -> String {
         urlTemplate(routeId: routeId, tileSize: RasterSource.defaultTileSize)
@@ -266,11 +270,15 @@ public final class LocalTileServer {
         guard Int(segments[2]) != nil else {
             return nil
         }
-        guard let z = Int(segments[3]), let x = Int(segments[4]) else {
+        let hasCacheKey = segments.count >= 7
+        let zIndex = hasCacheKey ? 4 : 3
+        let xIndex = hasCacheKey ? 5 : 4
+        let yIndex = hasCacheKey ? 6 : 5
+        guard let z = Int(segments[zIndex]), let x = Int(segments[xIndex]) else {
             return nil
         }
 
-        let yPart = segments[5].split(separator: ".").first
+        let yPart = segments[yIndex].split(separator: ".").first
         guard let yPart, let y = Int(yPart) else {
             return nil
         }
