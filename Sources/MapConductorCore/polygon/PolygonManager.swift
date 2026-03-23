@@ -96,9 +96,24 @@ public final class PolygonManager<ActualPolygon>: PolygonManagerProtocol {
             let last = ring.last
             let isClosed = last.map { GeoPoint.from(position: first) == GeoPoint.from(position: $0) } ?? false
             let closedRing = isClosed ? ring : (ring + [first])
-            if pointInPolygonWindingNumber(testX: testX, testY: testY, ring: closedRing) {
-                return entity
+            guard pointInPolygonWindingNumber(testX: testX, testY: testY, ring: closedRing) else { continue }
+
+            // Exclude points inside any hole
+            var insideHole = false
+            for holePoints in state.holes {
+                if holePoints.count < 3 { continue }
+                guard let holeFirst = holePoints.first else { continue }
+                let holeLast = holePoints.last
+                let holeIsClosed = holeLast.map { GeoPoint.from(position: holeFirst) == GeoPoint.from(position: $0) } ?? false
+                let closedHole = holeIsClosed ? holePoints : (holePoints + [holeFirst])
+                if pointInPolygonWindingNumber(testX: testX, testY: testY, ring: closedHole) {
+                    insideHole = true
+                    break
+                }
             }
+            if insideHole { continue }
+
+            return entity
         }
 
         return nil

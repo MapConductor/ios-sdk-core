@@ -9,6 +9,7 @@ public struct PolygonFingerPrint: Equatable, Hashable {
     public let geodesic: Int
     public let zIndex: Int
     public let points: Int
+    public let holes: Int
     public let extra: Int
 }
 
@@ -33,6 +34,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
     @Published public var geodesic: Bool
     @Published public var zIndex: Int
     @Published public var points: [GeoPointProtocol]
+    @Published public var holes: [[GeoPointProtocol]]
     @Published public var extra: Any?
     @Published public var onClick: OnPolygonEventHandler?
 
@@ -44,11 +46,13 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         fillColor: UIColor = .clear,
         geodesic: Bool = false,
         zIndex: Int = 0,
+        holes: [[GeoPointProtocol]] = [],
         extra: Any? = nil,
         onClick: OnPolygonEventHandler? = nil
     ) {
         let resolvedId = id ?? PolygonState.makePolygonId(
             points: points,
+            holes: holes,
             strokeColor: strokeColor,
             strokeWidth: strokeWidth,
             fillColor: fillColor,
@@ -62,6 +66,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         self.geodesic = geodesic
         self.zIndex = zIndex
         self.points = points
+        self.holes = holes
         self.extra = extra
         self.onClick = onClick
     }
@@ -74,6 +79,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         fillColor: UIColor? = nil,
         geodesic: Bool? = nil,
         zIndex: Int? = nil,
+        holes: [[GeoPointProtocol]]? = nil,
         extra: Any? = nil,
         onClick: OnPolygonEventHandler? = nil
     ) -> PolygonState {
@@ -85,6 +91,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
             fillColor: fillColor ?? self.fillColor,
             geodesic: geodesic ?? self.geodesic,
             zIndex: zIndex ?? self.zIndex,
+            holes: holes ?? self.holes,
             extra: extra ?? self.extra,
             onClick: onClick ?? self.onClick
         )
@@ -99,6 +106,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
             geodesic: javaHash(geodesic),
             zIndex: zIndex,
             points: listHashCode(points),
+            holes: nestedListHashCode(holes),
             extra: javaHash(extra)
         )
     }
@@ -107,13 +115,15 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         let combined = Publishers.CombineLatest4($strokeColor, $strokeWidth, $fillColor, $geodesic)
         let combined2 = Publishers.CombineLatest(combined, $zIndex)
         let combined3 = Publishers.CombineLatest(combined2, $points)
-        return combined3
-            .map { [id] combined, points in
-                let strokeColor = combined.0.0
-                let strokeWidth = combined.0.1
-                let fillColor = combined.0.2
-                let geodesic = combined.0.3
-                let zIndex = combined.1
+        let combined4 = Publishers.CombineLatest(combined3, $holes)
+        return combined4
+            .map { [id] combined, holes in
+                let strokeColor = combined.0.0.0
+                let strokeWidth = combined.0.0.1
+                let fillColor = combined.0.0.2
+                let geodesic = combined.0.0.3
+                let zIndex = combined.0.1
+                let points = combined.1
                 return PolygonFingerPrint(
                     id: javaHash(id),
                     strokeColor: javaHash(strokeColor),
@@ -122,6 +132,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
                     geodesic: javaHash(geodesic),
                     zIndex: zIndex,
                     points: listHashCode(points),
+                    holes: nestedListHashCode(holes),
                     extra: 0
                 )
             }
@@ -135,6 +146,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
                     geodesic: finger.geodesic,
                     zIndex: finger.zIndex,
                     points: finger.points,
+                    holes: finger.holes,
                     extra: javaHash(extra)
                 )
             }
@@ -158,11 +170,13 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(geodesic))
         result = result &* 31 &+ Int32(truncatingIfNeeded: zIndex)
         result = result &* 31 &+ Int32(truncatingIfNeeded: listHashCode(points))
+        result = result &* 31 &+ Int32(truncatingIfNeeded: nestedListHashCode(holes))
         return Int(result)
     }
 
     private static func makePolygonId(
         points: [GeoPointProtocol],
+        holes: [[GeoPointProtocol]],
         strokeColor: UIColor,
         strokeWidth: Double,
         fillColor: UIColor,
@@ -171,6 +185,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
     ) -> String {
         let hashCodes = [
             listHashCode(points),
+            nestedListHashCode(holes),
             javaHash(strokeColor),
             javaHash(strokeWidth),
             javaHash(fillColor),
@@ -185,6 +200,14 @@ private func listHashCode(_ points: [GeoPointProtocol]) -> Int {
     var result: Int32 = 0
     for point in points {
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(point))
+    }
+    return Int(result)
+}
+
+private func nestedListHashCode(_ rings: [[GeoPointProtocol]]) -> Int {
+    var result: Int32 = 0
+    for ring in rings {
+        result = result &* 31 &+ Int32(truncatingIfNeeded: listHashCode(ring))
     }
     return Int(result)
 }
