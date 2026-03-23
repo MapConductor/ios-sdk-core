@@ -8,11 +8,14 @@ public final class LocalTileServer {
     private let queue: DispatchQueue
     private let providersLock = NSLock()
     private var providers: [String: TileProvider] = [:]
+    private let cacheOptionsLock = NSLock()
+    private var forceNoStoreCache: Bool
 
-    private init(listener: NWListener, queue: DispatchQueue, baseUrl: String) {
+    private init(listener: NWListener, queue: DispatchQueue, baseUrl: String, forceNoStoreCache: Bool) {
         self.listener = listener
         self.queue = queue
         self.baseUrl = baseUrl
+        self.forceNoStoreCache = forceNoStoreCache
     }
 
     public func register(routeId: String, provider: TileProvider) {
@@ -27,15 +30,30 @@ public final class LocalTileServer {
         providersLock.unlock()
     }
 
+    public func setForceNoStoreCache(_ value: Bool) {
+        cacheOptionsLock.lock()
+        forceNoStoreCache = value
+        cacheOptionsLock.unlock()
+    }
+
+    public func urlTemplate(routeId: String, tileSize: Int) -> String {
+        "\(baseUrl)/tiles/\(routeId)/\(tileSize)/{z}/{x}/{y}.png"
+    }
+
+    public func urlTemplate(routeId: String, tileSize: Int, cacheKey: String) -> String {
+        "\(baseUrl)/tiles/\(routeId)/\(tileSize)/\(cacheKey)/{z}/{x}/{y}.png"
+    }
+
+    @available(*, deprecated, message: "`version` is ignored. Use `urlTemplate(routeId:tileSize:)` instead.")
     public func urlTemplate(routeId: String, version: Int64) -> String {
-        "\(baseUrl)/tiles/\(routeId)/\(version)/{z}/{x}/{y}.png"
+        urlTemplate(routeId: routeId, tileSize: RasterSource.defaultTileSize)
     }
 
     public func stop() {
         listener.cancel()
     }
 
-    public static func startServer() -> LocalTileServer {
+    public static func startServer(forceNoStoreCache: Bool = false) -> LocalTileServer {
         let queue = DispatchQueue(label: "MapConductorCore.LocalTileServer", attributes: .concurrent)
 
         let listener: NWListener
@@ -45,7 +63,12 @@ public final class LocalTileServer {
             fatalError("Failed to create tile server listener: \(error)")
         }
 
-        let server = LocalTileServer(listener: listener, queue: queue, baseUrl: "http://127.0.0.1:0")
+        let server = LocalTileServer(
+            listener: listener,
+            queue: queue,
+            baseUrl: "http://127.0.0.1:0",
+            forceNoStoreCache: forceNoStoreCache
+        )
         listener.newConnectionHandler = { [weak server] connection in
             server?.handleConnection(connection)
         }
@@ -244,12 +267,18 @@ public final class LocalTileServer {
         }
 
         let routeId = segments[1]
-        let version = Int64(segments[2])
-        guard let z = Int(segments[3]), let x = Int(segments[4]) else {
+        guard Int(segments[2]) != nil else {
+            return nil
+        }
+        let hasCacheKey = segments.count >= 7
+        let zIndex = hasCacheKey ? 4 : 3
+        let xIndex = hasCacheKey ? 5 : 4
+        let yIndex = hasCacheKey ? 6 : 5
+        guard let z = Int(segments[zIndex]), let x = Int(segments[xIndex]) else {
             return nil
         }
 
-        let yPart = segments[5].split(separator: ".").first
+        let yPart = segments[yIndex].split(separator: ".").first
         guard let yPart, let y = Int(yPart) else {
             return nil
         }
@@ -262,7 +291,12 @@ public final class LocalTileServer {
             return nil
         }
 
-        let cacheControl = version == nil ? "no-store" : Self.longCacheControl
+        let noStore: Bool = {
+            cacheOptionsLock.lock()
+            defer { cacheOptionsLock.unlock() }
+            return forceNoStoreCache
+        }()
+        let cacheControl = noStore ? Self.noStoreCacheControl : Self.longCacheControl
         return TileResponse(body: bytes, cacheControl: cacheControl)
     }
 
@@ -306,4 +340,5 @@ public final class LocalTileServer {
 
     private static let maxKeepAliveRequests = 10
     private static let longCacheControl = "public, max-age=31536000, immutable"
+    private static let noStoreCacheControl = "no-store, no-cache, must-revalidate, max-age=0"
 }

@@ -19,45 +19,51 @@ public final class RasterLayerManager<ActualLayer>: RasterLayerManagerProtocol {
 
     public init() {}
 
+    private func checkNotDestroyedLocked() {
+        if destroyed {
+            preconditionFailure("RasterLayerManager has been destroyed")
+        }
+    }
+
     public func registerEntity(_ entity: RasterLayerEntity<ActualLayer>) {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities[entity.state.id] = entity
     }
 
     public func removeEntity(_ id: String) -> RasterLayerEntity<ActualLayer>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         return entities.removeValue(forKey: id)
     }
 
     public func getEntity(_ id: String) -> RasterLayerEntity<ActualLayer>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         return entities[id]
     }
 
     public func hasEntity(_ id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return false }
+        checkNotDestroyedLocked()
         return entities[id] != nil
     }
 
     public func allEntities() -> [RasterLayerEntity<ActualLayer>] {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return [] }
+        checkNotDestroyedLocked()
         return Array(entities.values)
     }
 
     public func clear() {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities.removeAll()
     }
 
@@ -76,6 +82,9 @@ public final class RasterLayerManager<ActualLayer>: RasterLayerManagerProtocol {
     }
 
     public func find(position: GeoPointProtocol) -> RasterLayerEntity<ActualLayer>? {
-        nil
+        lock.lock()
+        defer { lock.unlock() }
+        checkNotDestroyedLocked()
+        return nil
     }
 }

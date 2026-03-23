@@ -126,8 +126,12 @@ where Renderer.ActualPolyline == ActualPolyline {
         polylineManager.find(position: position, cameraPosition: currentCameraPosition)
     }
 
+    public func setCurrentCameraPosition(_ cameraPosition: MapCameraPosition?) {
+        currentCameraPosition = cameraPosition
+    }
+
     open func onCameraChanged(mapCameraPosition: MapCameraPosition) async {
-        currentCameraPosition = mapCameraPosition
+        setCurrentCameraPosition(mapCameraPosition)
     }
 
     open func destroy() {
