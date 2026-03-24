@@ -38,6 +38,19 @@ public final class MarkerManager<ActualMarker> {
         return entities[id] != nil
     }
 
+    public func containsAllEntities(ids: Set<String>) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        checkNotDestroyedLocked()
+        if entities.count != ids.count {
+            return false
+        }
+        for id in ids where entities[id] == nil {
+            return false
+        }
+        return true
+    }
+
     @discardableResult
     public func removeEntity(_ id: String) -> MarkerEntity<ActualMarker>? {
         lock.lock()
@@ -140,17 +153,20 @@ public final class MarkerManager<ActualMarker> {
     }
 
     public func findMarkersInBounds(_ bounds: GeoRectBounds) -> [MarkerEntity<ActualMarker>] {
-        lock.lock()
-        defer { lock.unlock() }
-        checkNotDestroyedLocked()
         if bounds.isEmpty { return [] }
+
+        let snapshot: [MarkerEntity<ActualMarker>]
+        lock.lock()
+        checkNotDestroyedLocked()
 
         // For large datasets we still fall back to brute force until bounds queries are added to HexCellRegistry.
         if entities.count > 100 {
             _ = ensureCellRegistryLocked()
         }
+        snapshot = Array(entities.values)
+        lock.unlock()
 
-        return entities.values.filter { entity in
+        return snapshot.filter { entity in
             bounds.contains(point: entity.state.position)
         }
     }

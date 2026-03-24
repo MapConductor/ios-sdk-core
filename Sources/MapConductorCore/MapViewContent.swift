@@ -26,6 +26,7 @@ public struct MapViewContent {
     public var markerRenderingStrategy: Any? = nil
     public var markerRenderingMarkers: [MarkerState] = []
     public var views: [AnyView] = []
+    public var markerTilingOptions: MarkerTilingOptions = .Default
 
     public init() {}
 
@@ -45,6 +46,9 @@ public struct MapViewContent {
         views.append(contentsOf: other.views)
         if other.markerRenderingStrategy != nil {
             markerRenderingStrategy = other.markerRenderingStrategy
+        }
+        if other.markerTilingOptions.enabled {
+            markerTilingOptions = other.markerTilingOptions
         }
     }
 }
