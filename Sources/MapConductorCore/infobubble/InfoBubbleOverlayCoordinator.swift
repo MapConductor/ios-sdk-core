@@ -57,9 +57,14 @@ public final class InfoBubbleOverlayCoordinator {
         infoBubblesById = newBubbles
         syncInfoBubbleViews()
         // Layout can be requested while the host view is still zero-sized (e.g. during makeUIView).
-        // Do a second pass on the next runloop to avoid bubbles being placed at (0, 0)-derived positions.
+        // UIHostingController.sizeThatFits may return incorrect dimensions until SwiftUI completes its
+        // first layout pass, which can take more than one runloop turn. Do two deferred passes to ensure
+        // the bubble is positioned correctly after the view is fully laid out.
         DispatchQueue.main.async { [weak self] in
             self?.updateAllLayouts()
+            DispatchQueue.main.async { [weak self] in
+                self?.updateAllLayouts()
+            }
         }
     }
 
