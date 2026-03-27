@@ -30,6 +30,16 @@ public final class LocalTileServer {
         providersLock.unlock()
     }
 
+    public var isListening: Bool {
+        listener.state == .ready
+    }
+
+    internal var allProviders: [String: TileProvider] {
+        providersLock.lock()
+        defer { providersLock.unlock() }
+        return providers
+    }
+
     public func setForceNoStoreCache(_ value: Bool) {
         cacheOptionsLock.lock()
         forceNoStoreCache = value
@@ -287,6 +297,7 @@ public final class LocalTileServer {
             return nil
         }
 
+        MCLog.marker("LocalTileServer.resolveTile routeId=\(routeId) z=\(z) x=\(x) y=\(y)")
         guard let bytes = provider.renderTile(request: TileRequest(x: x, y: y, z: z)) else {
             return nil
         }

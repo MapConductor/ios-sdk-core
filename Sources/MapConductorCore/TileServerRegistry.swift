@@ -15,12 +15,17 @@ public enum TileServerRegistry {
 
         self.forceNoStoreCache = forceNoStoreCache
 
-        if let server {
+        if let server, server.isListening {
             server.setForceNoStoreCache(forceNoStoreCache)
             return server
         }
 
+        // Server is nil or died (e.g. app was backgrounded); restart and migrate providers.
+        let existingProviders = server?.allProviders ?? [:]
         let newServer = LocalTileServer.startServer(forceNoStoreCache: forceNoStoreCache)
+        for (routeId, provider) in existingProviders {
+            newServer.register(routeId: routeId, provider: provider)
+        }
         server = newServer
         return newServer
     }
