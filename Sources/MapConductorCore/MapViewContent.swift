@@ -488,3 +488,32 @@ public struct RasterLayer: MapOverlayItemProtocol, Identifiable {
         content.rasterLayers.append(self)
     }
 }
+
+/// Analogous to SwiftUI's `ForEach`, but for `MapViewContentBuilder` closures.
+///
+/// Usage:
+/// ```swift
+/// MapKitMapView(camera: $camera) {
+///     ForArray(markers) { marker in
+///         Marker(state: marker)
+///     }
+/// }
+/// ```
+public struct ForArray<Data: RandomAccessCollection>: MapOverlayItemProtocol {
+    private let built: MapViewContent
+
+    public init(
+        _ data: Data,
+        @MapViewContentBuilder content: (Data.Element) -> MapViewContent
+    ) {
+        var result = MapViewContent()
+        for item in data {
+            result.merge(content(item))
+        }
+        self.built = result
+    }
+
+    public func append(to content: inout MapViewContent) {
+        content.merge(built)
+    }
+}
