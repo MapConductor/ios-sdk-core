@@ -494,12 +494,14 @@ public struct RasterLayer: MapOverlayItemProtocol, Identifiable {
 /// Usage:
 /// ```swift
 /// MapKitMapView(camera: $camera) {
-///     ForArray(markers) { marker in
+///     ForEach(markers) { marker in
 ///         Marker(state: marker)
 ///     }
 /// }
 /// ```
-public struct ForArray<Data: RandomAccessCollection>: MapOverlayItemProtocol {
+/// When used inside a `@MapViewContentBuilder` closure, the compiler prefers this type
+/// over SwiftUI's `ForEach` because map overlay items (e.g. `Marker`) are not SwiftUI `View`s.
+public struct ForEach<Data: RandomAccessCollection>: MapOverlayItemProtocol {
     private let built: MapViewContent
 
     public init(
