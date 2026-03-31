@@ -18,25 +18,44 @@ public final class MarkerManager<ActualMarker> {
         self.geocell = geocell
     }
 
+    private func checkNotDestroyedLocked() {
+        if destroyed {
+            preconditionFailure("MarkerManager has been destroyed")
+        }
+    }
+
     public func getEntity(_ id: String) -> MarkerEntity<ActualMarker>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         return entities[id]
     }
 
     public func hasEntity(_ id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return false }
+        checkNotDestroyedLocked()
         return entities[id] != nil
+    }
+
+    public func containsAllEntities(ids: Set<String>) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        checkNotDestroyedLocked()
+        if entities.count != ids.count {
+            return false
+        }
+        for id in ids where entities[id] == nil {
+            return false
+        }
+        return true
     }
 
     @discardableResult
     public func removeEntity(_ id: String) -> MarkerEntity<ActualMarker>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
         let removed = entities.removeValue(forKey: id)
         if let removed {
             cellRegistry?.removePoint(entity: removed)
@@ -47,7 +66,7 @@ public final class MarkerManager<ActualMarker> {
     public func registerEntity(_ entity: MarkerEntity<ActualMarker>) {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities[entity.state.id] = entity
         cellRegistry?.setPoint(entity: entity)
     }
@@ -55,7 +74,7 @@ public final class MarkerManager<ActualMarker> {
     public func updateEntity(_ entity: MarkerEntity<ActualMarker>) {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities[entity.state.id] = entity
         cellRegistry?.setPoint(entity: entity)
     }
@@ -68,7 +87,7 @@ public final class MarkerManager<ActualMarker> {
     ) -> Double {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return 0.0 }
+        checkNotDestroyedLocked()
         let pixelsAtZoom = Double(tileSize) * pow(2.0, zoom)
         return Earth.circumferenceMeters / pixelsAtZoom * cos(position.latitude * .pi / 180.0) * pixels
     }
@@ -76,7 +95,7 @@ public final class MarkerManager<ActualMarker> {
     public func findNearest(position: GeoPointProtocol) -> MarkerEntity<ActualMarker>? {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return nil }
+        checkNotDestroyedLocked()
 
         if entities.count > 50 {
             let registry = ensureCellRegistryLocked()
@@ -111,7 +130,7 @@ public final class MarkerManager<ActualMarker> {
     public func findByIdPrefix(_ prefix: String) -> [HexCell] {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return [] }
+        checkNotDestroyedLocked()
         return cellRegistry?.findByIdPrefix(prefix) ?? []
     }
 
@@ -129,22 +148,25 @@ public final class MarkerManager<ActualMarker> {
     public func allEntities() -> [MarkerEntity<ActualMarker>] {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return [] }
+        checkNotDestroyedLocked()
         return Array(entities.values)
     }
 
     public func findMarkersInBounds(_ bounds: GeoRectBounds) -> [MarkerEntity<ActualMarker>] {
-        lock.lock()
-        defer { lock.unlock() }
-        if destroyed { return [] }
         if bounds.isEmpty { return [] }
+
+        let snapshot: [MarkerEntity<ActualMarker>]
+        lock.lock()
+        checkNotDestroyedLocked()
 
         // For large datasets we still fall back to brute force until bounds queries are added to HexCellRegistry.
         if entities.count > 100 {
             _ = ensureCellRegistryLocked()
         }
+        snapshot = Array(entities.values)
+        lock.unlock()
 
-        return entities.values.filter { entity in
+        return snapshot.filter { entity in
             bounds.contains(point: entity.state.position)
         }
     }
@@ -152,14 +174,7 @@ public final class MarkerManager<ActualMarker> {
     public func getMemoryStats() -> MarkerManagerStats {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed {
-            return MarkerManagerStats(
-                entityCount: 0,
-                hasSpatialIndex: false,
-                spatialIndexInitialized: false,
-                estimatedMemoryKB: 0
-            )
-        }
+        checkNotDestroyedLocked()
         return MarkerManagerStats(
             entityCount: entities.count,
             hasSpatialIndex: cellRegistry != nil,
@@ -178,7 +193,7 @@ public final class MarkerManager<ActualMarker> {
     public func clear() {
         lock.lock()
         defer { lock.unlock() }
-        if destroyed { return }
+        checkNotDestroyedLocked()
         entities.removeAll()
         cellRegistry?.clear()
     }

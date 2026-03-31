@@ -26,6 +26,7 @@ public struct MapViewContent {
     public var markerRenderingStrategy: Any? = nil
     public var markerRenderingMarkers: [MarkerState] = []
     public var views: [AnyView] = []
+    public var markerTilingOptions: MarkerTilingOptions = .Default
 
     public init() {}
 
@@ -45,6 +46,9 @@ public struct MapViewContent {
         views.append(contentsOf: other.views)
         if other.markerRenderingStrategy != nil {
             markerRenderingStrategy = other.markerRenderingStrategy
+        }
+        if other.markerTilingOptions.enabled {
+            markerTilingOptions = other.markerTilingOptions
         }
     }
 }
@@ -482,5 +486,34 @@ public struct RasterLayer: MapOverlayItemProtocol, Identifiable {
 
     public func append(to content: inout MapViewContent) {
         content.rasterLayers.append(self)
+    }
+}
+
+/// Analogous to SwiftUI's `ForEach`, but for `MapViewContentBuilder` closures.
+///
+/// Usage:
+/// ```swift
+/// MapKitMapView(camera: $camera) {
+///     ForArray(markers) { marker in
+///         Marker(state: marker)
+///     }
+/// }
+/// ```
+public struct ForArray<Data: RandomAccessCollection>: MapOverlayItemProtocol {
+    private let built: MapViewContent
+
+    public init(
+        _ data: Data,
+        @MapViewContentBuilder content: (Data.Element) -> MapViewContent
+    ) {
+        var result = MapViewContent()
+        for item in data {
+            result.merge(content(item))
+        }
+        self.built = result
+    }
+
+    public func append(to content: inout MapViewContent) {
+        content.merge(built)
     }
 }
