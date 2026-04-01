@@ -516,17 +516,6 @@ public struct ForArray<Data: RandomAccessCollection>: MapOverlayItemProtocol {
         self.built = result
     }
 
-    public init(
-        _ data: Data,
-        @MapViewContentBuilder content: (Int, Data.Element) -> MapViewContent
-    ) {
-        var result = MapViewContent()
-        for (index, item) in data.enumerated() {
-            result.merge(content(index, item))
-        }
-        self.built = result
-    }
-
     public func append(to content: inout MapViewContent) {
         content.merge(built)
     }
