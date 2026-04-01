@@ -491,17 +491,18 @@ public struct RasterLayer: MapOverlayItemProtocol, Identifiable {
 
 /// Analogous to SwiftUI's `ForEach`, but for `MapViewContentBuilder` closures.
 ///
+/// Cannot be named `ForEach` because SwiftUI's `ForEach` would take precedence when
+/// `Data.Element` conforms to `Identifiable`, causing a type mismatch error.
+///
 /// Usage:
 /// ```swift
 /// MapKitMapView(camera: $camera) {
-///     ForEach(markers) { marker in
+///     ForArray(markers) { marker in
 ///         Marker(state: marker)
 ///     }
 /// }
 /// ```
-/// When used inside a `@MapViewContentBuilder` closure, the compiler prefers this type
-/// over SwiftUI's `ForEach` because map overlay items (e.g. `Marker`) are not SwiftUI `View`s.
-public struct ForEach<Data: RandomAccessCollection>: MapOverlayItemProtocol {
+public struct ForArray<Data: RandomAccessCollection>: MapOverlayItemProtocol {
     private let built: MapViewContent
 
     public init(
@@ -511,6 +512,17 @@ public struct ForEach<Data: RandomAccessCollection>: MapOverlayItemProtocol {
         var result = MapViewContent()
         for item in data {
             result.merge(content(item))
+        }
+        self.built = result
+    }
+
+    public init(
+        _ data: Data,
+        @MapViewContentBuilder content: (Int, Data.Element) -> MapViewContent
+    ) {
+        var result = MapViewContent()
+        for (index, item) in data.enumerated() {
+            result.merge(content(index, item))
         }
         self.built = result
     }
