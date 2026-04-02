@@ -116,7 +116,7 @@ public struct Marker: MapOverlayItemProtocol, Identifiable {
     }
 
     public init(
-        position: GeoPointProtocol,
+        position: GeoPoint,
         id: String? = nil,
         extra: Any? = nil,
         icon: (any MarkerIconProtocol)? = nil,
@@ -150,7 +150,7 @@ public struct Marker: MapOverlayItemProtocol, Identifiable {
     }
 
     public init(
-        position: GeoPointProtocol,
+        position: GeoPoint,
         id: String? = nil,
         extra: Any? = nil,
         icon: DefaultMarkerIcon,
