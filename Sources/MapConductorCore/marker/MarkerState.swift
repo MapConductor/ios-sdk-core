@@ -271,7 +271,7 @@ private func javaHash(_ value: String) -> Int {
 
 private func javaHash(_ icon: (any MarkerIconProtocol)?) -> Int {
     guard let icon else { return 0 }
-    return icon.toBitmapIcon().hashValue
+    return icon.hashCode()
 }
 
 private func javaHash(_ value: Any?) -> Int {
