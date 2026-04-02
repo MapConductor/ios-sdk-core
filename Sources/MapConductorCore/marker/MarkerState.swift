@@ -31,17 +31,12 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
     @Published public var onDragEnd: OnMarkerEventHandler?
     @Published public var onAnimateStart: OnMarkerEventHandler?
     @Published public var onAnimateEnd: OnMarkerEventHandler?
+    @Published public var position: GeoPoint
 
     @Published private var internalAnimation: MarkerAnimation?
-    @Published private var currentPosition: GeoPointProtocol
-
-    public var position: GeoPointProtocol {
-        get { currentPosition }
-        set { currentPosition = newValue }
-    }
 
     public init(
-        position: GeoPointProtocol,
+        position: GeoPoint,
         id: String? = nil,
         extra: Any? = nil,
         icon: (any MarkerIconProtocol)? = nil,
@@ -76,11 +71,11 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         self.onAnimateStart = onAnimateStart
         self.onAnimateEnd = onAnimateEnd
         self.internalAnimation = animation
-        self.currentPosition = position
+        self.position = position
     }
 
     public convenience init(
-        position: GeoPointProtocol,
+        position: GeoPoint,
         id: String? = nil,
         extra: Any? = nil,
         icon: DefaultMarkerIcon,
@@ -123,7 +118,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
 
     public func copy(
         id: String? = nil,
-        position: GeoPointProtocol? = nil,
+        position: GeoPoint? = nil,
         extra: Any? = nil,
         icon: (any MarkerIconProtocol)? = nil,
         clickable: Bool? = nil,
@@ -190,7 +185,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
 
     public func asFlow() -> AnyPublisher<MarkerFingerPrint, Never> {
         let combined = Publishers.CombineLatest(
-            Publishers.CombineLatest4($icon, $clickable, $draggable, $currentPosition),
+            Publishers.CombineLatest4($icon, $clickable, $draggable, $position),
             $internalAnimation
         )
         return combined
@@ -271,7 +266,7 @@ private func javaHash(_ value: String) -> Int {
 
 private func javaHash(_ icon: (any MarkerIconProtocol)?) -> Int {
     guard let icon else { return 0 }
-    return icon.toBitmapIcon().hashValue
+    return icon.hashCode()
 }
 
 private func javaHash(_ value: Any?) -> Int {

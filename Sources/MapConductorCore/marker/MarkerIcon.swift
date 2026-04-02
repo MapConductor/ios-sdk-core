@@ -9,6 +9,7 @@ public protocol MarkerIconProtocol {
     var debug: Bool { get }
 
     func toBitmapIcon() -> BitmapIcon
+    func hashCode() -> Int
 }
 
 public struct BitmapIcon: MarkerIconProtocol, Equatable, Hashable {
@@ -41,6 +42,10 @@ public struct BitmapIcon: MarkerIconProtocol, Equatable, Hashable {
 
     public func toBitmapIcon() -> BitmapIcon {
         self
+    }
+
+    public func hashCode() -> Int {
+        hashValue
     }
 
     public func toByteArray() -> [UInt8] {

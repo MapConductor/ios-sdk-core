@@ -78,6 +78,23 @@ public final class DefaultMarkerIcon: MarkerIconProtocol {
         bitmapIcon
     }
 
+    public func hashCode() -> Int {
+        var result = fillColor.hashValue
+        result = result &* 31 &+ strokeColor.hashValue
+        result = result &* 31 &+ strokeWidth.hashValue
+        result = result &* 31 &+ scale.hashValue
+        result = result &* 31 &+ (label?.hashValue ?? 0)
+        result = result &* 31 &+ (labelTextColor?.hashValue ?? 0)
+        result = result &* 31 &+ labelTextSize.hashValue
+        result = result &* 31 &+ labelTypeFace.hashValue
+        result = result &* 31 &+ labelStrokeColor.hashValue
+        result = result &* 31 &+ infoAnchor.x.hashValue
+        result = result &* 31 &+ infoAnchor.y.hashValue
+        result = result &* 31 &+ iconSize.hashValue
+        result = result &* 31 &+ debug.hashValue
+        return result
+    }
+
     public func copy(
         fillColor: UIColor? = nil,
         strokeColor: UIColor? = nil,

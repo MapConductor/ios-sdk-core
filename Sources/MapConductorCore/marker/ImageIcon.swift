@@ -45,6 +45,18 @@ public final class ImageIcon: MarkerIconProtocol {
 
     public func toBitmapIcon() -> BitmapIcon { bitmapIcon }
 
+    public func hashCode() -> Int {
+        var result = image.hashValue
+        result = result &* 31 &+ scale.hashValue
+        result = result &* 31 &+ anchor.x.hashValue
+        result = result &* 31 &+ anchor.y.hashValue
+        result = result &* 31 &+ iconSize.hashValue
+        result = result &* 31 &+ infoAnchor.x.hashValue
+        result = result &* 31 &+ infoAnchor.y.hashValue
+        result = result &* 31 &+ debug.hashValue
+        return result
+    }
+
     public func copy(
         image: UIImage? = nil,
         iconSize: CGFloat? = nil,
