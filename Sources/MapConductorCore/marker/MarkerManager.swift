@@ -8,14 +8,19 @@ public struct MarkerManagerStats: Sendable, Hashable {
 
 public final class MarkerManager<ActualMarker> {
     private let geocell: HexGeocellProtocol
+    public let minMarkerCount: Int
 
     private var entities: [String: MarkerEntity<ActualMarker>] = [:]
     private var cellRegistry: HexCellRegistry<ActualMarker>?
     private var destroyed = false
     private let lock = NSLock()
 
-    public init(geocell: HexGeocellProtocol = HexGeocell.defaultGeocell()) {
+    public init(
+        geocell: HexGeocellProtocol = HexGeocell.defaultGeocell(),
+        minMarkerCount: Int = 2000
+    ) {
         self.geocell = geocell
+        self.minMarkerCount = minMarkerCount
     }
 
     private func checkNotDestroyedLocked() {
@@ -97,7 +102,7 @@ public final class MarkerManager<ActualMarker> {
         defer { lock.unlock() }
         checkNotDestroyedLocked()
 
-        if entities.count > 50 {
+        if entities.count > minMarkerCount {
             let registry = ensureCellRegistryLocked()
             if let nearestCell = registry.findNearest(point: position),
                let ids = registry.getEntryIDsByHexCell(nearestCell) {
@@ -155,18 +160,22 @@ public final class MarkerManager<ActualMarker> {
     public func findMarkersInBounds(_ bounds: GeoRectBounds) -> [MarkerEntity<ActualMarker>] {
         if bounds.isEmpty { return [] }
 
-        let snapshot: [MarkerEntity<ActualMarker>]
         lock.lock()
+        defer { lock.unlock() }
         checkNotDestroyedLocked()
 
-        // For large datasets we still fall back to brute force until bounds queries are added to HexCellRegistry.
-        if entities.count > 100 {
-            _ = ensureCellRegistryLocked()
+        if entities.count > minMarkerCount,
+           let center = bounds.center,
+           let northEast = bounds.northEast {
+            let registry = ensureCellRegistryLocked()
+            let distance = Spherical.computeDistanceBetween(from: center, to: northEast)
+            let hexCells = registry.findWithinRadiusWithDistance(point: center, radius: distance)
+            let entryIDs = hexCells.compactMap { registry.getEntryIDsByHexCell($0.cell) }
+                .flatMap { $0 }
+            return entryIDs.compactMap { entities[$0] }
         }
-        snapshot = Array(entities.values)
-        lock.unlock()
 
-        return snapshot.filter { entity in
+        return entities.values.filter { entity in
             bounds.contains(point: entity.state.position)
         }
     }
@@ -220,5 +229,15 @@ public final class MarkerManager<ActualMarker> {
 
     public static func defaultManager(geocell: HexGeocellProtocol) -> MarkerManager<ActualMarker> {
         MarkerManager<ActualMarker>(geocell: geocell)
+    }
+
+    public static func defaultManager(
+        geocell: HexGeocellProtocol? = nil,
+        minMarkerCount: Int = 2000
+    ) -> MarkerManager<ActualMarker> {
+        MarkerManager<ActualMarker>(
+            geocell: geocell ?? HexGeocell.defaultGeocell(),
+            minMarkerCount: minMarkerCount
+        )
     }
 }
