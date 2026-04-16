@@ -24,6 +24,7 @@ public enum MarkerIngestionEngine {
         shouldTile: (MarkerState) -> Bool
     ) async -> Result where Renderer.ActualMarker == ActualMarker {
         var previousIds = Set(markerManager.allEntities().map { $0.state.id })
+        var animatedEntities: [MarkerEntity<ActualMarker>] = []
 
         var added: [MarkerOverlayAddParams] = []
         var updated: [MarkerOverlayChangeParams<ActualMarker>] = []
@@ -104,12 +105,16 @@ public enum MarkerIngestionEngine {
             for (index, actualMarker) in actualMarkers.enumerated() {
                 guard let actualMarker else { continue }
                 let state = added[index].state
-                markerManager.registerEntity(MarkerEntity(
+                let entity = MarkerEntity(
                     marker: actualMarker,
                     state: state,
                     visible: true,
                     isRendered: true
-                ))
+                )
+                markerManager.registerEntity(entity)
+                if state.getAnimation() != nil {
+                    animatedEntities.append(entity)
+                }
             }
         }
 
@@ -118,13 +123,21 @@ public enum MarkerIngestionEngine {
             for (index, actualMarker) in actualMarkers.enumerated() {
                 guard let actualMarker else { continue }
                 let params = updated[index]
-                markerManager.updateEntity(MarkerEntity(
+                let entity = MarkerEntity(
                     marker: actualMarker,
                     state: params.current.state,
                     visible: params.current.visible,
                     isRendered: true
-                ))
+                )
+                markerManager.updateEntity(entity)
+                if params.current.state.getAnimation() != nil {
+                    animatedEntities.append(entity)
+                }
             }
+        }
+
+        for entity in animatedEntities {
+            await renderer.onAnimate(entity: entity)
         }
 
         await renderer.onPostProcess()
