@@ -14,10 +14,4 @@ public protocol MapViewControllerProtocol {
     func moveCamera(position: MapCameraPosition)
 
     func animateCamera(position: MapCameraPosition, duration: Long)
-
-    func registerOverlayController(controller: any OverlayControllerProtocol)
-}
-
-public extension MapViewControllerProtocol {
-    func registerOverlayController(controller: any OverlayControllerProtocol) {}
 }

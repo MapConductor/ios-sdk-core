@@ -62,10 +62,12 @@ where Renderer.ActualPolyline == ActualPolyline {
 
             if !removed.isEmpty {
                 await renderer.onRemove(data: removed)
+                if polylineManager.isDestroyed { return }
             }
 
             if !added.isEmpty {
                 let actualPolylines = await renderer.onAdd(data: added)
+                if polylineManager.isDestroyed { return }
                 for (index, polyline) in actualPolylines.enumerated() {
                     guard let polyline else { continue }
                     let entity = PolylineEntity(polyline: polyline, state: added[index].state)
@@ -75,6 +77,7 @@ where Renderer.ActualPolyline == ActualPolyline {
 
             if !updated.isEmpty {
                 let actualPolylines = await renderer.onChange(data: updated)
+                if polylineManager.isDestroyed { return }
                 for (index, polyline) in actualPolylines.enumerated() {
                     guard let polyline else { continue }
                     let params = updated[index]
@@ -83,6 +86,7 @@ where Renderer.ActualPolyline == ActualPolyline {
                 }
             }
 
+            if polylineManager.isDestroyed { return }
             await renderer.onPostProcess()
         }
     }
@@ -98,12 +102,14 @@ where Renderer.ActualPolyline == ActualPolyline {
             let entity = PolylineEntity(polyline: prevEntity.polyline, state: state)
             let params = PolylineOverlayChangeParams(current: entity, prev: prevEntity)
             let polylines = await renderer.onChange(data: [params])
+            if polylineManager.isDestroyed { return }
 
             if polylines.count == 1, let actualPolyline = polylines[0] {
                 let updated = PolylineEntity(polyline: actualPolyline, state: state)
                 polylineManager.registerEntity(updated)
             }
 
+            if polylineManager.isDestroyed { return }
             await renderer.onPostProcess()
         }
     }
@@ -113,7 +119,9 @@ where Renderer.ActualPolyline == ActualPolyline {
         await semaphore.withPermit {
             let entities = polylineManager.allEntities()
             await renderer.onRemove(data: entities)
+            if polylineManager.isDestroyed { return }
             await renderer.onPostProcess()
+            if polylineManager.isDestroyed { return }
             polylineManager.clear()
         }
     }
