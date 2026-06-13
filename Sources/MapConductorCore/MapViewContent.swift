@@ -193,6 +193,8 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
     public let marker: MarkerState
     public let tailOffset: CGPoint
     public let content: AnyView
+    /// When false the bubble is anchored directly at the GeoPoint with no icon-size compensation.
+    internal let useIconMetrics: Bool
 
     public init<Content: View>(
         marker: MarkerState,
@@ -204,6 +206,39 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
         self.id = marker.id
         self.marker = marker
         self.tailOffset = tailOffset
+        self.useIconMetrics = true
+        let builtContent = AnyView(content())
+        if useDefaultStyle {
+            self.content = AnyView(DefaultInfoBubbleView(style: style, content: builtContent))
+        } else {
+            self.content = builtContent
+        }
+    }
+
+    /// Places an InfoBubble directly at [position] without requiring a MarkerState.
+    ///
+    /// The bubble tail points exactly at the given coordinate.
+    /// A stable id is generated from the position coordinates when [id] is not provided.
+    ///
+    /// Usage:
+    /// ```swift
+    /// InfoBubble(position: GeoPoint(latitude: 35.68, longitude: 139.77)) {
+    ///     Text("Hello!")
+    /// }
+    /// ```
+    public init<Content: View>(
+        position: GeoPoint,
+        id: String? = nil,
+        tailOffset: CGPoint = CGPoint(x: 0.5, y: 1.0),
+        useDefaultStyle: Bool = true,
+        style: InfoBubbleStyle = .Default,
+        @ViewBuilder content: () -> Content
+    ) {
+        let syntheticMarker = MarkerState(position: position, id: id)
+        self.id = syntheticMarker.id
+        self.marker = syntheticMarker
+        self.tailOffset = tailOffset
+        self.useIconMetrics = false
         let builtContent = AnyView(content())
         if useDefaultStyle {
             self.content = AnyView(DefaultInfoBubbleView(style: style, content: builtContent))
@@ -486,6 +521,66 @@ public struct RasterLayer: MapOverlayItemProtocol, Identifiable {
 
     public func append(to content: inout MapViewContent) {
         content.rasterLayers.append(self)
+    }
+}
+
+public struct Markers: MapOverlayItemProtocol {
+    private let states: [MarkerState]
+
+    public init(_ states: [MarkerState]) {
+        self.states = states
+    }
+
+    public func append(to content: inout MapViewContent) {
+        content.markers.append(contentsOf: states.map { Marker(state: $0) })
+    }
+}
+
+public struct Circles: MapOverlayItemProtocol {
+    private let states: [CircleState]
+
+    public init(_ states: [CircleState]) {
+        self.states = states
+    }
+
+    public func append(to content: inout MapViewContent) {
+        content.circles.append(contentsOf: states.map { Circle(state: $0) })
+    }
+}
+
+public struct Polylines: MapOverlayItemProtocol {
+    private let states: [PolylineState]
+
+    public init(_ states: [PolylineState]) {
+        self.states = states
+    }
+
+    public func append(to content: inout MapViewContent) {
+        content.polylines.append(contentsOf: states.map { Polyline(state: $0) })
+    }
+}
+
+public struct Polygons: MapOverlayItemProtocol {
+    private let states: [PolygonState]
+
+    public init(_ states: [PolygonState]) {
+        self.states = states
+    }
+
+    public func append(to content: inout MapViewContent) {
+        content.polygons.append(contentsOf: states.map { Polygon(state: $0) })
+    }
+}
+
+public struct GroundImages: MapOverlayItemProtocol {
+    private let states: [GroundImageState]
+
+    public init(_ states: [GroundImageState]) {
+        self.states = states
+    }
+
+    public func append(to content: inout MapViewContent) {
+        content.groundImages.append(contentsOf: states.map { GroundImage(state: $0) })
     }
 }
 

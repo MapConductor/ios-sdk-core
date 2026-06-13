@@ -122,20 +122,28 @@ public final class InfoBubbleOverlayCoordinator {
         host: UIHostingController<AnyView>,
         screenPoint: CGPoint
     ) {
-        let markerStateForIcon = resolveMarkerStateForIcon(id, bubble.marker)
-        let metrics = iconMetrics(markerStateForIcon)
-
         let targetSize = host.sizeThatFits(in: CGSize(width: 260, height: 1000))
         host.view.bounds = CGRect(origin: .zero, size: targetSize)
 
-        let x = screenPoint.x +
-            (-bubble.tailOffset.x * targetSize.width) +
-            ((0.5 - metrics.anchor.x) * metrics.size.width) +
-            ((metrics.infoAnchor.x - 0.5) * metrics.size.width)
-        let y = screenPoint.y +
-            (-bubble.tailOffset.y * targetSize.height) +
-            ((0.5 - metrics.anchor.y) * metrics.size.height) +
-            ((metrics.infoAnchor.y - 0.5) * metrics.size.height)
+        let x: CGFloat
+        let y: CGFloat
+
+        if bubble.useIconMetrics {
+            let markerStateForIcon = resolveMarkerStateForIcon(id, bubble.marker)
+            let metrics = iconMetrics(markerStateForIcon)
+            x = screenPoint.x +
+                (-bubble.tailOffset.x * targetSize.width) +
+                ((0.5 - metrics.anchor.x) * metrics.size.width) +
+                ((metrics.infoAnchor.x - 0.5) * metrics.size.width)
+            y = screenPoint.y +
+                (-bubble.tailOffset.y * targetSize.height) +
+                ((0.5 - metrics.anchor.y) * metrics.size.height) +
+                ((metrics.infoAnchor.y - 0.5) * metrics.size.height)
+        } else {
+            // No icon: tail points directly at the GeoPoint screen coordinate.
+            x = screenPoint.x - bubble.tailOffset.x * targetSize.width
+            y = screenPoint.y - bubble.tailOffset.y * targetSize.height
+        }
 
         host.view.frame = CGRect(
             origin: alignToPixel(CGPoint(x: x, y: y), scale: UIScreen.main.scale),
