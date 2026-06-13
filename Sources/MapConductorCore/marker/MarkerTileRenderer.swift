@@ -10,6 +10,7 @@ import UIKit
 public final class MarkerTileRenderer<ActualMarker>: TileProvider {
     private let markerManager: MarkerManager<ActualMarker>
     public let tileSize: Int
+    public let extraIconScale: Double
     private let debugTileOverlay: Bool
     private let iconScaleCallback: ((MarkerState, Int) -> Double)?
 
@@ -22,12 +23,14 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
     public init(
         markerManager: MarkerManager<ActualMarker>,
         tileSize: Int = 256,
+        extraIconScale: Double = 1.0,
         cacheSizeBytes: Int = 8 * 1024 * 1024,
         debugTileOverlay: Bool = false,
         iconScaleCallback: ((MarkerState, Int) -> Double)? = nil
     ) {
         self.markerManager = markerManager
         self.tileSize = tileSize
+        self.extraIconScale = extraIconScale
         self.debugTileOverlay = debugTileOverlay
         self.iconScaleCallback = iconScaleCallback
         self.defaultIcon = DefaultMarkerIcon().toBitmapIcon()
@@ -198,7 +201,7 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
             let centerNormY = tilePoint.y - tileY
 
             let callbackScale = max(iconScaleCallback?(entity.state, zoom) ?? 1.0, 0.0)
-            let scale = max((Double(icon.scale)) * callbackScale, 0.0)
+            let scale = max((Double(icon.scale)) * callbackScale, 0.0) * self.extraIconScale
             let drawW = max(Double(icon.size.width) * scale, 1.0)
             let drawH = max(Double(icon.size.height) * scale, 1.0)
 
