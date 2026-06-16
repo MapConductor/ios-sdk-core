@@ -6,7 +6,9 @@ public enum InitState {
     case Initializing
     case SdkInitialized
     case MapViewCreated
+    case MapCreating
     case MapCreated
+    case MapLoaded
     case Failed
 }
 

@@ -1,3 +1,5 @@
+public typealias OnMapInitializedHandler = (InitState) -> Void
+
 public protocol MapViewControllerProtocol {
     var holder: AnyMapViewHolder { get }
     var coroutine: CoroutineScope { get }
@@ -10,6 +12,8 @@ public protocol MapViewControllerProtocol {
 
     func setMapClickListener(listener: OnMapEventHandler?)
     func setMapLongClickListener(listener: OnMapEventHandler?)
+
+    func setMapInitializedListener(listener: OnMapInitializedHandler?)
 
     func moveCamera(position: MapCameraPosition)
 

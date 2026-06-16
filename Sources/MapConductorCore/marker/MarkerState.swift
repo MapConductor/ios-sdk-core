@@ -13,6 +13,7 @@ public struct MarkerFingerPrint: Equatable, Hashable {
     public let draggable: Int
     public let latitude: Int
     public let longitude: Int
+    public let zIndex: Int?
     public let animation: Int?
 }
 
@@ -25,6 +26,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
     @Published public var icon: (any MarkerIconProtocol)?
     @Published public var clickable: Bool
     @Published public var draggable: Bool
+    @Published public var zIndex: Int?
     @Published public var onClick: OnMarkerEventHandler?
     @Published public var onDragStart: OnMarkerEventHandler?
     @Published public var onDrag: OnMarkerEventHandler?
@@ -43,6 +45,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         animation: MarkerAnimation? = nil,
         clickable: Bool = true,
         draggable: Bool = false,
+        zIndex: Int? = nil,
         onClick: OnMarkerEventHandler? = nil,
         onDragStart: OnMarkerEventHandler? = nil,
         onDrag: OnMarkerEventHandler? = nil,
@@ -64,6 +67,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         self.icon = icon
         self.clickable = clickable
         self.draggable = draggable
+        self.zIndex = zIndex
         self.onClick = onClick
         self.onDragStart = onDragStart
         self.onDrag = onDrag
@@ -82,6 +86,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         animation: MarkerAnimation? = nil,
         clickable: Bool = true,
         draggable: Bool = false,
+        zIndex: Int? = nil,
         onClick: OnMarkerEventHandler? = nil,
         onDragStart: OnMarkerEventHandler? = nil,
         onDrag: OnMarkerEventHandler? = nil,
@@ -98,6 +103,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
             animation: animation,
             clickable: clickable,
             draggable: draggable,
+            zIndex: zIndex,
             onClick: onClick,
             onDragStart: onDragStart,
             onDrag: onDrag,
@@ -123,6 +129,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         icon: (any MarkerIconProtocol)? = nil,
         clickable: Bool? = nil,
         draggable: Bool? = nil,
+        zIndex: Int?? = nil,
         onClick: OnMarkerEventHandler? = nil,
         onDragStart: OnMarkerEventHandler? = nil,
         onDrag: OnMarkerEventHandler? = nil,
@@ -138,6 +145,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
             animation: nil,
             clickable: clickable ?? self.clickable,
             draggable: draggable ?? self.draggable,
+            zIndex: zIndex ?? self.zIndex,
             onClick: onClick ?? self.onClick,
             onDragStart: onDragStart ?? self.onDragStart,
             onDrag: onDrag ?? self.onDrag,
@@ -176,6 +184,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
             draggable: javaHash(draggable),
             latitude: javaHash(position.latitude),
             longitude: javaHash(position.longitude),
+            zIndex: zIndex.map { Int(Int32(truncatingIfNeeded: $0)) },
             // Android uses `internalAnimation?.hashCode() ?: 1`. Kotlin's enum hashCode is
             // identity-based, so it never collides with `1` in practice. Swift's `hashValue`
             // can collide (e.g. `.Bounce` being `1`), so use stable, non-colliding values.
@@ -201,7 +210,21 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
                     draggable: javaHash(draggable),
                     latitude: javaHash(position.latitude),
                     longitude: javaHash(position.longitude),
+                    zIndex: nil,
                     animation: javaHashAnimationForFingerPrint(animation)
+                )
+            }
+            .combineLatest($zIndex)
+            .map { finger, zIndex in
+                MarkerFingerPrint(
+                    id: finger.id,
+                    icon: finger.icon,
+                    clickable: finger.clickable,
+                    draggable: finger.draggable,
+                    latitude: finger.latitude,
+                    longitude: finger.longitude,
+                    zIndex: zIndex.map { Int(Int32(truncatingIfNeeded: $0)) },
+                    animation: finger.animation
                 )
             }
             .removeDuplicates()

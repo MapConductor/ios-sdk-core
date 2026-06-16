@@ -8,6 +8,7 @@ public struct PolylineFingerPrint: Equatable, Hashable {
     public let strokeWidth: Int
     public let geodesic: Int
     public let points: Int
+    public let zIndex: Int
     public let extra: Int
 }
 
@@ -30,6 +31,7 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
     @Published public var strokeWidth: Double
     @Published public var geodesic: Bool
     @Published public var points: [GeoPointProtocol]
+    @Published public var zIndex: Int
     @Published public var extra: Any?
     @Published public var onClick: OnPolylineEventHandler?
 
@@ -39,6 +41,7 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
         strokeColor: UIColor = .black,
         strokeWidth: Double = 1.0,
         geodesic: Bool = false,
+        zIndex: Int = 0,
         extra: Any? = nil,
         onClick: OnPolylineEventHandler? = nil
     ) {
@@ -54,6 +57,7 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
         self.strokeWidth = strokeWidth
         self.geodesic = geodesic
         self.points = points
+        self.zIndex = zIndex
         self.extra = extra
         self.onClick = onClick
     }
@@ -64,6 +68,7 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
         strokeColor: UIColor? = nil,
         strokeWidth: Double? = nil,
         geodesic: Bool? = nil,
+        zIndex: Int? = nil,
         extra: Any? = nil,
         onClick: OnPolylineEventHandler? = nil
     ) -> PolylineState {
@@ -73,6 +78,7 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
             strokeColor: strokeColor ?? self.strokeColor,
             strokeWidth: strokeWidth ?? self.strokeWidth,
             geodesic: geodesic ?? self.geodesic,
+            zIndex: zIndex ?? self.zIndex,
             extra: extra ?? self.extra,
             onClick: onClick ?? self.onClick
         )
@@ -85,6 +91,7 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
             strokeWidth: javaHash(strokeWidth),
             geodesic: javaHash(geodesic),
             points: listHashCode(points),
+            zIndex: Int(Int32(truncatingIfNeeded: zIndex)),
             extra: javaHash(extra)
         )
     }
@@ -99,6 +106,19 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
                     strokeWidth: javaHash(strokeWidth),
                     geodesic: javaHash(geodesic),
                     points: listHashCode(points),
+                    zIndex: 0,
+                    extra: 0
+                )
+            }
+            .combineLatest($zIndex)
+            .map { finger, zIndex in
+                PolylineFingerPrint(
+                    id: finger.id,
+                    strokeColor: finger.strokeColor,
+                    strokeWidth: finger.strokeWidth,
+                    geodesic: finger.geodesic,
+                    points: finger.points,
+                    zIndex: Int(Int32(truncatingIfNeeded: zIndex)),
                     extra: 0
                 )
             }
@@ -110,6 +130,7 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
                     strokeWidth: finger.strokeWidth,
                     geodesic: finger.geodesic,
                     points: finger.points,
+                    zIndex: finger.zIndex,
                     extra: javaHash(extra)
                 )
             }

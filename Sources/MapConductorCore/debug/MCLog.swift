@@ -20,7 +20,7 @@ public enum MCLog {
     private static let mapLogger = Logger(subsystem: subsystem, category: "MapView")
 
     public static func marker(_ message: String) {
-        guard isEnabled else { return }
+        // guard isEnabled else { return }
         markerLogger.debug("\(message, privacy: .public)")
     }
 

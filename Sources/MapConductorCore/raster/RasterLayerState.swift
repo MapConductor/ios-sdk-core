@@ -5,6 +5,8 @@ public struct RasterLayerFingerPrint: Equatable, Hashable {
     public let source: Int
     public let opacity: Int
     public let visible: Int
+    public let zIndex: Int
+    public let debug: Int
     public let userAgent: Int
     public let extraHeaders: Int
     public let extra: Int
@@ -26,6 +28,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     @Published public var source: RasterSource
     @Published public var opacity: Double
     @Published public var visible: Bool
+    @Published public var zIndex: Int
+    @Published public var debug: Bool
     @Published public var userAgent: String?
     @Published public var extraHeaders: [String: String]?
     @Published public var extra: Any?
@@ -34,7 +38,9 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         source: RasterSource,
         opacity: Double = 1.0,
         visible: Bool = true,
-        userAgent: String? = nil,
+        zIndex: Int = 0,
+        debug: Bool = false,
+        userAgent: String = "MapConductor/RasterLayerAgent(https://mapconductor.com)",
         extraHeaders: [String: String]? = nil,
         id: String? = nil,
         extra: Any? = nil
@@ -51,6 +57,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         self.source = source
         self.opacity = opacity
         self.visible = visible
+        self.zIndex = zIndex
+        self.debug = debug
         self.userAgent = userAgent
         self.extraHeaders = extraHeaders
         self.extra = extra
@@ -60,6 +68,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         source: RasterSource? = nil,
         opacity: Double? = nil,
         visible: Bool? = nil,
+        zIndex: Int? = nil,
+        debug: Bool? = nil,
         userAgent: String? = nil,
         extraHeaders: [String: String]? = nil,
         id: String? = nil,
@@ -69,7 +79,10 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
             source: source ?? self.source,
             opacity: opacity ?? self.opacity,
             visible: visible ?? self.visible,
-            userAgent: userAgent ?? self.userAgent,
+            zIndex: zIndex ?? self.zIndex,
+            debug: debug ?? self.debug,
+            userAgent: userAgent ??
+                self.userAgent ?? "MapConductor/RasterLayerAgent(https://mapconductor.com)",
             extraHeaders: extraHeaders ?? self.extraHeaders,
             id: id ?? self.id,
             extra: extra ?? self.extra
@@ -82,6 +95,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
             source: javaHash(source),
             opacity: javaHash(opacity),
             visible: javaHash(visible),
+            zIndex: Int(Int32(truncatingIfNeeded: zIndex)),
+            debug: javaHash(debug),
             userAgent: javaHash(userAgent),
             extraHeaders: javaHash(extraHeaders),
             extra: javaHash(extra)
@@ -91,16 +106,46 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     public func asFlow() -> AnyPublisher<RasterLayerFingerPrint, Never> {
         Publishers
             .CombineLatest3($source, $opacity, $visible)
-            .combineLatest($userAgent)
-            .combineLatest($extraHeaders)
-            .map { [id] combined, extraHeaders in
-                let ((source, opacity, visible), userAgent) = combined
+            .combineLatest(Publishers.CombineLatest($zIndex, $debug))
+            .map { [id] combined, zDebug in
+                let (source, opacity, visible) = combined
+                let (zIndex, debug) = zDebug
                 return RasterLayerFingerPrint(
                     id: javaHash(id),
                     source: javaHash(source),
                     opacity: javaHash(opacity),
                     visible: javaHash(visible),
+                    zIndex: Int(Int32(truncatingIfNeeded: zIndex)),
+                    debug: javaHash(debug),
+                    userAgent: 0,
+                    extraHeaders: 0,
+                    extra: 0
+                )
+            }
+            .combineLatest($userAgent)
+            .map { finger, userAgent in
+                RasterLayerFingerPrint(
+                    id: finger.id,
+                    source: finger.source,
+                    opacity: finger.opacity,
+                    visible: finger.visible,
+                    zIndex: finger.zIndex,
+                    debug: finger.debug,
                     userAgent: javaHash(userAgent),
+                    extraHeaders: 0,
+                    extra: 0
+                )
+            }
+            .combineLatest($extraHeaders)
+            .map { finger, extraHeaders in
+                RasterLayerFingerPrint(
+                    id: finger.id,
+                    source: finger.source,
+                    opacity: finger.opacity,
+                    visible: finger.visible,
+                    zIndex: finger.zIndex,
+                    debug: finger.debug,
+                    userAgent: finger.userAgent,
                     extraHeaders: javaHash(extraHeaders),
                     extra: 0
                 )
@@ -112,6 +157,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
                     source: finger.source,
                     opacity: finger.opacity,
                     visible: finger.visible,
+                    zIndex: finger.zIndex,
+                    debug: finger.debug,
                     userAgent: finger.userAgent,
                     extraHeaders: finger.extraHeaders,
                     extra: javaHash(extra)
