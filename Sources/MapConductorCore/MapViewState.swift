@@ -18,9 +18,12 @@ public protocol MapViewStateProtocol: ObservableObject {
     var id: String { get }
     var cameraPosition: MapCameraPosition { get }
     var mapDesignType: ActualMapDesignType { get set }
+    var uiSettings: MapUISettings { get set }
 
     func moveCameraTo(cameraPosition: MapCameraPosition, durationMillis: Long?)
     func moveCameraTo(position: GeoPoint, durationMillis: Long?)
+
+    func fitBounds(bounds: GeoRectBounds, padding: Int)
 
     func getMapViewHolder() -> AnyMapViewHolder?
 }
@@ -51,6 +54,11 @@ open class MapViewState<ActualMapDesignType>: ObservableObject, MapViewStateProt
         set { fatalError("Override in subclass") }
     }
 
+    open var uiSettings: MapUISettings {
+        get { fatalError("Override in subclass") }
+        set { fatalError("Override in subclass") }
+    }
+
     open func moveCameraTo(cameraPosition: MapCameraPosition, durationMillis: Long?) {
         fatalError("Override in subclass")
     }
@@ -58,6 +66,10 @@ open class MapViewState<ActualMapDesignType>: ObservableObject, MapViewStateProt
     open func moveCameraTo(position: GeoPoint, durationMillis: Long?) {
         let updated = cameraPosition.copy(position: position)
         moveCameraTo(cameraPosition: updated, durationMillis: durationMillis)
+    }
+
+    open func fitBounds(bounds: GeoRectBounds, padding: Int) {
+        fatalError("Override in subclass")
     }
 
     open func getMapViewHolder() -> AnyMapViewHolder? {

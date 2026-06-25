@@ -18,4 +18,6 @@ public protocol MapViewControllerProtocol {
     func moveCamera(position: MapCameraPosition)
 
     func animateCamera(position: MapCameraPosition, duration: Long)
+
+    func fitBounds(bounds: GeoRectBounds, padding: Int)
 }
