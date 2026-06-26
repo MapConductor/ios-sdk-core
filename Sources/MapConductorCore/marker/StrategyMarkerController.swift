@@ -18,6 +18,7 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
     public let zIndex: Int = 10
     private let semaphore = AsyncSemaphore(1)
     private var mapCameraPosition: MapCameraPosition?
+    private var lastKnownBounds: GeoRectBounds?
     private var pendingStates: [MarkerState]?
 
     public init(
@@ -71,7 +72,7 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
     }
 
     public func add(data: [MarkerState]) async {
-        guard let bounds = mapCameraPosition?.visibleRegion?.bounds else {
+        guard let bounds = mapCameraPosition?.visibleRegion?.bounds ?? lastKnownBounds else {
             pendingStates = data
             return
         }
@@ -85,7 +86,7 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
     }
 
     public func update(state: MarkerState) async {
-        guard let bounds = mapCameraPosition?.visibleRegion?.bounds else { return }
+        guard let bounds = mapCameraPosition?.visibleRegion?.bounds ?? lastKnownBounds else { return }
         await semaphore.withPermit {
             _ = await strategy.onUpdate(
                 state: state,
@@ -105,6 +106,9 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
 
     public func onCameraChanged(mapCameraPosition: MapCameraPosition) async {
         self.mapCameraPosition = mapCameraPosition
+        if let bounds = mapCameraPosition.visibleRegion?.bounds {
+            lastKnownBounds = bounds
+        }
         await semaphore.withPermit {
             await strategy.onCameraChanged(
                 mapCameraPosition: mapCameraPosition,
