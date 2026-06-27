@@ -10,6 +10,12 @@ public protocol MarkerOverlayRendererProtocol {
     func onRemove(data: [MarkerEntity<ActualMarker>]) async
     func onAnimate(entity: MarkerEntity<ActualMarker>) async
     func onPostProcess() async
+
+    func unbind()
+}
+
+public extension MarkerOverlayRendererProtocol {
+    func unbind() {}
 }
 
 public struct MarkerOverlayAddParams {
