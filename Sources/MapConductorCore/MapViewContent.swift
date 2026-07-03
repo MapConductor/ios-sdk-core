@@ -192,9 +192,13 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
     public let id: String
     public let marker: MarkerState
     public let tailOffset: CGPoint
-    public let content: AnyView
+    /// Holds either an AnyView (SwiftUI path) or a UIView (React Native / UIKit path).
+    internal let _content: Any
     /// When false the bubble is anchored directly at the GeoPoint with no icon-size compensation.
-    internal let useIconMetrics: Bool
+    public let useIconMetrics: Bool
+
+    public var swiftUIContent: AnyView? { _content as? AnyView }
+    public var uiViewContent: UIView? { _content as? UIView }
 
     public init<Content: View>(
         marker: MarkerState,
@@ -209,9 +213,9 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
         self.useIconMetrics = true
         let builtContent = AnyView(content())
         if useDefaultStyle {
-            self.content = AnyView(DefaultInfoBubbleView(style: style, content: builtContent))
+            self._content = AnyView(DefaultInfoBubbleView(style: style, content: builtContent))
         } else {
-            self.content = builtContent
+            self._content = builtContent
         }
     }
 
@@ -241,10 +245,38 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
         self.useIconMetrics = false
         let builtContent = AnyView(content())
         if useDefaultStyle {
-            self.content = AnyView(DefaultInfoBubbleView(style: style, content: builtContent))
+            self._content = AnyView(DefaultInfoBubbleView(style: style, content: builtContent))
         } else {
-            self.content = builtContent
+            self._content = builtContent
         }
+    }
+
+    /// UIKit / React Native initializer: provide a UIView directly as bubble content.
+    public init(
+        marker: MarkerState,
+        tailOffset: CGPoint = CGPoint(x: 0.5, y: 1.0),
+        uiViewContent: UIView
+    ) {
+        self.id = marker.id
+        self.marker = marker
+        self.tailOffset = tailOffset
+        self.useIconMetrics = true
+        self._content = uiViewContent
+    }
+
+    /// UIKit / React Native initializer anchored at a position without a MarkerState.
+    public init(
+        position: GeoPoint,
+        id: String? = nil,
+        tailOffset: CGPoint = CGPoint(x: 0.5, y: 1.0),
+        uiViewContent: UIView
+    ) {
+        let syntheticMarker = MarkerState(position: position, id: id)
+        self.id = syntheticMarker.id
+        self.marker = syntheticMarker
+        self.tailOffset = tailOffset
+        self.useIconMetrics = false
+        self._content = uiViewContent
     }
 
     public func append(to content: inout MapViewContent) {

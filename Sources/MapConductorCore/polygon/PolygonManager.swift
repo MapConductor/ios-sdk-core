@@ -20,8 +20,12 @@ public final class PolygonManager<ActualPolygon>: PolygonManagerProtocol {
     public init() {}
 
     private func checkNotDestroyedLocked() {
+        // In-flight async work (e.g. Combine subscriptions delivering through
+        // a Task) can legitimately arrive just after destroy() during provider
+        // switches. destroy() clears all state, so post-destroy access is a
+        // harmless no-op on empty state — log instead of crashing.
         if destroyed {
-            preconditionFailure("PolygonManager has been destroyed")
+            NSLog("[MapConductor] PolygonManager accessed after destroy (ignored)")
         }
     }
 

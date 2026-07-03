@@ -27,6 +27,7 @@ public final class InfoBubbleOverlayCoordinator {
 
     private var infoBubblesById: [String: InfoBubble] = [:]
     private var infoBubbleHosts: [String: UIHostingController<AnyView>] = [:]
+    private var infoBubbleDirectViews: [String: UIView] = [:]
 
     public init(
         container: UIView,
@@ -71,19 +72,34 @@ public final class InfoBubbleOverlayCoordinator {
     private func syncInfoBubbleViews() {
         guard let container else { return }
         for (id, bubble) in infoBubblesById {
-            let host = infoBubbleHosts[id] ?? UIHostingController(rootView: bubble.content)
-            host.rootView = bubble.content
-            host.view.backgroundColor = .clear
-            host.view.isUserInteractionEnabled = true
-            if host.view.superview == nil {
-                container.addSubview(host.view)
+            if let uiView = bubble.uiViewContent {
+                // UIKit / React Native path: use the UIView directly
+                if infoBubbleDirectViews[id] !== uiView {
+                    infoBubbleDirectViews[id]?.removeFromSuperview()
+                    infoBubbleDirectViews[id] = uiView
+                }
+                uiView.isUserInteractionEnabled = true
+                if uiView.superview == nil {
+                    container.addSubview(uiView)
+                }
+            } else if let anyView = bubble.swiftUIContent {
+                // SwiftUI path: host via UIHostingController
+                let host = infoBubbleHosts[id] ?? UIHostingController(rootView: anyView)
+                host.rootView = anyView
+                host.view.backgroundColor = .clear
+                host.view.isUserInteractionEnabled = true
+                if host.view.superview == nil {
+                    container.addSubview(host.view)
+                }
+                infoBubbleHosts[id] = host
             }
-            infoBubbleHosts[id] = host
         }
 
         let activeIds = Set(infoBubblesById.keys)
-        let existingIds = Set(infoBubbleHosts.keys)
-        for id in existingIds.subtracting(activeIds) {
+        for id in Set(infoBubbleHosts.keys).subtracting(activeIds) {
+            removeInfoBubbleView(for: id)
+        }
+        for id in Set(infoBubbleDirectViews.keys).subtracting(activeIds) {
             removeInfoBubbleView(for: id)
         }
     }
@@ -91,6 +107,9 @@ public final class InfoBubbleOverlayCoordinator {
     public func removeInfoBubbleView(for id: String) {
         if let host = infoBubbleHosts.removeValue(forKey: id) {
             host.view.removeFromSuperview()
+        }
+        if let view = infoBubbleDirectViews.removeValue(forKey: id) {
+            view.removeFromSuperview()
         }
     }
 
@@ -104,26 +123,38 @@ public final class InfoBubbleOverlayCoordinator {
     public func updateInfoBubblePosition(for id: String) {
         guard let container, !container.bounds.isEmpty else { return }
         guard let bubble = infoBubblesById[id],
-              let host = infoBubbleHosts[id],
               let screenPoint = project(bubble.marker.position) else { return }
-        updateInfoBubblePosition(for: id, bubble: bubble, host: host, screenPoint: screenPoint)
+        updateInfoBubblePosition(for: id, bubble: bubble, host: infoBubbleHosts[id], screenPoint: screenPoint)
     }
 
     public func updateInfoBubblePosition(for id: String, screenPoint: CGPoint) {
         guard let container, !container.bounds.isEmpty else { return }
-        guard let bubble = infoBubblesById[id],
-              let host = infoBubbleHosts[id] else { return }
-        updateInfoBubblePosition(for: id, bubble: bubble, host: host, screenPoint: screenPoint)
+        guard let bubble = infoBubblesById[id] else { return }
+        updateInfoBubblePosition(for: id, bubble: bubble, host: infoBubbleHosts[id], screenPoint: screenPoint)
     }
 
     private func updateInfoBubblePosition(
         for id: String,
         bubble: InfoBubble,
-        host: UIHostingController<AnyView>,
+        host: UIHostingController<AnyView>?,
         screenPoint: CGPoint
     ) {
-        let targetSize = host.sizeThatFits(in: CGSize(width: 260, height: 1000))
-        host.view.bounds = CGRect(origin: .zero, size: targetSize)
+        let bubbleView: UIView
+        let targetSize: CGSize
+        if let host {
+            targetSize = host.sizeThatFits(in: CGSize(width: 260, height: 1000))
+            host.view.bounds = CGRect(origin: .zero, size: targetSize)
+            bubbleView = host.view
+        } else if let directView = infoBubbleDirectViews[id] {
+            directView.layoutIfNeeded()
+            targetSize = directView.systemLayoutSizeFitting(
+                CGSize(width: 260, height: UIView.layoutFittingCompressedSize.height)
+            )
+            directView.bounds = CGRect(origin: .zero, size: targetSize)
+            bubbleView = directView
+        } else {
+            return
+        }
 
         let x: CGFloat
         let y: CGFloat
@@ -145,7 +176,7 @@ public final class InfoBubbleOverlayCoordinator {
             y = screenPoint.y - bubble.tailOffset.y * targetSize.height
         }
 
-        host.view.frame = CGRect(
+        bubbleView.frame = CGRect(
             origin: alignToPixel(CGPoint(x: x, y: y), scale: UIScreen.main.scale),
             size: targetSize
         )
@@ -165,6 +196,8 @@ public final class InfoBubbleOverlayCoordinator {
         }
         infoBubbleHosts.values.forEach { $0.view.removeFromSuperview() }
         infoBubbleHosts.removeAll()
+        infoBubbleDirectViews.values.forEach { $0.removeFromSuperview() }
+        infoBubbleDirectViews.removeAll()
         infoBubblesById.removeAll()
     }
 }

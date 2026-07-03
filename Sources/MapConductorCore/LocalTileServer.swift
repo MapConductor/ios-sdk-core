@@ -10,6 +10,9 @@ public final class LocalTileServer {
     private var providers: [String: TileProvider] = [:]
     private let cacheOptionsLock = NSLock()
     private var forceNoStoreCache: Bool
+    private let connectionsLock = NSLock()
+    private var activeConnections = 0
+    private var shedConnections = 0
 
     private init(listener: NWListener, queue: DispatchQueue, baseUrl: String, forceNoStoreCache: Bool) {
         self.listener = listener
@@ -113,8 +116,59 @@ public final class LocalTileServer {
     }
 
     private func handleConnection(_ connection: NWConnection) {
+        // Only serve device-internal clients: a remote peer cannot complete a
+        // TCP handshake with a spoofed loopback source address. The listener
+        // itself stays on the wildcard address (dual-stack) because some map
+        // SDK HTTP stacks resolve localhost to ::1.
+        guard isLoopback(connection) else {
+            MCLog.marker("LocalTileServer: rejected non-loopback connection from \(connection.endpoint)")
+            connection.cancel()
+            return
+        }
+
+        // Bound concurrent connections; excess is shed and the map SDK retries.
+        connectionsLock.lock()
+        if activeConnections >= Self.maxConcurrentConnections {
+            shedConnections += 1
+            let shed = shedConnections
+            connectionsLock.unlock()
+            MCLog.marker("LocalTileServer: shed connection (saturated) total=\(shed)")
+            connection.cancel()
+            return
+        }
+        activeConnections += 1
+        connectionsLock.unlock()
+
+        connection.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .cancelled, .failed:
+                guard let self else { return }
+                self.connectionsLock.lock()
+                self.activeConnections = max(0, self.activeConnections - 1)
+                self.connectionsLock.unlock()
+            default:
+                break
+            }
+        }
+
         connection.start(queue: queue)
         receiveRequest(connection: connection, buffer: Data(), handled: 0)
+    }
+
+    private func isLoopback(_ connection: NWConnection) -> Bool {
+        guard case let .hostPort(host, _) = connection.endpoint else { return false }
+        switch host {
+        case .ipv4(let address):
+            return address.isLoopback
+        case .ipv6(let address):
+            if address.isLoopback { return true }
+            // IPv4-mapped loopback (::ffff:127.0.0.1)
+            return address.asIPv4?.isLoopback == true
+        case .name:
+            return false
+        @unknown default:
+            return false
+        }
     }
 
     private func receiveRequest(connection: NWConnection, buffer: Data, handled: Int) {
@@ -124,6 +178,12 @@ public final class LocalTileServer {
             var nextBuffer = buffer
             if let data {
                 nextBuffer.append(data)
+            }
+
+            // Refuse oversized request heads instead of buffering them forever.
+            if nextBuffer.count > Self.maxRequestHeadBytes {
+                connection.cancel()
+                return
             }
 
             if let headerRange = nextBuffer.range(of: Data([13, 10, 13, 10])) {
@@ -350,6 +410,8 @@ public final class LocalTileServer {
     }
 
     private static let maxKeepAliveRequests = 10
+    private static let maxConcurrentConnections = 128
+    private static let maxRequestHeadBytes = 16 * 1024
     private static let longCacheControl = "public, max-age=31536000, immutable"
     private static let noStoreCacheControl = "no-store, no-cache, must-revalidate, max-age=0"
 }

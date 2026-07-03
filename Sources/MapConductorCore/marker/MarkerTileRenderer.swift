@@ -201,7 +201,9 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
             let centerNormY = tilePoint.y - tileY
 
             let callbackScale = max(iconScaleCallback?(entity.state, zoom) ?? 1.0, 0.0)
-            let scale = max((Double(icon.scale)) * callbackScale, 0.0) * self.extraIconScale
+            // icon.size already includes MarkerIconProtocol.scale (baked into the
+            // bitmap by toBitmapIcon), so it must not be applied again here.
+            let scale = max(callbackScale, 0.0) * self.extraIconScale
             let drawW = max(Double(icon.size.width) * scale, 1.0)
             let drawH = max(Double(icon.size.height) * scale, 1.0)
 
