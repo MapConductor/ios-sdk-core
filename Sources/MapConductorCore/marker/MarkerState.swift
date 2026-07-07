@@ -137,23 +137,41 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         onAnimateStart: OnMarkerEventHandler? = nil,
         onAnimateEnd: OnMarkerEventHandler? = nil
     ) -> MarkerState {
-        MarkerState(
-            position: position ?? self.position,
-            id: id ?? self.id,
-            extra: extra ?? self.extra,
-            icon: icon ?? self.icon,
+        // 各プロパティを個別の変数に展開する
+        // これによりコンパイラの型推論の負荷を分散させます
+        let finalId = id ?? self.id
+        let finalPosition = position ?? self.position
+        let finalExtra = extra ?? self.extra
+        let finalIcon = icon ?? self.icon
+        let finalClickable = clickable ?? self.clickable
+        let finalDraggable = draggable ?? self.draggable
+        let finalZIndex = zIndex ?? self.zIndex
+        let finalOnClick = onClick ?? self.onClick
+        let finalOnDragStart = onDragStart ?? self.onDragStart
+        let finalOnDrag = onDrag ?? self.onDrag
+        let finalOnDragEnd = onDragEnd ?? self.onDragEnd
+        let finalOnAnimateStart = onAnimateStart ?? self.onAnimateStart
+        let finalOnAnimateEnd = onAnimateEnd ?? self.onAnimateEnd
+
+        // 最終的にそれらを使ってインスタンスを生成
+        return MarkerState(
+            position: finalPosition,
+            id: finalId,
+            extra: finalExtra,
+            icon: finalIcon,
             animation: nil,
-            clickable: clickable ?? self.clickable,
-            draggable: draggable ?? self.draggable,
-            zIndex: zIndex ?? self.zIndex,
-            onClick: onClick ?? self.onClick,
-            onDragStart: onDragStart ?? self.onDragStart,
-            onDrag: onDrag ?? self.onDrag,
-            onDragEnd: onDragEnd ?? self.onDragEnd,
-            onAnimateStart: onAnimateStart ?? self.onAnimateStart,
-            onAnimateEnd: onAnimateEnd ?? self.onAnimateEnd
+            clickable: finalClickable,
+            draggable: finalDraggable,
+            zIndex: finalZIndex,
+            onClick: finalOnClick,
+            onDragStart: finalOnDragStart,
+            onDrag: finalOnDrag,
+            onDragEnd: finalOnDragEnd,
+            onAnimateStart: finalOnAnimateStart,
+            onAnimateEnd: finalOnAnimateEnd
         )
     }
+
 
     public static func == (lhs: MarkerState, rhs: MarkerState) -> Bool {
         lhs.hashCode() == rhs.hashCode()

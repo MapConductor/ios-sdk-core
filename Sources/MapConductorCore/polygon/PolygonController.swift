@@ -54,13 +54,17 @@ where Renderer.ActualPolygon == ActualPolygon {
             }
 
             for remainId in previous {
-                if let removedEntity = polygonManager.removeEntity(remainId) {
+                if let removedEntity = polygonManager.getEntity(remainId) {
                     removed.append(removedEntity)
                 }
             }
 
+            // Remove from the map first, then forget the entities. If this sync is
+            // cancelled mid-removal, the manager still tracks the leftovers so the
+            // next sync retries the removal instead of orphaning graphics on the map.
             if !removed.isEmpty {
                 await renderer.onRemove(data: removed)
+                removed.forEach { polygonManager.removeEntity($0.state.id) }
             }
 
             if !added.isEmpty {

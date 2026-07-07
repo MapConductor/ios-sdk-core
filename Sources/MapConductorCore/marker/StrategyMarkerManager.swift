@@ -41,6 +41,14 @@ where Renderer.ActualMarker == ActualMarker {
             let r = makeRenderer(strategy)
             renderer = r
             controller = StrategyMarkerController(strategy: strategy, renderer: r)
+            // Clear cached marker state so syncMarkers re-sends all markers to the
+            // new controller/strategy instance that has an empty marker registry.
+            // Without this, syncMarkers sees "no change" and the new strategy starts
+            // with zero markers — stale hull polygons are never cleaned up, and new
+            // clusters never appear until the next content diff that changes IDs.
+            subscriptions.values.forEach { $0.cancel() }
+            subscriptions.removeAll()
+            statesById = [:]
             Task { [weak self] in
                 await self?.controller?.onCameraChanged(mapCameraPosition: initialCamera)
             }

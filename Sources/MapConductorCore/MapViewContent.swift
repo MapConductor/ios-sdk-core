@@ -27,6 +27,11 @@ public struct MapViewContent {
     public var markerRenderingMarkers: [MarkerState] = []
     public var views: [AnyView] = []
     public var markerTilingOptions: MarkerTilingOptions = .Default
+    /// Handlers that manage a subset of polygons imperatively (e.g. cluster hull polygons).
+    /// Map view coordinators call ``PolygonSyncHandler/bindPolygonSync(_:)`` on each handler
+    /// to provide a direct polygon sync function, ensuring those polygons are committed before
+    /// marker animations start rather than through SwiftUI's deferred recomposition path.
+    public var polygonSyncHandlers: [any PolygonSyncHandler] = []
 
     public init() {}
 
@@ -44,6 +49,7 @@ public struct MapViewContent {
         rasterLayers.append(contentsOf: other.rasterLayers)
         markerRenderingMarkers.append(contentsOf: other.markerRenderingMarkers)
         views.append(contentsOf: other.views)
+        polygonSyncHandlers.append(contentsOf: other.polygonSyncHandlers)
         if other.markerRenderingStrategy != nil {
             markerRenderingStrategy = other.markerRenderingStrategy
         }
