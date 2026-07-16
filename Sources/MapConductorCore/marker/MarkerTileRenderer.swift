@@ -56,6 +56,43 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         cacheLock.unlock()
     }
 
+    /// Returns the closest marker whose rendered icon bounds contain the screen point.
+    public func hitTest(
+        screenPoint: CGPoint,
+        markerIds: Set<String>,
+        zoom: Int,
+        tolerance: CGFloat = 14,
+        renderScaleToScreenScale: CGFloat = UIScreen.main.scale,
+        project: (GeoPoint) -> CGPoint?
+    ) -> MarkerState? {
+        var bestState: MarkerState?
+        var bestDistanceSquared = CGFloat.infinity
+
+        for id in markerIds {
+            guard let entity = markerManager.getEntity(id), entity.state.clickable,
+                  let markerPoint = project(entity.state.position) else { continue }
+            let icon = entity.state.icon?.toBitmapIcon() ?? defaultIcon
+            let callbackScale = max(iconScaleCallback?(entity.state, zoom) ?? 1, 0)
+            let scale = CGFloat(callbackScale * extraIconScale) / max(renderScaleToScreenScale, 1)
+            let width = max(icon.size.width * scale, 1)
+            let height = max(icon.size.height * scale, 1)
+            let dx = screenPoint.x - markerPoint.x
+            let dy = screenPoint.y - markerPoint.y
+            let left = -icon.anchor.x * width - tolerance
+            let right = (1 - icon.anchor.x) * width + tolerance
+            let top = -icon.anchor.y * height - tolerance
+            let bottom = (1 - icon.anchor.y) * height + tolerance
+
+            guard dx >= left, dx <= right, dy >= top, dy <= bottom else { continue }
+            let distanceSquared = dx * dx + dy * dy
+            if distanceSquared < bestDistanceSquared {
+                bestDistanceSquared = distanceSquared
+                bestState = entity.state
+            }
+        }
+        return bestState
+    }
+
     public func renderTile(request: TileRequest) -> Data? {
         let z = request.z
         let worldTileCount = 1 << z

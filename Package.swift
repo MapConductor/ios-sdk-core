@@ -1,7 +1,11 @@
 // swift-tools-version: 5.9
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import Foundation
 import PackageDescription
+
+let frameworkLibraryType: Product.Library.LibraryType? =
+    ProcessInfo.processInfo.environment["MAPCONDUCTOR_BUILD_XCFRAMEWORK"] == "1" ? .dynamic : nil
 
 let package = Package(
     name: "mapconductor-core",
@@ -12,6 +16,7 @@ let package = Package(
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "MapConductorCore",
+            type: frameworkLibraryType,
             targets: ["MapConductorCore"]
         ),
     ],
@@ -20,6 +25,10 @@ let package = Package(
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "MapConductorCore"
+        ),
+        .testTarget(
+            name: "MapConductorCoreTests",
+            dependencies: ["MapConductorCore"]
         ),
     ]
 )
