@@ -9,7 +9,7 @@ public enum RasterSource: Hashable {
         tileSize: Int = RasterSource.defaultTileSize,
         minZoom: Int? = nil,
         maxZoom: Int? = nil,
-        attribution: String? = nil,
+        attributionRules: [AttributionRule] = [],
         scheme: TileScheme = .XYZ
     )
     case tileJson(url: String)

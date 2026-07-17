@@ -274,14 +274,24 @@ private func javaHash(_ value: Any?) -> Int {
 
 private func javaHash(_ source: RasterSource) -> Int {
     switch source {
-    case let .urlTemplate(template, tileSize, minZoom, maxZoom, attribution, scheme):
+    case let .urlTemplate(template, tileSize, minZoom, maxZoom, attributionRules, scheme):
         let hashCodes = [
             javaHash("urlTemplate"),
             javaHash(template),
             javaHash(tileSize),
             javaHash(minZoom),
             javaHash(maxZoom),
-            javaHash(attribution),
+            javaHash(attributionRules.map { rule in
+                [
+                    javaHash(rule.attribution),
+                    javaHash(rule.minZoom),
+                    javaHash(rule.maxZoom),
+                    javaHash(rule.bounds?.southWest?.latitude),
+                    javaHash(rule.bounds?.southWest?.longitude),
+                    javaHash(rule.bounds?.northEast?.latitude),
+                    javaHash(rule.bounds?.northEast?.longitude)
+                ]
+            }.flatMap { $0 }),
             javaHash(scheme.rawValue)
         ]
         return listHashCode(hashCodes)
@@ -295,6 +305,15 @@ private func javaHash(_ source: RasterSource) -> Int {
 private func javaHash(_ value: Int?) -> Int {
     guard let value else { return 0 }
     return Int(Int32(truncatingIfNeeded: value))
+}
+
+private func javaHash(_ value: Double?) -> Int {
+    guard let value else { return 0 }
+    return javaHash(value)
+}
+
+private func javaHash(_ values: [Int]) -> Int {
+    listHashCode(values)
 }
 
 private func javaHash(_ value: String?) -> Int {
