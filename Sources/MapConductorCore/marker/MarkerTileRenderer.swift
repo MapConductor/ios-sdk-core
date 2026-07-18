@@ -63,34 +63,32 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         zoom: Int,
         tolerance: CGFloat = 14,
         renderScaleToScreenScale: CGFloat = UIScreen.main.scale,
+        unproject: (CGPoint) -> GeoPoint?,
         project: (GeoPoint) -> CGPoint?
     ) -> MarkerState? {
-        var bestState: MarkerState?
-        var bestDistanceSquared = CGFloat.infinity
+        // Android resolves one spatially indexed nearest marker before applying the
+        // rendered-icon bounds check. Do the same here: iterating every tiled marker
+        // made each tap O(n), including a projection and icon conversion per marker.
+        guard let position = unproject(screenPoint),
+              let entity = markerManager.findNearest(position: position),
+              markerIds.contains(entity.state.id),
+              entity.state.clickable,
+              let markerPoint = project(entity.state.position) else { return nil }
 
-        for id in markerIds {
-            guard let entity = markerManager.getEntity(id), entity.state.clickable,
-                  let markerPoint = project(entity.state.position) else { continue }
-            let icon = entity.state.icon?.toBitmapIcon() ?? defaultIcon
-            let callbackScale = max(iconScaleCallback?(entity.state, zoom) ?? 1, 0)
-            let scale = CGFloat(callbackScale * extraIconScale) / max(renderScaleToScreenScale, 1)
-            let width = max(icon.size.width * scale, 1)
-            let height = max(icon.size.height * scale, 1)
-            let dx = screenPoint.x - markerPoint.x
-            let dy = screenPoint.y - markerPoint.y
-            let left = -icon.anchor.x * width - tolerance
-            let right = (1 - icon.anchor.x) * width + tolerance
-            let top = -icon.anchor.y * height - tolerance
-            let bottom = (1 - icon.anchor.y) * height + tolerance
+        let icon = entity.state.icon?.toBitmapIcon() ?? defaultIcon
+        let callbackScale = max(iconScaleCallback?(entity.state, zoom) ?? 1, 0)
+        let scale = CGFloat(callbackScale * extraIconScale) / max(renderScaleToScreenScale, 1)
+        let width = max(icon.size.width * scale, 1)
+        let height = max(icon.size.height * scale, 1)
+        let dx = screenPoint.x - markerPoint.x
+        let dy = screenPoint.y - markerPoint.y
+        let left = -icon.anchor.x * width - tolerance
+        let right = (1 - icon.anchor.x) * width + tolerance
+        let top = -icon.anchor.y * height - tolerance
+        let bottom = (1 - icon.anchor.y) * height + tolerance
 
-            guard dx >= left, dx <= right, dy >= top, dy <= bottom else { continue }
-            let distanceSquared = dx * dx + dy * dy
-            if distanceSquared < bestDistanceSquared {
-                bestDistanceSquared = distanceSquared
-                bestState = entity.state
-            }
-        }
-        return bestState
+        guard dx >= left, dx <= right, dy >= top, dy <= bottom else { return nil }
+        return entity.state
     }
 
     public func renderTile(request: TileRequest) -> Data? {

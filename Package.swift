@@ -26,5 +26,9 @@ let package = Package(
         .target(
             name: "MapConductorCore"
         ),
+        .testTarget(
+            name: "MapConductorCoreTests",
+            dependencies: ["MapConductorCore"]
+        ),
     ]
 )
