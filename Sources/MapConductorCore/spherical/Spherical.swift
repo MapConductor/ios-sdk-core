@@ -3,7 +3,7 @@ import Foundation
 public enum Spherical {
     private static let radToDeg = 180.0 / Double.pi
     private static let degToRad = Double.pi / 180.0
-    private static let earthRadiusMeters: Double = 6_378_137.0
+    private static let earthRadiusMeters: Double = Earth.radiusMeters
 
     public static func computeDistanceBetween(
         from: GeoPointProtocol,

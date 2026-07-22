@@ -122,7 +122,7 @@ public final class CircleManager<ActualCircle>: CircleManagerProtocol {
 
         let a = sin(dLat / 2) * sin(dLat / 2) + cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
         let c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return 6_378_137.0 * c
+        return Earth.radiusMeters * c
     }
 
     private func deg2rad(_ deg: Double) -> Double {

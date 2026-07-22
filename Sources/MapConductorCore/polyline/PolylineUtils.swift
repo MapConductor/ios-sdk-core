@@ -1,18 +1,12 @@
 import Foundation
 
-private enum PolylineEarth {
-    // Used for Web Mercator meters-per-pixel computations.
-    static let radiusMeters: Double = 6_378_137.0
-    static let circumferenceMeters: Double = 2.0 * Double.pi * radiusMeters
-}
-
 public func calculateMetersPerPixel(
     latitude: Double,
     zoom: Double,
     // Match Android/Web Mercator convention where zoom is defined against a 256px tile.
     tileSize: Double = 256.0
 ) -> Double {
-    let metersPerPixelAtEquator = PolylineEarth.circumferenceMeters / tileSize
+    let metersPerPixelAtEquator = Earth.circumferenceMeters / tileSize
     let metersPerPixelAtZoom = metersPerPixelAtEquator / pow(2.0, zoom)
     let latitudeAdjustment = cos(deg2rad(abs(latitude)))
     return metersPerPixelAtZoom * latitudeAdjustment
@@ -503,7 +497,7 @@ private func haversineDistanceMeters(from: GeoPointProtocol, to: GeoPointProtoco
 
     let a = sin(dLat / 2) * sin(dLat / 2) + cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
     let c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return PolylineEarth.radiusMeters * c
+    return Earth.radiusMeters * c
 }
 
 private func sphericalGeodesicInterpolate(from: GeoPointProtocol, to: GeoPointProtocol, fraction: Double) -> GeoPoint {
@@ -548,9 +542,9 @@ private func sphericalGeodesicInterpolate(from: GeoPointProtocol, to: GeoPointPr
 // MARK: - Vincenty (WGS84 Ellipsoid)
 
 private enum WGS84 {
-    static let a: Double = 6_378_137.0
-    static let f: Double = 1.0 / 298.257_223_563
-    static let b: Double = a * (1.0 - f)
+    static let a: Double = Earth.radiusMeters
+    static let f: Double = Earth.flattening
+    static let b: Double = Earth.semiMinorAxisMeters
 }
 
 private struct VincentyInverseResult {
