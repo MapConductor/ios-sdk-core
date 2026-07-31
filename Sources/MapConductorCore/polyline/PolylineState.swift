@@ -18,7 +18,10 @@ public struct PolylineEvent {
 
     public init(state: PolylineState, clicked: GeoPointProtocol) {
         self.state = state
-        self.clicked = clicked
+        // 生成時に wrap して [-180,180] / [-90,90] に正規化する（日付変更線対策）。
+        // 正規化をここ（イベント型＝出口）に一元化することで、コア/独自コントローラ/将来のプロバイダの
+        // どの配送経路を通っても wrap 漏れが起きない。ヒットテストの入力座標は wrap しないこと。
+        self.clicked = clicked.wrap()
     }
 }
 

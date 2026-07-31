@@ -25,6 +25,7 @@ where Renderer.ActualGroundImage == ActualGroundImage {
     }
 
     public func dispatchClick(event: GroundImageEvent) {
+        // 配送座標の wrap は GroundImageEvent の生成時に一元化済み。
         event.state.onClick?(event)
         clickListener?(event)
     }

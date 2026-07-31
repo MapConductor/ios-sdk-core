@@ -348,8 +348,7 @@ public final class LocalTileServer {
             return nil
         }
 
-        let yPart = segments[yIndex].split(separator: ".").first
-        guard let yPart, let y = Int(yPart) else {
+        guard let coordinate = parseTileCoordinate(segments[yIndex]) else {
             return nil
         }
 
@@ -357,8 +356,13 @@ public final class LocalTileServer {
             return nil
         }
 
-        MCLog.marker("LocalTileServer.resolveTile routeId=\(routeId) z=\(z) x=\(x) y=\(y)")
-        guard let bytes = provider.renderTile(request: TileRequest(x: x, y: y, z: z)) else {
+        MCLog.marker(
+            "LocalTileServer.resolveTile routeId=\(routeId) z=\(z) x=\(x) " +
+                "y=\(coordinate.y) ratio=\(coordinate.pixelRatio)x"
+        )
+        guard let bytes = provider.renderTile(
+            request: TileRequest(x: x, y: coordinate.y, z: z, pixelRatio: coordinate.pixelRatio)
+        ) else {
             return nil
         }
 
@@ -414,4 +418,35 @@ public final class LocalTileServer {
     private static let maxRequestHeadBytes = 16 * 1024
     private static let longCacheControl = "public, max-age=31536000, immutable"
     private static let noStoreCacheControl = "no-store, no-cache, must-revalidate, max-age=0"
+}
+
+struct TileCoordinate: Equatable {
+    let y: Int
+    let pixelRatio: Int
+}
+
+private let tileCoordinateExpression = try! NSRegularExpression(
+    pattern: #"^(\d+)(?:@(\d+)x)?\.png$"#
+)
+
+func parseTileCoordinate(_ fileName: String) -> TileCoordinate? {
+    guard let match = tileCoordinateExpression.firstMatch(
+              in: fileName,
+              range: NSRange(fileName.startIndex..., in: fileName)
+          ),
+          let yRange = Range(match.range(at: 1), in: fileName),
+          let y = Int(fileName[yRange]) else {
+        return nil
+    }
+
+    let pixelRatio: Int
+    if match.range(at: 2).location != NSNotFound,
+       let ratioRange = Range(match.range(at: 2), in: fileName),
+       let parsedRatio = Int(fileName[ratioRange]) {
+        pixelRatio = parsedRatio
+    } else {
+        pixelRatio = 1
+    }
+    guard (1...3).contains(pixelRatio) else { return nil }
+    return TileCoordinate(y: y, pixelRatio: pixelRatio)
 }

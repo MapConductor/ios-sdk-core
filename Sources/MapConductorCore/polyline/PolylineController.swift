@@ -26,6 +26,7 @@ where Renderer.ActualPolyline == ActualPolyline {
     }
 
     public func dispatchClick(event: PolylineEvent) {
+        // 配送座標の wrap は PolylineEvent の生成時に一元化済み。
         event.state.onClick?(event)
         clickListener?(event)
     }

@@ -25,6 +25,7 @@ where Renderer.ActualPolygon == ActualPolygon {
     }
 
     public func dispatchClick(event: PolygonEvent) {
+        // 配送座標の wrap は PolygonEvent の生成時に一元化済み。
         event.state.onClick?(event)
         clickListener?(event)
     }
