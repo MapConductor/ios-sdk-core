@@ -34,6 +34,14 @@ public struct MarkerAnimationOverlayEntry {
     }
 }
 
+/// Implemented by the screen-space animation layer and handed to marker
+/// renderers; renderers that support the overlay delegate their Drop/Bounce
+/// animations here (counterpart of Android's `MarkerAnimationOverlayHost`).
+@MainActor
+public protocol MarkerAnimationOverlayHost: AnyObject {
+    func start(_ entry: MarkerAnimationOverlayEntry)
+}
+
 /// Screen-space marker animation layer (UIKit counterpart of the Compose
 /// `MarkerAnimationOverlayLayer` on Android).
 ///
@@ -44,14 +52,26 @@ public struct MarkerAnimationOverlayEntry {
 /// from the top of the map view. The projected target is re-resolved every
 /// frame, so the animation tracks a moving camera.
 ///
-/// The layer shares the InfoBubble overlay container; animation views are
-/// inserted at the bottom so info bubbles stay on top.
+/// The layer shares the InfoBubble overlay container; animation views live in
+/// a clipped sub-container inserted at the bottom so info bubbles stay on top
+/// and the falling icon never draws outside the map bounds.
 @MainActor
-public final class MarkerAnimationOverlayCoordinator {
+public final class MarkerAnimationOverlayCoordinator: MarkerAnimationOverlayHost {
     public typealias Projection = (GeoPointProtocol) -> CGPoint?
 
     private weak var container: UIView?
     private let project: Projection
+
+    /// Clips the animated icons to the map bounds (the icon starts above the
+    /// container's top edge) without forcing clipping on the shared
+    /// info-bubble container.
+    private let clipView: UIView = {
+        let view = UIView()
+        view.clipsToBounds = true
+        view.isUserInteractionEnabled = false
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        return view
+    }()
 
     private final class ActiveAnimation {
         let entry: MarkerAnimationOverlayEntry
@@ -86,11 +106,18 @@ public final class MarkerAnimationOverlayCoordinator {
             existing.entry.onFinished()
         }
 
+        // Keep animations below info bubbles sharing the same container: the
+        // clipped sub-container sits at the bottom of the shared container.
+        if clipView.superview !== container {
+            clipView.removeFromSuperview()
+            clipView.frame = container.bounds
+            container.insertSubview(clipView, at: 0)
+        }
+
         let view = UIImageView(image: entry.icon.bitmap)
         view.isUserInteractionEnabled = false
         view.frame = CGRect(origin: .zero, size: entry.icon.size)
-        // Keep animations below info bubbles sharing the same container.
-        container.insertSubview(view, at: 0)
+        clipView.addSubview(view)
 
         let animation = ActiveAnimation(entry: entry, view: view, startTime: CACurrentMediaTime())
         active[entry.id] = animation
@@ -108,6 +135,7 @@ public final class MarkerAnimationOverlayCoordinator {
             animation.view.removeFromSuperview()
             animation.entry.onFinished()
         }
+        clipView.removeFromSuperview()
     }
 
     // MARK: - Private
@@ -190,25 +218,26 @@ public final class MarkerAnimationOverlayCoordinator {
         case .Drop:
             return t
         case .Bounce:
-            return Self.easeOutBounce(t)
+            return Self.bounceInterpolation(t)
         }
     }
 
-    private static func easeOutBounce(_ t: CGFloat) -> CGFloat {
-        let n1: CGFloat = 7.5625
-        let d1: CGFloat = 2.75
-        var value = t
-        if value < 1 / d1 {
-            return n1 * value * value
-        } else if value < 2 / d1 {
-            value -= 1.5 / d1
-            return n1 * value * value + 0.75
-        } else if value < 2.5 / d1 {
-            value -= 2.25 / d1
-            return n1 * value * value + 0.9375
+    private static func bounce(_ t: CGFloat) -> CGFloat {
+        8.0 * t * t
+    }
+
+    /// AOSP `android.view.animation.BounceInterpolator` — the exact easing the
+    /// Android SDK uses for `MarkerAnimation.Bounce`.
+    static func bounceInterpolation(_ input: CGFloat) -> CGFloat {
+        let t = input * 1.1226
+        if t < 0.3535 {
+            return bounce(t)
+        } else if t < 0.7408 {
+            return bounce(t - 0.54719) + 0.7
+        } else if t < 0.9644 {
+            return bounce(t - 0.8526) + 0.9
         } else {
-            value -= 2.625 / d1
-            return n1 * value * value + 0.984375
+            return bounce(t - 1.0435) + 0.95
         }
     }
 }

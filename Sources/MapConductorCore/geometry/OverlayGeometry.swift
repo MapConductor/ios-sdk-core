@@ -1,0 +1,96 @@
+import Foundation
+
+// ポリライン／ポリゴン描画用の共通ジオメトリパイプライン（unwrap 版）。
+//
+// Mapbox GL / MapLibre GL（MapTiler 含む）は GeoJSON の経度が [-180, 180] を超えていても
+// そのまま描画できる。経度を連続化（unwrap）した単一ジオメトリを渡せば、±180 跨ぎでも
+// 分割不要で継ぎ目が出ず、外周が分割されることによる「穴を含められない」制約も無くなる。
+// 経度 ±180 に制約のある SDK は従来どおり normalize + `splitByMeridian`／
+// `splitRingByMeridian` を使うこと。android-sdk の geometry パッケージと同一仕様。
+
+/// ポリゴンの外周リングと穴リング。リングは閉じていない
+/// （末尾に先頭点を追加する処理は各ドライバーの座標変換後に行う）。
+public struct PolygonRings {
+    public let outerRings: [[GeoPointProtocol]]
+    public let holeRings: [[GeoPointProtocol]]
+
+    public init(outerRings: [[GeoPointProtocol]], holeRings: [[GeoPointProtocol]]) {
+        self.outerRings = outerRings
+        self.holeRings = holeRings
+    }
+}
+
+/// geodesic に応じた補間で点列を密度化し、緯度経度を正規化して返す。
+public func densifyAndNormalize(
+    _ points: [GeoPointProtocol],
+    geodesic: Bool,
+    maxSegmentLength: Double = 10_000.0
+) -> [GeoPointProtocol] {
+    let interpolated = geodesic
+        ? createInterpolatePoints(points, maxSegmentLength: maxSegmentLength)
+        : createLinearInterpolatePoints(points)
+    return interpolated.map { $0.normalize() }
+}
+
+/// 密度化済みの点列の経度を、直前の点からの最短差分を積み上げる形で連続化する。
+/// 先頭点は `anchorLng`（省略時は正規化した自身の経度）から ±180 以内に配置する。
+private func unwrapContinuous(
+    _ points: [GeoPointProtocol],
+    anchorLng: Double? = nil
+) -> [GeoPointProtocol] {
+    guard let first = points.first else { return points }
+    var result: [GeoPointProtocol] = []
+    result.reserveCapacity(points.count)
+    var prevLng: Double
+    if let anchorLng {
+        prevLng = anchorLng + normalizeLngDegrees(first.longitude - anchorLng)
+    } else {
+        prevLng = normalizeLngDegrees(first.longitude)
+    }
+    result.append(GeoPoint(latitude: first.latitude, longitude: prevLng))
+    for i in 1 ..< points.count {
+        let p = points[i]
+        prevLng += normalizeLngDegrees(p.longitude - points[i - 1].longitude)
+        result.append(GeoPoint(latitude: p.latitude, longitude: prevLng))
+    }
+    return result
+}
+
+/// ポリライン用パイプライン（unwrap 版）。密度化後に経度を連続化した単一パスを返す。
+/// 頂点 2 未満の入力は空配列を返す。
+public func buildUnwrappedPolylinePath(
+    _ points: [GeoPointProtocol],
+    geodesic: Bool,
+    maxSegmentLength: Double = 10_000.0
+) -> [GeoPointProtocol] {
+    guard points.count >= 2 else { return [] }
+    return unwrapContinuous(
+        densifyAndNormalize(points, geodesic: geodesic, maxSegmentLength: maxSegmentLength)
+    )
+}
+
+/// ポリゴン用パイプライン（unwrap 版）。外周・穴とも密度化し、外周の先頭経度を基準に
+/// 同一の連続座標系へ unwrap する（±180 跨ぎでも常に外周 1 リング + 全穴を返せる）。
+/// 頂点 3 未満の外周入力は空の結果を返し、3 点未満に縮退した穴は除外する。
+public func buildUnwrappedPolygonRings(
+    points: [GeoPointProtocol],
+    holes: [[GeoPointProtocol]],
+    geodesic: Bool,
+    maxSegmentLength: Double = 10_000.0
+) -> PolygonRings {
+    guard points.count >= 3 else { return PolygonRings(outerRings: [], holeRings: []) }
+    let outer = unwrapContinuous(
+        densifyAndNormalize(points, geodesic: geodesic, maxSegmentLength: maxSegmentLength)
+    )
+    let anchor = outer[0].longitude
+    let holeRings = holes
+        .filter { $0.count >= 3 }
+        .map { hole in
+            unwrapContinuous(
+                densifyAndNormalize(hole, geodesic: geodesic, maxSegmentLength: maxSegmentLength),
+                anchorLng: anchor
+            )
+        }
+        .filter { $0.count >= 3 }
+    return PolygonRings(outerRings: [outer], holeRings: holeRings)
+}

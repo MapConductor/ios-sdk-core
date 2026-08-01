@@ -1,22 +1,29 @@
 import Foundation
 
-/// Densifies a path by inserting linearly interpolated (rhumb-like) points at a
-/// fixed fraction step between each pair of vertices.
+/// 非測地線（直線補間）の点列を密度化する。
+///
+/// 分割数はセグメント長に応じて決める（`createInterpolatePoints` と同じ方式）。固定分割だと
+/// 短いセグメントが多い多頂点ポリゴンで点数が頂点数×分割数に膨れ上がり、WebView ブリッジや
+/// ネイティブジオメトリ構築が極端に遅くなるため、`maxSegmentLength` を超えるセグメントのみ
+/// 分割する。android-sdk / react-sdk と同一仕様。
 public func createLinearInterpolatePoints(
     _ points: [GeoPointProtocol],
-    fractionStep: Double = 0.01
+    maxSegmentLength: Double = 10_000.0
 ) -> [GeoPointProtocol] {
     guard points.count >= 2 else { return points }
 
     var results: [GeoPointProtocol] = [points[0]]
 
-    for index in 1..<points.count {
+    for index in 1 ..< points.count {
         let from = points[index - 1]
         let to = points[index]
-        var fraction = fractionStep
-        while fraction <= 1.0 {
+        let distance = GeographicLibCalculator.computeDistanceBetween(from: from, to: to)
+        let numSegments = max(Int(distance / maxSegmentLength), 1)
+        let step = 1.0 / Double(numSegments)
+        var fraction = step
+        while fraction < 1.0 {
             results.append(Spherical.linearInterpolate(from: from, to: to, fraction: fraction))
-            fraction += fractionStep
+            fraction += step
         }
         results.append(to)
     }

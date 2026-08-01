@@ -13,9 +13,21 @@ func interpolateAtMeridianLinear(
     let targetMeridian = fromLng >= 0 ? 180.0 : -180.0
 
     // Fraction along the segment where the meridian crossing occurs.
-    let totalLngDiff = toLng - fromLng
+    // The raw difference exceeds 180° for an antimeridian-crossing segment (the
+    // only case this function is called for), so unwrap it to the short-way
+    // signed span; otherwise the fraction comes out negative and the latitude is
+    // extrapolated in the wrong direction.
+    let directDiff = toLng - fromLng
+    let totalLngDiff: Double
+    if directDiff > 180.0 {
+        totalLngDiff = directDiff - 360.0
+    } else if directDiff < -180.0 {
+        totalLngDiff = directDiff + 360.0
+    } else {
+        totalLngDiff = directDiff
+    }
     let meridianDiff = targetMeridian - fromLng
-    let fraction = meridianDiff / totalLngDiff
+    let fraction = totalLngDiff == 0.0 ? 0.0 : min(1.0, max(0.0, meridianDiff / totalLngDiff))
 
     let latitude = from.latitude + fraction * (to.latitude - from.latitude)
     let altitude: Double
