@@ -389,6 +389,11 @@ public final class LocalTileServer {
         response.append("Content-Type: \(contentType)\r\n".data(using: .utf8) ?? Data())
         response.append("Content-Length: \(body.count)\r\n".data(using: .utf8) ?? Data())
         response.append("Connection: \(keepAlive ? "keep-alive" : "close")\r\n".data(using: .utf8) ?? Data())
+        // Allow cross-origin reads: WebView-based providers (e.g. Longdo, whose
+        // MapLibre GL map runs in a WKWebView at a different origin) fetch these
+        // tiles as crossOrigin images and would otherwise drop them. The server
+        // only ever serves locally-generated overlay tiles on loopback.
+        response.append("Access-Control-Allow-Origin: *\r\n".data(using: .utf8) ?? Data())
         for (key, value) in extraHeaders {
             response.append("\(key): \(value)\r\n".data(using: .utf8) ?? Data())
         }

@@ -32,6 +32,48 @@ public func densifyAndNormalize(
     return interpolated.map { $0.normalize() }
 }
 
+// ─── 分割版パイプライン（経度 ±180 に制約のある SDK 向け） ─────────────────────
+//
+// 経度 ±180 を超える座標を受け付けない SDK（ネイティブオーバーレイ系）は、密度化・正規化後に
+// 子午線で分割した複数リングとして描画する。GL 系は代わりに `buildUnwrappedPolylinePath`／
+// `buildUnwrappedPolygonRings`（unwrap 版）を使うこと。android-sdk と同一仕様。
+
+/// ポリライン用パイプライン（分割版）。密度化・正規化後に子午線で分割したセグメント列を返す。
+/// 頂点 2 未満の入力、および分割で 2 点未満になったセグメントは除く（空配列になり得る）。
+public func buildPolylineSegments(
+    _ points: [GeoPointProtocol],
+    geodesic: Bool
+) -> [[GeoPointProtocol]] {
+    guard points.count >= 2 else { return [] }
+    return splitByMeridian(densifyAndNormalize(points, geodesic: geodesic), geodesic: geodesic)
+        .filter { $0.count >= 2 }
+}
+
+/// ポリゴン用パイプライン（分割版）。外周を密度化→分割し、穴も同じ方式で密度化する。
+///
+/// 外周が子午線で複数リングに分割された場合、穴を分割後の各ピースへ再割当てできないため
+/// 穴を含めない（従来から全 GeoJSON 系ドライバー共通の仕様）。頂点 3 未満の外周入力は
+/// 空の結果を返し、3 点未満に縮退したリングは除外する。
+public func buildPolygonRings(
+    points: [GeoPointProtocol],
+    holes: [[GeoPointProtocol]],
+    geodesic: Bool
+) -> PolygonRings {
+    guard points.count >= 3 else { return PolygonRings(outerRings: [], holeRings: []) }
+    let outerRings = splitRingByMeridian(
+        densifyAndNormalize(points, geodesic: geodesic),
+        geodesic: geodesic
+    ).filter { $0.count >= 3 }
+    let includeHoles = !holes.isEmpty && outerRings.count == 1
+    let holeRings = includeHoles
+        ? holes
+            .filter { $0.count >= 3 }
+            .map { densifyAndNormalize($0, geodesic: geodesic) }
+            .filter { $0.count >= 3 }
+        : []
+    return PolygonRings(outerRings: outerRings, holeRings: holeRings)
+}
+
 /// 密度化済みの点列の経度を、直前の点からの最短差分を積み上げる形で連続化する。
 /// 先頭点は `anchorLng`（省略時は正規化した自身の経度）から ±180 以内に配置する。
 private func unwrapContinuous(

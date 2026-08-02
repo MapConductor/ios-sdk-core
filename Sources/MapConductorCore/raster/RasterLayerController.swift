@@ -9,6 +9,9 @@ where Renderer.ActualLayer == ActualLayer {
 
     public let zIndex: Int = 0
     private let semaphore = AsyncSemaphore(1)
+    // android-sdk / react-sdk と同じく、内部的に upsert したレイヤー（例: マーカータイル）は
+    // アプリ層の add()/composition の削除スイープ対象から除外する。
+    private var upsertedIds: Set<String> = []
 
     public var clickListener: ((RasterLayerEvent) -> Void)?
 
@@ -30,13 +33,23 @@ where Renderer.ActualLayer == ActualLayer {
         if rasterLayerManager.isDestroyed { return }
         await semaphore.withPermit {
             if rasterLayerManager.isDestroyed { return }
-            var previous = Set(rasterLayerManager.allEntities().map { $0.state.id })
+            var previous = Set(
+                rasterLayerManager.allEntities()
+                    .map { $0.state.id }
+                    .filter { !upsertedIds.contains($0) }
+            )
             var added: [RasterLayerOverlayAddParams] = []
             var updated: [RasterLayerOverlayChangeParams<ActualLayer>] = []
             var removed: [RasterLayerEntity<ActualLayer>] = []
 
             for state in data {
                 if previous.contains(state.id), let prevEntity = rasterLayerManager.getEntity(state.id) {
+                    if state.fingerPrint() == prevEntity.fingerPrint {
+                        // 描画結果が不変なら renderer を呼ばず最新の state だけ採用する（react-sdk と同じ）。
+                        rasterLayerManager.registerEntity(RasterLayerEntity(layer: prevEntity.layer, state: state))
+                        previous.remove(state.id)
+                        continue
+                    }
                     updated.append(
                         RasterLayerOverlayChangeParams(
                             current: RasterLayerEntity(layer: prevEntity.layer, state: state),
@@ -104,9 +117,49 @@ where Renderer.ActualLayer == ActualLayer {
         }
     }
 
+    /// アプリ層の add()/composition とは独立に、単一のレイヤーを追加・更新する
+    /// （マーカータイル等の内部レイヤー用）。android-sdk / react-sdk と同一。
+    open func upsert(state: RasterLayerState) async {
+        if rasterLayerManager.isDestroyed { return }
+        await semaphore.withPermit {
+            if rasterLayerManager.isDestroyed { return }
+            upsertedIds.insert(state.id)
+            guard let prevEntity = rasterLayerManager.getEntity(state.id) else {
+                let layers = await renderer.onAdd(data: [RasterLayerOverlayAddParams(state: state)])
+                if layers.count == 1, let layer = layers[0] {
+                    rasterLayerManager.registerEntity(RasterLayerEntity(layer: layer, state: state))
+                }
+                await renderer.onPostProcess()
+                return
+            }
+            if state.fingerPrint() == prevEntity.fingerPrint { return }
+            let params = RasterLayerOverlayChangeParams(
+                current: RasterLayerEntity(layer: prevEntity.layer, state: state),
+                prev: prevEntity
+            )
+            let layers = await renderer.onChange(data: [params])
+            if layers.count == 1, let layer = layers[0] {
+                rasterLayerManager.registerEntity(RasterLayerEntity(layer: layer, state: state))
+            }
+            await renderer.onPostProcess()
+        }
+    }
+
+    /// upsert で追加した単一レイヤーを id 指定で削除する。android-sdk / react-sdk と同一。
+    open func removeById(_ id: String) async {
+        if rasterLayerManager.isDestroyed { return }
+        await semaphore.withPermit {
+            upsertedIds.remove(id)
+            guard let entity = rasterLayerManager.removeEntity(id) else { return }
+            await renderer.onRemove(data: [entity])
+            await renderer.onPostProcess()
+        }
+    }
+
     open func clear() async {
         if rasterLayerManager.isDestroyed { return }
         await semaphore.withPermit {
+            upsertedIds.removeAll()
             let entities = rasterLayerManager.allEntities()
             await renderer.onRemove(data: entities)
             await renderer.onPostProcess()

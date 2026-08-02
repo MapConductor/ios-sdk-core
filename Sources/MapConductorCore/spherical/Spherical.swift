@@ -193,7 +193,9 @@ public enum Spherical {
         to: GeoPointProtocol,
         fraction: Double
     ) -> Double {
-        let f = max(0.0, min(1.0, fraction))
+        // android-sdk / react-sdk と同じく fraction はクランプしない
+        // （lat/lng と同様に外挿する。以前は [0,1] にクランプしていた）。
+        let f = fraction
         switch (from.altitude, to.altitude) {
         case let (fromAlt?, toAlt?):
             return fromAlt + (toAlt - fromAlt) * f

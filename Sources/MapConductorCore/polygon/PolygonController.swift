@@ -41,6 +41,12 @@ where Renderer.ActualPolygon == ActualPolygon {
 
             for state in data {
                 if previous.contains(state.id), let prevEntity = polygonManager.getEntity(state.id) {
+                    if state.fingerPrint() == prevEntity.fingerPrint {
+                        // 描画結果が不変なら renderer を呼ばず最新の state だけ採用する（react-sdk と同じ）。
+                        polygonManager.registerEntity(PolygonEntity(polygon: prevEntity.polygon, state: state))
+                        previous.remove(state.id)
+                        continue
+                    }
                     updated.append(
                         PolygonOverlayChangeParams(
                             current: PolygonEntity(polygon: prevEntity.polygon, state: state),

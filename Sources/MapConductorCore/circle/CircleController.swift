@@ -41,6 +41,13 @@ where Renderer.ActualCircle == ActualCircle {
 
             for state in data {
                 if previous.contains(state.id), let prevEntity = circleManager.getEntity(state.id) {
+                    if state.fingerPrint() == prevEntity.fingerPrint {
+                        // 描画結果が不変なら renderer を呼ばず最新の state だけ採用する
+                        // （react-sdk と同じ。composition ごとの無駄な onChange 再実行を避ける）。
+                        circleManager.registerEntity(CircleEntity(circle: prevEntity.circle, state: state))
+                        previous.remove(state.id)
+                        continue
+                    }
                     updated.append(
                         CircleOverlayChangeParams(
                             current: CircleEntity(circle: prevEntity.circle, state: state),

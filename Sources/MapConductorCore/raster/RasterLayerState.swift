@@ -49,9 +49,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
             source: source,
             opacity: opacity,
             visible: visible,
-            userAgent: userAgent,
-            extraHeaders: extraHeaders,
-            extra: extra
+            debug: debug,
+            extraHeaders: extraHeaders
         )
         self.id = resolvedId
         self.source = source
@@ -177,11 +176,16 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     }
 
     public func hashCode() -> Int {
+        // android-sdk と同じフィールド集合: source, opacity, visible, zIndex, debug,
+        // extraHeaders, userAgent（zIndex/debug を含める。以前は除外していたため
+        // zIndex や debug のみ異なるレイヤーが等価扱いになっていた）。extra は iOS 独自。
         var result: Int32 = Int32(truncatingIfNeeded: javaHash(source))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(opacity))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(visible))
-        result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(userAgent))
+        result = result &* 31 &+ Int32(truncatingIfNeeded: zIndex)
+        result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(debug))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(extraHeaders))
+        result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(userAgent))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(extra))
         return Int(result)
     }
@@ -190,17 +194,17 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         source: RasterSource,
         opacity: Double,
         visible: Bool,
-        userAgent: String?,
-        extraHeaders: [String: String]?,
-        extra: Any?
+        debug: Bool,
+        extraHeaders: [String: String]?
     ) -> String {
+        // android-sdk / react-sdk と同じフィールド集合・順序: source, opacity, visible,
+        // debug, extraHeaders（userAgent / extra は id に含めない）。
         let hashCodes = [
             javaHash(source),
             javaHash(opacity),
             javaHash(visible),
-            javaHash(userAgent),
-            javaHash(extraHeaders),
-            javaHash(extra)
+            javaHash(debug),
+            javaHash(extraHeaders)
         ]
         return rasterLayerId(hashCodes: hashCodes)
     }
@@ -226,8 +230,8 @@ private func javaHash(_ value: Double) -> Int {
 
 private func javaHash(_ value: String) -> Int {
     var result: Int32 = 0
-    for scalar in value.unicodeScalars {
-        result = result &* 31 &+ Int32(truncatingIfNeeded: scalar.value)
+    for unit in value.utf16 {
+        result = result &* 31 &+ Int32(truncatingIfNeeded: unit)
     }
     return Int(result)
 }

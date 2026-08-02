@@ -1,3 +1,5 @@
+import CoreGraphics
+
 public final class StrategyMarkerController<ActualMarker, Strategy: MarkerRenderingStrategyProtocol, Renderer: MarkerOverlayRendererProtocol>: OverlayControllerProtocol
 where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMarker {
     public typealias StateType = MarkerState
@@ -8,6 +10,11 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
     public let strategy: Strategy
     public var renderer: Renderer
     public var clickListener: ((MarkerState) -> Void)?
+
+    /// タップのヒットテスト用に地理座標をビューのスクリーン座標（ポイント）へ投影する。
+    /// プロバイダが @MainActor の MapView を捕捉した closure を注入する。未設定のとき
+    /// find() は距離判定なしで最近傍を返す（投影不可プロバイダ向けの従来動作）。
+    public var markerProjector: ((GeoPointProtocol) -> CGPoint?)?
 
     public var dragStartListener: OnMarkerEventHandler?
     public var dragListener: OnMarkerEventHandler?
@@ -101,7 +108,29 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
     }
 
     public func find(position: GeoPointProtocol) -> MarkerEntity<ActualMarker>? {
-        markerManager.findNearest(position: position)
+        guard let nearest = markerManager.findNearest(position: position) else { return nil }
+        // android-sdk の StrategyMarkerController.find() と同じスクリーン空間の
+        // 「アイコン境界 + tapTolerance」矩形判定。投影 closure 未設定のときは従来どおり
+        // 最近傍をそのまま返す（geo→screen 投影ができないプロバイダ向けフォールバック）。
+        guard let projector = markerProjector,
+              let touchScreen = projector(position),
+              let markerScreen = projector(nearest.state.position) else {
+            return nearest
+        }
+        let icon = nearest.state.icon ?? DefaultMarkerIcon()
+        let iconWidth = icon.iconSize * icon.scale
+        let iconHeight = icon.iconSize * icon.scale
+        let anchorX = icon.anchor.x
+        let anchorY = icon.anchor.y
+        // Settings.Default.tapTolerance = 14.dp。iOS の投影はポイント単位のため密度倍は不要。
+        let tolerance: CGFloat = 14.0
+        let dx = touchScreen.x - markerScreen.x
+        let dy = touchScreen.y - markerScreen.y
+        let left = -anchorX * iconWidth - tolerance
+        let right = (1 - anchorX) * iconWidth + tolerance
+        let top = -anchorY * iconHeight - tolerance
+        let bottom = (1 - anchorY) * iconHeight + tolerance
+        return (dx >= left && dx <= right && dy >= top && dy <= bottom) ? nearest : nil
     }
 
     public func onCameraChanged(mapCameraPosition: MapCameraPosition) async {

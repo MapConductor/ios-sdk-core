@@ -204,8 +204,8 @@ private func javaHash(_ value: Double) -> Int {
 
 private func javaHash(_ value: String) -> Int {
     var result: Int32 = 0
-    for scalar in value.unicodeScalars {
-        result = result &* 31 &+ Int32(truncatingIfNeeded: scalar.value)
+    for unit in value.utf16 {
+        result = result &* 31 &+ Int32(truncatingIfNeeded: unit)
     }
     return Int(result)
 }

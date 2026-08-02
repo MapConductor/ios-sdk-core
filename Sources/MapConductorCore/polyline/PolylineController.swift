@@ -42,6 +42,12 @@ where Renderer.ActualPolyline == ActualPolyline {
 
             for state in data {
                 if previous.contains(state.id), let prevEntity = polylineManager.getEntity(state.id) {
+                    if state.fingerPrint() == prevEntity.fingerPrint {
+                        // 描画結果が不変なら renderer を呼ばず最新の state だけ採用する（react-sdk と同じ）。
+                        polylineManager.registerEntity(PolylineEntity(polyline: prevEntity.polyline, state: state))
+                        previous.remove(state.id)
+                        continue
+                    }
                     updated.append(
                         PolylineOverlayChangeParams(
                             current: PolylineEntity(polyline: prevEntity.polyline, state: state),

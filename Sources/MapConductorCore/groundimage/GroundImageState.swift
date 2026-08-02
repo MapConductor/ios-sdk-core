@@ -178,8 +178,8 @@ private func javaHash(_ value: Int64) -> Int {
 
 private func javaHash(_ value: String) -> Int {
     var result: Int32 = 0
-    for u in value.unicodeScalars {
-        result = result &* 31 &+ Int32(u.value)
+    for u in value.utf16 {
+        result = result &* 31 &+ Int32(u)
     }
     return Int(result)
 }

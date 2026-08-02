@@ -191,6 +191,9 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(position.longitude))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(position.altitude ?? 0.0))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(icon))
+        // android-sdk / react-sdk と同じく zIndex も含める（Kotlin の `Int?.hashCode()`
+        // に合わせ nil は 0）。以前は除外しており zIndex のみ異なるマーカーが等価だった。
+        result = result &* 31 &+ Int32(truncatingIfNeeded: zIndex ?? 0)
         return Int(result)
     }
 
@@ -299,8 +302,8 @@ private func javaHash(_ value: UInt64) -> Int {
 
 private func javaHash(_ value: String) -> Int {
     var result: Int32 = 0
-    for scalar in value.unicodeScalars {
-        result = result &* 31 &+ Int32(truncatingIfNeeded: scalar.value)
+    for unit in value.utf16 {
+        result = result &* 31 &+ Int32(truncatingIfNeeded: unit)
     }
     return Int(result)
 }

@@ -85,6 +85,48 @@ final class GeometryPipelineTests: XCTestCase {
 
     // MARK: - unwrap パイプライン
 
+    // MARK: - 分割版パイプライン + OverlayGeoJson（±180 制約 SDK 向け・android 互換）
+
+    func testSplitPolylineSegmentsAcrossAntimeridian() {
+        let segments = buildPolylineSegments([tokyo, newYork], geodesic: true)
+        XCTAssertGreaterThanOrEqual(segments.count, 2) // 太平洋横断で分割される
+        for segment in segments {
+            XCTAssertGreaterThanOrEqual(segment.count, 2)
+            for i in 0 ..< segment.count - 1 {
+                XCTAssertTrue(abs(segment[i + 1].longitude - segment[i].longitude) <= 180.0)
+            }
+        }
+    }
+
+    func testSplitPolygonRingsDropsHolesWhenOuterSplits() {
+        let outer: [GeoPointProtocol] = [
+            GeoPoint(latitude: 10.0, longitude: 170.0),
+            GeoPoint(latitude: 10.0, longitude: -170.0),
+            GeoPoint(latitude: 20.0, longitude: -170.0),
+            GeoPoint(latitude: 20.0, longitude: 170.0),
+        ]
+        let hole: [GeoPointProtocol] = [
+            GeoPoint(latitude: 14.0, longitude: 178.0),
+            GeoPoint(latitude: 14.0, longitude: 179.0),
+            GeoPoint(latitude: 15.0, longitude: 179.0),
+        ]
+        let rings = buildPolygonRings(points: outer, holes: [hole], geodesic: false)
+        XCTAssertGreaterThanOrEqual(rings.outerRings.count, 2)
+        XCTAssertTrue(rings.holeRings.isEmpty) // 外周分割時は穴を含めない
+    }
+
+    func testOverlayGeoJsonMatchesLegacyFormat() {
+        let segments = buildPolylineSegments([tokyo, newYork], geodesic: true)
+        let coords = segments.map { seg in
+            "[" + seg.map { "[\($0.longitude),\($0.latitude)]" }.joined(separator: ",") + "]"
+        }.joined(separator: ",")
+        let expected = "{\"type\":\"Feature\",\"geometry\":"
+            + "{\"type\":\"MultiLineString\",\"coordinates\":[\(coords)]},\"properties\":{}}"
+        XCTAssertEqual(OverlayGeoJson.multiLineStringFeature(segments), expected)
+        XCTAssertNil(OverlayGeoJson.multiLineStringFeature([]))
+        XCTAssertNil(OverlayGeoJson.polygonFeature(PolygonRings(outerRings: [], holeRings: [])))
+    }
+
     func testUnwrappedPolylineAntimeridianCrossingIsSingleContinuousPath() {
         let path = buildUnwrappedPolylinePath([tokyo, newYork], geodesic: true)
         XCTAssertTrue(path.count >= 2)

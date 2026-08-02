@@ -41,6 +41,12 @@ where Renderer.ActualGroundImage == ActualGroundImage {
 
             for state in data {
                 if previous.contains(state.id), let prevEntity = groundImageManager.getEntity(state.id) {
+                    if state.fingerPrint() == prevEntity.fingerPrint {
+                        // 描画結果が不変なら renderer を呼ばず最新の state だけ採用する（react-sdk と同じ）。
+                        groundImageManager.registerEntity(GroundImageEntity(groundImage: prevEntity.groundImage, state: state))
+                        previous.remove(state.id)
+                        continue
+                    }
                     updated.append(
                         GroundImageOverlayChangeParams(
                             current: GroundImageEntity(groundImage: prevEntity.groundImage, state: state),
@@ -112,6 +118,8 @@ where Renderer.ActualGroundImage == ActualGroundImage {
         await semaphore.withPermit {
             let entities = groundImageManager.allEntities()
             await renderer.onRemove(data: entities)
+            // android-sdk / react-sdk と同じく clear() でも onPostProcess を呼ぶ。
+            await renderer.onPostProcess()
             groundImageManager.clear()
         }
     }
