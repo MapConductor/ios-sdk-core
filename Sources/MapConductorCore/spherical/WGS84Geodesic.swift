@@ -1,37 +1,327 @@
 import Foundation
 
-/// Thin compatibility layer.
+/// WGS84 ellipsoid geodesic distance/interpolation via Vincenty's formulae.
 ///
-/// The implementations that used to live here duplicated other modules: the
-/// Vincenty inverse solution duplicated ``GeographicLibCalculator`` (which
-/// additionally provides a spherical fallback when the iteration fails to
-/// converge), and `computeHeading` / `interpolate` duplicated the spherical
-/// formulas in ``Spherical``. The public API is preserved by delegating.
+/// Ported from the android-sdk/react-sdk implementations so all platforms agree
+/// without depending on an external geographiclib library. Vincenty can fail to
+/// converge for near-antipodal point pairs; in that (rare, map-rendering-
+/// irrelevant) case this falls back to a spherical (haversine) approximation,
+/// matching android/react behavior exactly.
 public enum WGS84Geodesic {
-    /// WGS84 ellipsoid distance (Vincenty), compatible with Google Maps
-    /// geodesic calculations.
+    private static let flattening = Earth.flattening
+    private static let semiMajorAxis = Earth.radiusMeters
+    private static let semiMinorAxis = Earth.semiMinorAxisMeters
+
+    // Authalic-sphere constants for ellipsoidal polygon area (see computeSignedArea).
+    private static let eccentricitySq = flattening * (2 - flattening)
+    private static let eccentricity = sqrt(eccentricitySq)
+    private static let authalicQp =
+        1 - ((1 - eccentricitySq) / (2 * eccentricity)) *
+        log((1 - eccentricity) / (1 + eccentricity))
+    private static let authalicRadius = semiMajorAxis * sqrt(authalicQp / 2)
+
+    private struct InverseResult {
+        let distanceMeters: Double
+        let initialBearingRad: Double
+    }
+
     public static func computeDistanceBetween(
         from: GeoPointProtocol,
         to: GeoPointProtocol
     ) -> Double {
-        GeographicLibCalculator.computeDistanceBetween(from: from, to: to)
+        inverse(from: from, to: to).distanceMeters
     }
 
-    /// Heading from one point to another, in degrees clockwise from North
-    /// within the range (-180, 180].
     public static func computeHeading(
         from: GeoPointProtocol,
         to: GeoPointProtocol
     ) -> Double {
-        Spherical.computeHeading(from: from, to: to)
+        rad2deg(inverse(from: from, to: to).initialBearingRad)
     }
 
-    /// Spherical linear interpolation (Slerp) between two points.
+    public static func computeOffset(
+        origin: GeoPointProtocol,
+        distance: Double,
+        heading: Double
+    ) -> GeoPoint {
+        let destination = direct(
+            origin: origin,
+            initialBearingRad: deg2rad(heading),
+            distanceMeters: distance
+        )
+        return GeoPoint(latitude: destination.0, longitude: destination.1, altitude: origin.altitude ?? 0.0)
+    }
+
+    public static func computeOffsetOrigin(
+        to: GeoPointProtocol,
+        distance: Double,
+        heading: Double
+    ) -> GeoPoint? {
+        let reverseHeading = (heading + 180).truncatingRemainder(dividingBy: 360)
+        return computeOffset(origin: to, distance: distance, heading: reverseHeading)
+    }
+
+    public static func computeLength(_ path: [GeoPointProtocol]) -> Double {
+        guard path.count >= 2 else { return 0.0 }
+        var length = 0.0
+        for i in 1..<path.count {
+            length += computeDistanceBetween(from: path[i - 1], to: path[i])
+        }
+        return length
+    }
+
+    /// Densify a path by inserting points along the geodesic.
+    public static func createInterpolatePoints(
+        _ points: [GeoPointProtocol],
+        maxSegmentLength: Double = 10_000.0
+    ) -> [GeoPointProtocol] {
+        densifyAlongGeodesic(points, maxSegmentLength: maxSegmentLength)
+    }
+
+    /// Closest point on the geodesic segment within `thresholdMeters`, or nil.
+    public static func pointOnLineOrNull(
+        from: GeoPointProtocol,
+        to: GeoPointProtocol,
+        position: GeoPointProtocol,
+        thresholdMeters: Double
+    ) -> (GeoPointProtocol, Double)? {
+        geodesicPointOnLineOrNull(from: from, to: to, position: position, thresholdMeters: thresholdMeters)
+    }
+
+    /// Ellipsoidal (authalic-sphere) polygon area. Maps geodetic latitudes to
+    /// authalic latitudes on the equal-area sphere of radius `authalicRadius`
+    /// (which reproduces the exact WGS84 surface area), then applies the
+    /// spherical-excess formula. Accounts for flattening — unlike the sphere-based
+    /// `Spherical.computeSignedArea` — matching the ellipsoidal area to well under
+    /// 0.01% for typical polygons. Edges are treated as authalic-sphere arcs; the
+    /// higher-order geodesic-edge terms of Karney's exact method are omitted.
+    public static func computeSignedArea(_ path: [GeoPointProtocol]) -> Double {
+        guard path.count >= 3 else { return 0.0 }
+        var area = 0.0
+        let pointCount = path.count
+        for i in 0..<pointCount {
+            let j = (i + 1) % pointCount
+            let sinXi1 = authalicSinLatitude(path[i].latitude)
+            let sinXi2 = authalicSinLatitude(path[j].latitude)
+            let deltaLng = deg2rad(path[j].longitude - path[i].longitude)
+            area += deltaLng * (2 + sinXi1 + sinXi2)
+        }
+        return area * authalicRadius * authalicRadius / 2.0
+    }
+
+    public static func computeArea(_ path: [GeoPointProtocol]) -> Double {
+        abs(computeSignedArea(path))
+    }
+
+    private static func authalicSinLatitude(_ latitudeDeg: Double) -> Double {
+        let sinPhi = sin(deg2rad(latitudeDeg))
+        let q = (1 - eccentricitySq) *
+            (sinPhi / (1 - eccentricitySq * sinPhi * sinPhi) -
+                (1 / (2 * eccentricity)) *
+                log((1 - eccentricity * sinPhi) / (1 + eccentricity * sinPhi)))
+        return q / authalicQp
+    }
+
     public static func interpolate(
         from: GeoPointProtocol,
         to: GeoPointProtocol,
         fraction: Double
     ) -> GeoPoint {
-        Spherical.sphericalInterpolate(from: from, to: to, fraction: fraction)
+        let line = inverse(from: from, to: to)
+        let destination = direct(
+            origin: from,
+            initialBearingRad: line.initialBearingRad,
+            distanceMeters: line.distanceMeters * fraction
+        )
+
+        let altitude: Double
+        switch (from.altitude, to.altitude) {
+        case let (fromAlt?, toAlt?):
+            altitude = fromAlt + fraction * (toAlt - fromAlt)
+        case let (fromAlt?, nil):
+            altitude = fromAlt
+        case let (nil, toAlt?):
+            altitude = toAlt
+        default:
+            altitude = 0.0
+        }
+
+        return GeoPoint(latitude: destination.0, longitude: destination.1, altitude: altitude)
     }
+
+    private static func inverse(
+        from: GeoPointProtocol,
+        to: GeoPointProtocol
+    ) -> InverseResult {
+        let lat1 = deg2rad(from.latitude)
+        let lat2 = deg2rad(to.latitude)
+        let lon1 = deg2rad(from.longitude)
+        let lon2 = deg2rad(to.longitude)
+        let longitudeDifference = lon2 - lon1
+
+        let u1 = atan((1 - flattening) * tan(lat1))
+        let u2 = atan((1 - flattening) * tan(lat2))
+        let sinU1 = sin(u1)
+        let cosU1 = cos(u1)
+        let sinU2 = sin(u2)
+        let cosU2 = cos(u2)
+
+        var lambda = longitudeDifference
+        var lambdaPrev = 0.0
+        var iterLimit = 100
+        var cosSqAlpha = 0.0
+        var sinSigma = 0.0
+        var cos2SigmaM = 0.0
+        var cosSigma = 0.0
+        var sigma = 0.0
+
+        repeat {
+            let sinLambda = sin(lambda)
+            let cosLambda = cos(lambda)
+            sinSigma = sqrt(
+                (cosU2 * sinLambda) * (cosU2 * sinLambda) +
+                (cosU1 * sinU2 - sinU1 * cosU2 * cosLambda) *
+                (cosU1 * sinU2 - sinU1 * cosU2 * cosLambda)
+            )
+
+            if sinSigma == 0.0 {
+                return InverseResult(distanceMeters: 0.0, initialBearingRad: 0.0)
+            }
+
+            cosSigma = sinU1 * sinU2 + cosU1 * cosU2 * cosLambda
+            sigma = atan2(sinSigma, cosSigma)
+            let sinAlpha = cosU1 * cosU2 * sinLambda / sinSigma
+            cosSqAlpha = 1 - sinAlpha * sinAlpha
+            cos2SigmaM = cosSigma - 2 * sinU1 * sinU2 / cosSqAlpha
+            if !cos2SigmaM.isFinite { cos2SigmaM = 0.0 }
+
+            let correctionFactor = flattening / 16 * cosSqAlpha * (4 + flattening * (4 - 3 * cosSqAlpha))
+            lambdaPrev = lambda
+            lambda = longitudeDifference +
+                (1 - correctionFactor) * flattening * sinAlpha *
+                (
+                    sigma +
+                    correctionFactor * sinSigma *
+                    (cos2SigmaM + correctionFactor * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM))
+                )
+            iterLimit -= 1
+        } while abs(lambda - lambdaPrev) > 1e-12 && iterLimit > 0
+
+        if iterLimit == 0 {
+            return sphericalFallbackInverse(from: from, to: to)
+        }
+
+        let uSq = cosSqAlpha * (semiMajorAxis * semiMajorAxis - semiMinorAxis * semiMinorAxis) /
+            (semiMinorAxis * semiMinorAxis)
+        let ellipsoidFactor = 1 + uSq / 16384 * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)))
+        let correctionTerm = uSq / 1024 * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)))
+        let deltaSigma = correctionTerm * sinSigma * (
+            cos2SigmaM + correctionTerm / 4 * (
+                cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM) -
+                correctionTerm / 6 * cos2SigmaM * (-3 + 4 * sinSigma * sinSigma) *
+                (-3 + 4 * cos2SigmaM * cos2SigmaM)
+            )
+        )
+
+        let distance = semiMinorAxis * ellipsoidFactor * (sigma - deltaSigma)
+        let initialBearing = atan2(
+            cosU2 * sin(lambda),
+            cosU1 * sinU2 - sinU1 * cosU2 * cos(lambda)
+        )
+
+        return InverseResult(distanceMeters: distance, initialBearingRad: initialBearing)
+    }
+
+    private static func direct(
+        origin: GeoPointProtocol,
+        initialBearingRad: Double,
+        distanceMeters: Double
+    ) -> (Double, Double) {
+        let lat1 = deg2rad(origin.latitude)
+        let lon1 = deg2rad(origin.longitude)
+        let sinAlpha1 = sin(initialBearingRad)
+        let cosAlpha1 = cos(initialBearingRad)
+
+        let tanU1 = (1 - flattening) * tan(lat1)
+        let cosU1 = 1 / sqrt(1 + tanU1 * tanU1)
+        let sinU1 = tanU1 * cosU1
+        let sigma1 = atan2(tanU1, cosAlpha1)
+        let sinAlpha = cosU1 * sinAlpha1
+        let cosSqAlpha = 1 - sinAlpha * sinAlpha
+        let uSq = cosSqAlpha * (semiMajorAxis * semiMajorAxis - semiMinorAxis * semiMinorAxis) /
+            (semiMinorAxis * semiMinorAxis)
+        let ellipsoidFactor = 1 + uSq / 16384 * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)))
+        let correctionTerm = uSq / 1024 * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)))
+
+        var sigma = distanceMeters / (semiMinorAxis * ellipsoidFactor)
+        var sigmaPrev = 0.0
+        var cos2SigmaM = 0.0
+        var sinSigma = 0.0
+        var cosSigma = 0.0
+
+        // Android's reference loops until convergence with no iteration cap; a
+        // generous cap keeps this safe without changing the converged result.
+        var iterLimit = 1000
+        repeat {
+            cos2SigmaM = cos(2 * sigma1 + sigma)
+            sinSigma = sin(sigma)
+            cosSigma = cos(sigma)
+            let deltaSigma = correctionTerm * sinSigma * (
+                cos2SigmaM + correctionTerm / 4 * (
+                    cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM) -
+                    correctionTerm / 6 * cos2SigmaM * (-3 + 4 * sinSigma * sinSigma) *
+                    (-3 + 4 * cos2SigmaM * cos2SigmaM)
+                )
+            )
+            sigmaPrev = sigma
+            sigma = distanceMeters / (semiMinorAxis * ellipsoidFactor) + deltaSigma
+            iterLimit -= 1
+        } while abs(sigma - sigmaPrev) > 1e-12 && iterLimit > 0
+
+        let tmp = sinU1 * sinSigma - cosU1 * cosSigma * cosAlpha1
+        let lat2 = atan2(
+            sinU1 * cosSigma + cosU1 * sinSigma * cosAlpha1,
+            (1 - flattening) * sqrt(sinAlpha * sinAlpha + tmp * tmp)
+        )
+        let lambda = atan2(
+            sinSigma * sinAlpha1,
+            cosU1 * cosSigma - sinU1 * sinSigma * cosAlpha1
+        )
+        let correctionFactor = flattening / 16 * cosSqAlpha * (4 + flattening * (4 - 3 * cosSqAlpha))
+        let longitudeDifference = lambda - (1 - correctionFactor) * flattening * sinAlpha *
+            (
+                sigma +
+                correctionFactor * sinSigma *
+                (cos2SigmaM + correctionFactor * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM))
+            )
+        let lon2 = lon1 + longitudeDifference
+
+        return (rad2deg(lat2), normalizeLng(rad2deg(lon2)))
+    }
+
+    private static func sphericalFallbackInverse(
+        from: GeoPointProtocol,
+        to: GeoPointProtocol
+    ) -> InverseResult {
+        let lat1 = deg2rad(from.latitude)
+        let lat2 = deg2rad(to.latitude)
+        let deltaLat = deg2rad(to.latitude - from.latitude)
+        let deltaLng = deg2rad(to.longitude - from.longitude)
+        let a = sin(deltaLat / 2) * sin(deltaLat / 2) +
+            cos(lat1) * cos(lat2) * sin(deltaLng / 2) * sin(deltaLng / 2)
+        let centralAngle = 2 * atan2(sqrt(a), sqrt(1 - a))
+        let y = sin(deltaLng) * cos(lat2)
+        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(deltaLng)
+        return InverseResult(
+            distanceMeters: semiMajorAxis * centralAngle,
+            initialBearingRad: atan2(y, x)
+        )
+    }
+
+    private static func normalizeLng(_ lng: Double) -> Double {
+        (((lng + 180.0).truncatingRemainder(dividingBy: 360.0) + 360.0).truncatingRemainder(dividingBy: 360.0)) - 180.0
+    }
+
+    private static func deg2rad(_ degrees: Double) -> Double { degrees * .pi / 180.0 }
+    private static func rad2deg(_ radians: Double) -> Double { radians * 180.0 / .pi }
 }

@@ -154,6 +154,10 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(strokeColor))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(strokeWidth))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(geodesic))
+        // android-sdk / react-sdk と同じく zIndex も含める（Kotlin の `Int.hashCode()` は
+        // 値そのもの）。以前は除外しており zIndex のみ異なる Polyline が等価判定されていた。
+        // 畳み込み順も Android の PolylineState.hashCode() に合わせて points より前に置く。
+        result = result &* 31 &+ Int32(truncatingIfNeeded: zIndex)
         result = result &* 31 &+ Int32(truncatingIfNeeded: listHashCode(points))
         return Int(result)
     }

@@ -128,35 +128,48 @@ open class AbstractMarkerController<
                 }
             }
 
+            // Remove markers
             if !removed.isEmpty {
                 await renderer.onRemove(data: removed)
-            }
-
-            if !added.isEmpty {
-                let actualMarkers = await renderer.onAdd(data: added)
-                for (index, actualMarker) in actualMarkers.enumerated() {
-                    guard let actualMarker else { continue }
-                    let entity = MarkerEntity(
-                        marker: actualMarker,
-                        state: added[index].state,
-                        isRendered: true
-                    )
-                    markerManager.registerEntity(entity)
-                    modifiedEntities.append(entity)
+                // Give the UI thread a chance to breathe when removing many markers.
+                if removed.count >= markerRenderBatchSize {
+                    await Task.yield()
                 }
             }
 
+            // Add new markers
+            if !added.isEmpty {
+                for batch in added.chunked(into: markerRenderBatchSize) {
+                    let actualMarkers = await renderer.onAdd(data: batch)
+                    for (index, actualMarker) in actualMarkers.enumerated() {
+                        guard let actualMarker, index < batch.count else { continue }
+                        let entity = MarkerEntity(
+                            marker: actualMarker,
+                            state: batch[index].state,
+                            isRendered: true
+                        )
+                        markerManager.registerEntity(entity)
+                        modifiedEntities.append(entity)
+                    }
+                    await Task.yield()
+                }
+            }
+
+            // Update changed markers
             if !updated.isEmpty {
-                let actualMarkers = await renderer.onChange(data: updated)
-                for (index, actualMarker) in actualMarkers.enumerated() {
-                    guard let actualMarker else { continue }
-                    let params = updated[index]
-                    let entity = MarkerEntity(
-                        marker: actualMarker,
-                        state: params.current.state,
-                        isRendered: true
-                    )
-                    markerManager.registerEntity(entity)
+                for batch in updated.chunked(into: markerRenderBatchSize) {
+                    let actualMarkers = await renderer.onChange(data: batch)
+                    for (index, actualMarker) in actualMarkers.enumerated() {
+                        guard let actualMarker, index < batch.count else { continue }
+                        let params = batch[index]
+                        let entity = MarkerEntity(
+                            marker: actualMarker,
+                            state: params.current.state,
+                            isRendered: true
+                        )
+                        markerManager.registerEntity(entity)
+                    }
+                    await Task.yield()
                 }
             }
 
@@ -267,5 +280,21 @@ open class AbstractMarkerController<
 
     open func destroy() {
         markerManager.destroy()
+    }
+}
+
+/// android-sdk の `MARKER_RENDER_BATCH_SIZE` と同値。
+/// レンダラ呼び出しをこの件数ごとに区切り、バッチの合間に `Task.yield()` を挟むことで、
+/// 数万件のマーカー投入中でも UI 更新やキャンセルが割り込めるようにする。
+let markerRenderBatchSize = 500
+
+private extension Array {
+    /// Kotlin の `List.chunked(size)` 相当。空配列は空、`size <= 0` は全体を 1 チャンクとして返す。
+    func chunked(into size: Int) -> [[Element]] {
+        if isEmpty { return [] }
+        guard size > 0 else { return [self] }
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0..<Swift.min($0 + size, count)])
+        }
     }
 }

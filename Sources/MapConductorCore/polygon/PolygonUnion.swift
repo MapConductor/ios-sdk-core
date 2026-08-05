@@ -9,7 +9,52 @@ public extension PolygonState {
     /// who need geometrically-correct polygon data.
     func unionHoles() -> PolygonState {
         guard let merged = unionHoleRings(holes) else { return self }
-        return copy(holes: merged)
+        return copy(holes: merged.map { $0.map { $0 as GeoPointProtocol } })
+    }
+
+    /// ``unionHoles()`` を MainActor の外で回すバックグラウンド版。
+    ///
+    /// android-sdk の `ArcGISPolygonOverlayRenderer` / `HerePolygonOverlayRenderer` が
+    /// `withContext(Dispatchers.Default) { state.unionHoles() }` としているのと同じ位置づけ。
+    /// 平面アレンジメントは辺数に対して O(n²) なので、穴の多いポリゴンをドラッグ中に
+    /// 再構築するとメインスレッドを塞ぐ。
+    ///
+    /// 存在型（`GeoPointProtocol`）は Sendable でないため、detached task へは値型の
+    /// ``GeoPoint`` に落としたスナップショットだけを渡す。
+    func unionHolesInBackground() async -> PolygonState {
+        guard holes.count > 1 else { return self }
+        let snapshot = holes.map { ring in
+            ring.map { GeoPoint(latitude: $0.latitude, longitude: $0.longitude, altitude: $0.altitude ?? 0.0) }
+        }
+        let merged = await Task.detached(priority: .userInitiated) {
+            unionHoleRings(snapshot.map { $0.map { $0 as GeoPointProtocol } })
+        }.value
+        guard let merged else { return self }
+        return copy(holes: merged.map { $0.map { $0 as GeoPointProtocol } })
+    }
+
+    /// In-place variant: mutates `holes` to the merged result and returns self.
+    ///
+    /// android-sdk の `PolygonState.unionHolesInPlace()`（`PolygonUnion.kt`）の移植。
+    /// 呼び出し側は android-sdk と同じくコンポーネント層（``Polygon``）。
+    ///
+    /// android-sdk は `LaunchedEffect(state)` により 1 state インスタンスにつき 1 回しか
+    /// 走らないので、こちらも ``PolygonState/holesUnionApplied`` で同じ回数に揃える。
+    /// つまり後から `holes` が差し替わっても（頂点ドラッグなど）ここは再実行されない。
+    /// そのため各プロバイダのレンダラも、ジオメトリを組み立てる時点で ``unionHoles()``
+    /// （または ``unionHolesInBackground()``）を通す — android-sdk の各
+    /// `PolygonOverlayRenderer.resolveHoles()` と同じ構成。
+    @discardableResult
+    func unionHolesInPlace() -> PolygonState {
+        if holesUnionApplied { return self }
+        // android-sdk と同じく穴が 1 つ以下ならそのまま。ユニオン失敗時も元の穴を保持する。
+        guard holes.count > 1, let merged = unionHoleRings(holes) else {
+            holesUnionApplied = true
+            return self
+        }
+        holes = merged.map { $0.map { $0 as GeoPointProtocol } }
+        holesUnionApplied = true
+        return self
     }
 }
 
@@ -30,7 +75,7 @@ public extension PolygonState {
 ///   results may differ from spherical expectations.
 /// - Returns nil when the input is degenerate or the union fails; callers keep the
 ///   original rings unchanged in that case.
-func unionHoleRings(_ holes: [[GeoPointProtocol]]) -> [[GeoPointProtocol]]? {
+func unionHoleRings(_ holes: [[GeoPointProtocol]]) -> [[GeoPoint]]? {
     guard holes.count > 1 else { return nil }
 
     // Work relative to an origin so coordinates stay feature-scale, which keeps
@@ -43,8 +88,8 @@ func unionHoleRings(_ holes: [[GeoPointProtocol]]) -> [[GeoPointProtocol]]? {
     let merged = unionRings(rings)
     guard !merged.isEmpty else { return nil }
 
-    return merged.map { ring -> [GeoPointProtocol] in
-        let geo: [GeoPointProtocol] = ring.map { p in
+    return merged.map { ring -> [GeoPoint] in
+        let geo: [GeoPoint] = ring.map { p in
             GeoPoint(latitude: p.y + origin.y, longitude: p.x + origin.x)
         }
         // Normalize hole winding to clockwise (renderers expect holes to wind

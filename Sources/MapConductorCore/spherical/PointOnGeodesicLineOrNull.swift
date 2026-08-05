@@ -6,16 +6,16 @@ import Foundation
 ///
 /// - Returns: The closest point on the segment and the distance in meters, or
 ///   nil if farther than the threshold.
-func pointOnGeodesicSegmentOrNull(
+func geodesicPointOnLineOrNull(
     from: GeoPointProtocol,
     to: GeoPointProtocol,
     position: GeoPointProtocol,
     thresholdMeters: Double
 ) -> (GeoPointProtocol, Double)? {
-    let totalDistance = GeographicLibCalculator.computeDistanceBetween(from: from, to: to)
+    let totalDistance = WGS84Geodesic.computeDistanceBetween(from: from, to: to)
 
     if totalDistance == 0.0 {
-        let distPosFrom = GeographicLibCalculator.computeDistanceBetween(from: from, to: position)
+        let distPosFrom = WGS84Geodesic.computeDistanceBetween(from: from, to: position)
         if distPosFrom <= thresholdMeters {
             return (GeoPoint(latitude: from.latitude, longitude: from.longitude, altitude: from.altitude ?? 0.0), distPosFrom)
         }
@@ -31,11 +31,11 @@ func pointOnGeodesicSegmentOrNull(
         let m1 = left + (right - left) / 3.0
         let m2 = right - (right - left) / 3.0
 
-        let point1 = GeographicLibCalculator.interpolate(from: from, to: to, fraction: m1)
-        let dist1 = GeographicLibCalculator.computeDistanceBetween(from: point1, to: position)
+        let point1 = WGS84Geodesic.interpolate(from: from, to: to, fraction: m1)
+        let dist1 = WGS84Geodesic.computeDistanceBetween(from: point1, to: position)
 
-        let point2 = GeographicLibCalculator.interpolate(from: from, to: to, fraction: m2)
-        let dist2 = GeographicLibCalculator.computeDistanceBetween(from: point2, to: position)
+        let point2 = WGS84Geodesic.interpolate(from: from, to: to, fraction: m2)
+        let dist2 = WGS84Geodesic.computeDistanceBetween(from: point2, to: position)
 
         if dist1 > dist2 {
             left = m1
@@ -48,8 +48,8 @@ func pointOnGeodesicSegmentOrNull(
 
     // Closest point falls outside the segment.
     if bestFraction <= 0.0 || bestFraction >= 1.0 {
-        let distFrom = GeographicLibCalculator.computeDistanceBetween(from: from, to: position)
-        let distTo = GeographicLibCalculator.computeDistanceBetween(from: to, to: position)
+        let distFrom = WGS84Geodesic.computeDistanceBetween(from: from, to: position)
+        let distTo = WGS84Geodesic.computeDistanceBetween(from: to, to: position)
 
         let actualMin = min(distFrom, distTo)
         if actualMin > thresholdMeters { return nil }
@@ -60,8 +60,8 @@ func pointOnGeodesicSegmentOrNull(
         return (closest, actualMin)
     }
 
-    let closestPoint = GeographicLibCalculator.interpolate(from: from, to: to, fraction: bestFraction)
-    let minDistance = GeographicLibCalculator.computeDistanceBetween(from: closestPoint, to: position)
+    let closestPoint = WGS84Geodesic.interpolate(from: from, to: to, fraction: bestFraction)
+    let minDistance = WGS84Geodesic.computeDistanceBetween(from: closestPoint, to: position)
 
     if minDistance > thresholdMeters { return nil }
 

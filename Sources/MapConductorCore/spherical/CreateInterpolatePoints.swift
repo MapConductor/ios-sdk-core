@@ -2,7 +2,7 @@ import Foundation
 
 /// Densifies a path by inserting geodesic (WGS84 great-circle) points so that no
 /// segment exceeds `maxSegmentLength` meters.
-public func createInterpolatePoints(
+func densifyAlongGeodesic(
     _ points: [GeoPointProtocol],
     maxSegmentLength: Double = 10_000.0
 ) -> [GeoPointProtocol] {
@@ -13,14 +13,14 @@ public func createInterpolatePoints(
     for index in 1..<points.count {
         let from = points[index - 1]
         let to = points[index]
-        let distance = GeographicLibCalculator.computeDistanceBetween(from: from, to: to)
+        let distance = WGS84Geodesic.computeDistanceBetween(from: from, to: to)
 
         let numSegments = max(1, Int(distance / maxSegmentLength))
         let step = 1.0 / Double(numSegments)
 
         var fraction = step
         while fraction < 1.0 {
-            results.append(GeographicLibCalculator.interpolate(from: from, to: to, fraction: fraction))
+            results.append(WGS84Geodesic.interpolate(from: from, to: to, fraction: fraction))
             fraction += step
         }
         results.append(to)

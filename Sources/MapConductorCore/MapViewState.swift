@@ -20,6 +20,10 @@ public protocol MapViewStateProtocol: ObservableObject {
     var mapDesignType: ActualMapDesignType { get set }
     var uiSettings: MapUISettings { get set }
 
+    /// Map-scoped registry the provider populates with its capabilities and add-on
+    /// modules resolve from. See ``MapServiceRegistry``.
+    var serviceRegistry: MutableMapServiceRegistry { get }
+
     func moveCameraTo(cameraPosition: MapCameraPosition, durationMillis: Long?)
     func moveCameraTo(position: GeoPoint, durationMillis: Long?)
 
@@ -39,6 +43,14 @@ public extension MapViewStateProtocol {
 }
 
 open class MapViewState<ActualMapDesignType>: ObservableObject, MapViewStateProtocol {
+    /// One registry per map, with the same lifetime as the state object.
+    ///
+    /// This is where Android uses `remember { MutableMapServiceRegistry() }` inside the
+    /// provider's `MapView` composable: the object identity has to survive re-composition
+    /// (here, re-evaluation of `body`) so a capability registered once when the map loads
+    /// is still resolvable on every later content build.
+    public let serviceRegistry = MutableMapServiceRegistry()
+
     public init() {}
 
     open var id: String {

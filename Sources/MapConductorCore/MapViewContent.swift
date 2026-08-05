@@ -23,8 +23,6 @@ public struct MapViewContent {
     public var circles: [Circle] = []
     public var groundImages: [GroundImage] = []
     public var rasterLayers: [RasterLayer] = []
-    public var markerRenderingStrategy: Any? = nil
-    public var markerRenderingMarkers: [MarkerState] = []
     public var views: [AnyView] = []
     public var markerTilingOptions: MarkerTilingOptions = .Default
     /// Handlers that manage a subset of polygons imperatively (e.g. cluster hull polygons).
@@ -47,12 +45,8 @@ public struct MapViewContent {
         circles.append(contentsOf: other.circles)
         groundImages.append(contentsOf: other.groundImages)
         rasterLayers.append(contentsOf: other.rasterLayers)
-        markerRenderingMarkers.append(contentsOf: other.markerRenderingMarkers)
         views.append(contentsOf: other.views)
         polygonSyncHandlers.append(contentsOf: other.polygonSyncHandlers)
-        if other.markerRenderingStrategy != nil {
-            markerRenderingStrategy = other.markerRenderingStrategy
-        }
         if other.markerTilingOptions.enabled {
             markerTilingOptions = other.markerTilingOptions
         }
@@ -206,23 +200,29 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
     public var swiftUIContent: AnyView? { _content as? AnyView }
     public var uiViewContent: UIView? { _content as? UIView }
 
+    /// The style parameters mirror `InfoBubble` in `android-sdk-compose` one for one.
+    /// To draw the bubble — tail included — entirely yourself, use ``InfoBubbleCustom``.
     public init<Content: View>(
         marker: MarkerState,
-        tailOffset: CGPoint = CGPoint(x: 0.5, y: 1.0),
-        useDefaultStyle: Bool = true,
-        style: InfoBubbleStyle = .Default,
+        bubbleColor: Color = .white,
+        borderColor: Color = .black,
+        contentPadding: CGFloat = 8.0,
+        cornerRadius: CGFloat = 4.0,
+        tailSize: CGFloat = 8.0,
         @ViewBuilder content: () -> Content
     ) {
         self.id = marker.id
         self.marker = marker
-        self.tailOffset = tailOffset
+        self.tailOffset = CGPoint(x: 0.5, y: 1.0)
         self.useIconMetrics = true
-        let builtContent = AnyView(content())
-        if useDefaultStyle {
-            self._content = AnyView(DefaultInfoBubbleView(style: style, content: builtContent))
-        } else {
-            self._content = builtContent
-        }
+        self._content = AnyView(DefaultInfoBubbleView(
+            bubbleColor: bubbleColor,
+            borderColor: borderColor,
+            contentPadding: contentPadding,
+            cornerRadius: cornerRadius,
+            tailSize: tailSize,
+            content: AnyView(content())
+        ))
     }
 
     /// Places an InfoBubble directly at [position] without requiring a MarkerState.
@@ -239,22 +239,40 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
     public init<Content: View>(
         position: GeoPoint,
         id: String? = nil,
-        tailOffset: CGPoint = CGPoint(x: 0.5, y: 1.0),
-        useDefaultStyle: Bool = true,
-        style: InfoBubbleStyle = .Default,
+        bubbleColor: Color = .white,
+        borderColor: Color = .black,
+        contentPadding: CGFloat = 8.0,
+        cornerRadius: CGFloat = 4.0,
+        tailSize: CGFloat = 8.0,
         @ViewBuilder content: () -> Content
     ) {
         let syntheticMarker = MarkerState(position: position, id: id)
         self.id = syntheticMarker.id
         self.marker = syntheticMarker
-        self.tailOffset = tailOffset
+        self.tailOffset = CGPoint(x: 0.5, y: 1.0)
         self.useIconMetrics = false
-        let builtContent = AnyView(content())
-        if useDefaultStyle {
-            self._content = AnyView(DefaultInfoBubbleView(style: style, content: builtContent))
-        } else {
-            self._content = builtContent
-        }
+        self._content = AnyView(DefaultInfoBubbleView(
+            bubbleColor: bubbleColor,
+            borderColor: borderColor,
+            contentPadding: contentPadding,
+            cornerRadius: cornerRadius,
+            tailSize: tailSize,
+            content: AnyView(content())
+        ))
+    }
+
+    /// Unstyled bubble: the caller draws everything, tail included.
+    /// Backs ``InfoBubbleCustom``, which is the public spelling.
+    internal init<Content: View>(
+        marker: MarkerState,
+        tailOffset: CGPoint,
+        @ViewBuilder unstyledContent content: () -> Content
+    ) {
+        self.id = marker.id
+        self.marker = marker
+        self.tailOffset = tailOffset
+        self.useIconMetrics = true
+        self._content = AnyView(content())
     }
 
     /// UIKit / React Native initializer: provide a UIView directly as bubble content.
@@ -287,6 +305,60 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
 
     public func append(to content: inout MapViewContent) {
         content.infoBubbles.append(self)
+    }
+}
+
+/// An info bubble whose content is drawn entirely by the caller — including its tail.
+///
+/// Mirrors `InfoBubbleCustom` in `android-sdk-compose` and `@mapconductor/js-sdk-react`.
+/// The bubble is positioned by the same overlay engine as `InfoBubble`; only the default
+/// chrome (background, border, corner radius, tail) is omitted.
+///
+/// `tailOffset` says where, inside your content box, the connection point sits, in
+/// normalized (0...1) coordinates: `(0.5, 1)` is bottom-center — the default for a bubble
+/// sitting above its marker — and `(0, 0.5)` is center-left, for a bubble whose tail points
+/// left from the right-hand side of the marker.
+///
+/// Usage:
+/// ```swift
+/// InfoBubbleCustom(marker: markerState, tailOffset: CGPoint(x: 0, y: 0.5)) {
+///     RightTailBubble { Text(label) }
+/// }
+/// ```
+///
+public struct InfoBubbleCustom: MapOverlayItemProtocol, Identifiable {
+    public let id: String
+    private let bubble: InfoBubble
+
+    public init<Content: View>(
+        marker: MarkerState,
+        tailOffset: CGPoint,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.bubble = InfoBubble(
+            marker: marker,
+            tailOffset: tailOffset,
+            unstyledContent: content
+        )
+        self.id = bubble.id
+    }
+
+    /// UIKit / React Native variant: provide a `UIView` directly as bubble content.
+    public init(
+        marker: MarkerState,
+        tailOffset: CGPoint,
+        uiViewContent: UIView
+    ) {
+        self.bubble = InfoBubble(
+            marker: marker,
+            tailOffset: tailOffset,
+            uiViewContent: uiViewContent
+        )
+        self.id = bubble.id
+    }
+
+    public func append(to content: inout MapViewContent) {
+        bubble.append(to: &content)
     }
 }
 
@@ -370,6 +442,12 @@ public struct Polygon: MapOverlayItemProtocol, Identifiable {
     public let state: PolygonState
 
     public init(state: PolygonState) {
+        // 穴のユニオンはここ（コンポーネント層）で一度だけ適用する。
+        // android-sdk の `PolygonComponent.kt` が `LaunchedEffect(state)` の中で
+        // `state.unionHolesInPlace()` を呼んでからコレクタへ渡すのと同じ位置づけ。
+        // 以前は各プロバイダの `PolygonOverlayRenderer` が `state.unionHoles()` を
+        // 呼んでおり、プロバイダごとに実装が重複していた。
+        state.unionHolesInPlace()
         self.state = state
         self.id = state.id
     }
@@ -385,7 +463,8 @@ public struct Polygon: MapOverlayItemProtocol, Identifiable {
         extra: Any? = nil,
         onClick: OnPolygonEventHandler? = nil
     ) {
-        let state = PolygonState(
+        // すべての初期化子は init(state:) に集約する（穴のユニオンを 1 箇所で適用するため）。
+        self.init(state: PolygonState(
             points: points,
             id: id,
             strokeColor: strokeColor,
@@ -395,9 +474,7 @@ public struct Polygon: MapOverlayItemProtocol, Identifiable {
             zIndex: zIndex,
             extra: extra,
             onClick: onClick
-        )
-        self.state = state
-        self.id = state.id
+        ))
     }
 
     public init(

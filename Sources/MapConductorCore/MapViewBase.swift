@@ -144,6 +144,43 @@ open class MapViewCoordinatorBase<State: MapViewStateProtocol>: NSObject {
         body()
     }
 
+    /// ビューから最後に要求されたカメラ制限。二重 optional なのは「まだ一度も要求されていない」と
+    /// 「`nil`（制限なし）を要求済み」を区別するため。
+    private var requestedCameraRestriction: CameraRestriction??
+    /// 実際にコントローラへ適用済みのカメラ制限。
+    private var appliedCameraRestriction: CameraRestriction??
+
+    /// `restriction` が前回適用時から変わっているときだけ `controller` へ適用する。
+    ///
+    /// android-sdk の各 `*MapView.kt` がコントローラ生成直後に
+    /// `cameraRestriction?.let { controller.setCameraRestriction(it) }` を呼ぶのに対応する。
+    /// iOS の `updateUIView` は SwiftUI の更新ごとに走るため、変化検知を挟んで
+    /// ネイティブ API の呼び出し回数を抑える。
+    ///
+    /// `controller` がまだ生成されていない場合（TomTom / ArcGIS のようにマップ準備完了の
+    /// コールバックで生成するプロバイダ）は要求だけを記録し、コントローラ生成側が
+    /// ``reapplyCameraRestriction(to:)`` を呼んだ時点で適用される。
+    public func applyCameraRestriction(
+        _ restriction: CameraRestriction?,
+        to controller: (any MapViewControllerProtocol)?
+    ) {
+        requestedCameraRestriction = .some(restriction)
+        guard let controller else { return }
+        if let applied = appliedCameraRestriction, applied == restriction { return }
+        appliedCameraRestriction = .some(restriction)
+        controller.setCameraRestriction(restriction)
+    }
+
+    /// コントローラが生成されたタイミングで、保留中の制限を適用する。
+    ///
+    /// マップ準備完了コールバックでコントローラを作るプロバイダは、生成直後にこれを呼ぶ。
+    /// 一度も制限が要求されていなければ何もしない。
+    public func reapplyCameraRestriction(to controller: (any MapViewControllerProtocol)?) {
+        guard let requested = requestedCameraRestriction else { return }
+        appliedCameraRestriction = nil
+        applyCameraRestriction(requested, to: controller)
+    }
+
     /// Attaches the shared info-bubble container on top of `hostView`,
     /// following the host's bounds.
     public func attachInfoBubbleContainer(to hostView: UIView) {

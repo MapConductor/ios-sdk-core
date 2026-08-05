@@ -106,7 +106,7 @@ public enum Spherical {
         return area * earthRadiusMeters * earthRadiusMeters / 2.0
     }
 
-    public static func sphericalInterpolate(
+    public static func interpolate(
         from: GeoPointProtocol,
         to: GeoPointProtocol,
         fraction: Double
@@ -155,38 +155,7 @@ public enum Spherical {
         )
     }
 
-    public static func linearInterpolate(
-        from: GeoPointProtocol,
-        to: GeoPointProtocol,
-        fraction: Double
-    ) -> GeoPoint {
-        let interpolatedAltitude = interpolateAltitude(from: from, to: to, fraction: fraction)
-        let interpolatedLatitude = from.latitude + fraction * (to.latitude - from.latitude)
-
-        let fromLng = from.longitude
-        let toLng = to.longitude
-        let directDiff = toLng - fromLng
-        let crossMeridianDiff: Double
-        if directDiff > 180 {
-            crossMeridianDiff = directDiff - 360
-        } else if directDiff < -180 {
-            crossMeridianDiff = directDiff + 360
-        } else {
-            crossMeridianDiff = directDiff
-        }
-        let interpolatedLongitude = fromLng + fraction * crossMeridianDiff
-        let normalizedLongitude = normalizeLng(interpolatedLongitude)
-
-        return GeoPoint(
-            latitude: interpolatedLatitude,
-            longitude: normalizedLongitude,
-            altitude: interpolatedAltitude
-        )
-    }
-
-    private static func normalizeLng(_ lng: Double) -> Double {
-        (((lng + 180.0).truncatingRemainder(dividingBy: 360.0) + 360.0).truncatingRemainder(dividingBy: 360.0)) - 180.0
-    }
+    // `linearInterpolate` moved to `Planar.interpolate` (the straight-line model).
 
     private static func interpolateAltitude(
         from: GeoPointProtocol,

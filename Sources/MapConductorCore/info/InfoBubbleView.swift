@@ -1,62 +1,51 @@
 import CoreGraphics
 import SwiftUI
 
-public struct InfoBubbleStyle {
-    public let bubbleColor: Color
-    public let borderColor: Color
-    public let contentPadding: CGFloat
-    public let cornerRadius: CGFloat
-    public let tailSize: CGFloat
+/// Draws the default bubble chrome — background, border, corner radius and tail.
+///
+/// The parameters mirror `DrawInfoBubble` in `android-sdk-compose` one for one, so the
+/// same bubble is described the same way on both platforms.
+public struct DefaultInfoBubbleView: View {
+    private let bubbleColor: Color
+    private let borderColor: Color
+    private let contentPadding: CGFloat
+    private let cornerRadius: CGFloat
+    private let tailSize: CGFloat
+    private let content: AnyView
 
     public init(
         bubbleColor: Color = .white,
         borderColor: Color = .black,
         contentPadding: CGFloat = 8.0,
         cornerRadius: CGFloat = 4.0,
-        tailSize: CGFloat = 8.0
+        tailSize: CGFloat = 8.0,
+        content: AnyView
     ) {
         self.bubbleColor = bubbleColor
         self.borderColor = borderColor
         self.contentPadding = contentPadding
         self.cornerRadius = cornerRadius
         self.tailSize = tailSize
-    }
-
-    public static let Default = InfoBubbleStyle()
-}
-
-public struct DefaultInfoBubbleView: View {
-    private let style: InfoBubbleStyle
-    private let content: AnyView
-
-    public init(style: InfoBubbleStyle, content: AnyView) {
-        self.style = style
         self.content = content
     }
 
     public var body: some View {
         ZStack {
-            InfoBubbleShape(
-                cornerRadius: style.cornerRadius,
-                tailSize: style.tailSize
-            )
-            .fill(style.bubbleColor)
-            .overlay(
-                InfoBubbleShape(
-                    cornerRadius: style.cornerRadius,
-                    tailSize: style.tailSize
+            InfoBubbleShape(cornerRadius: cornerRadius, tailSize: tailSize)
+                .fill(bubbleColor)
+                .overlay(
+                    InfoBubbleShape(cornerRadius: cornerRadius, tailSize: tailSize)
+                        .stroke(borderColor, lineWidth: 2.0)
                 )
-                .stroke(style.borderColor, lineWidth: 2.0)
-            )
 
             content
                 .padding(.init(
-                    top: style.contentPadding,
-                    leading: style.contentPadding,
-                    bottom: style.contentPadding + style.tailSize,
-                    trailing: style.contentPadding
+                    top: contentPadding,
+                    leading: contentPadding,
+                    bottom: contentPadding + tailSize,
+                    trailing: contentPadding
                 ))
-                .clipShape(RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
         .fixedSize()
     }

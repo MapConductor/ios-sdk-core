@@ -6,7 +6,7 @@ import Foundation
 /// 短いセグメントが多い多頂点ポリゴンで点数が頂点数×分割数に膨れ上がり、WebView ブリッジや
 /// ネイティブジオメトリ構築が極端に遅くなるため、`maxSegmentLength` を超えるセグメントのみ
 /// 分割する。android-sdk / react-sdk と同一仕様。
-public func createLinearInterpolatePoints(
+func densifyAlongStraightLine(
     _ points: [GeoPointProtocol],
     maxSegmentLength: Double = 10_000.0
 ) -> [GeoPointProtocol] {
@@ -17,12 +17,12 @@ public func createLinearInterpolatePoints(
     for index in 1 ..< points.count {
         let from = points[index - 1]
         let to = points[index]
-        let distance = GeographicLibCalculator.computeDistanceBetween(from: from, to: to)
+        let distance = WGS84Geodesic.computeDistanceBetween(from: from, to: to)
         let numSegments = max(Int(distance / maxSegmentLength), 1)
         let step = 1.0 / Double(numSegments)
         var fraction = step
         while fraction < 1.0 {
-            results.append(Spherical.linearInterpolate(from: from, to: to, fraction: fraction))
+            results.append(Planar.interpolate(from: from, to: to, fraction: fraction))
             fraction += step
         }
         results.append(to)

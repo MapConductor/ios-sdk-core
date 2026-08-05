@@ -97,7 +97,7 @@ public final class PolygonManager<ActualPolygon>: PolygonManagerProtocol {
 
             let ring: [GeoPointProtocol]
             if state.geodesic {
-                ring = createInterpolatePoints(basePoints)
+                ring = WGS84Geodesic.createInterpolatePoints(basePoints)
             } else {
                 ring = basePoints
             }

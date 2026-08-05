@@ -24,7 +24,7 @@ final class GeometryPipelineTests: XCTestCase {
         let ring = circleToRing(center: tokyo, radiusMeters: radius, geodesic: false)
         XCTAssertEqual(ring.count, defaultCircleSegments)
         for p in ring {
-            let d = GeographicLibCalculator.computeDistanceBetween(from: tokyo, to: p)
+            let d = WGS84Geodesic.computeDistanceBetween(from: tokyo, to: p)
             XCTAssertTrue(d >= radius * 0.99 && d <= radius * 1.01, "distance=\(d)")
         }
     }

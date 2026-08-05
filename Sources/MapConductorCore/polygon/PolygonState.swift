@@ -40,6 +40,13 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
     @Published public var extra: Any?
     @Published public var onClick: OnPolygonEventHandler?
 
+    /// android-sdk の `Polygon(state)` コンポーザブルは `LaunchedEffect(state)` の中で
+    /// `unionHolesInPlace()` を呼ぶため、穴のユニオンは「1 つの state インスタンスにつき 1 回」
+    /// しか走らない。iOS では `Polygon` 値が SwiftUI の body 評価ごとに作り直されるので、
+    /// 同じ「1 回だけ」を再現するためのフラグ。これが無いと再描画のたびに
+    /// O(n²) の平面アレンジメントを回してしまう。
+    var holesUnionApplied = false
+
     public init(
         points: [GeoPointProtocol],
         id: String? = nil,

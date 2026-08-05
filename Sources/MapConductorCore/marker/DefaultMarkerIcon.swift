@@ -2,8 +2,8 @@ import CoreText
 import UIKit
 
 public final class DefaultMarkerIcon: MarkerIconProtocol {
-    public static let defaultIconSize: CGFloat = 48.0
-    public static let defaultStrokeWidth: CGFloat = 1.0
+    public static let defaultIconSize: CGFloat = Settings.Default.iconSize
+    public static let defaultStrokeWidth: CGFloat = Settings.Default.iconStroke
     public static let defaultFillColor: UIColor = .red
     public static let defaultStrokeColor: UIColor = .white
     public static let defaultLabelTextSize: CGFloat = 18.0

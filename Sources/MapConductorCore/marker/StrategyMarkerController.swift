@@ -117,20 +117,11 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
               let markerScreen = projector(nearest.state.position) else {
             return nearest
         }
-        let icon = nearest.state.icon ?? DefaultMarkerIcon()
-        let iconWidth = icon.iconSize * icon.scale
-        let iconHeight = icon.iconSize * icon.scale
-        let anchorX = icon.anchor.x
-        let anchorY = icon.anchor.y
-        // Settings.Default.tapTolerance = 14.dp。iOS の投影はポイント単位のため密度倍は不要。
-        let tolerance: CGFloat = 14.0
-        let dx = touchScreen.x - markerScreen.x
-        let dy = touchScreen.y - markerScreen.y
-        let left = -anchorX * iconWidth - tolerance
-        let right = (1 - anchorX) * iconWidth + tolerance
-        let top = -anchorY * iconHeight - tolerance
-        let bottom = (1 - anchorY) * iconHeight + tolerance
-        return (dx >= left && dx <= right && dy >= top && dy <= bottom) ? nearest : nil
+        return MarkerHitTest.hitsIcon(
+            touchScreen: touchScreen,
+            markerScreen: markerScreen,
+            state: nearest.state
+        ) ? nearest : nil
     }
 
     public func onCameraChanged(mapCameraPosition: MapCameraPosition) async {

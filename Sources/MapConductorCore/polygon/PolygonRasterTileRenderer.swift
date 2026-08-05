@@ -64,7 +64,7 @@ public final class PolygonRasterTileRenderer: TileProvider {
 
         func buildPath(for ring: [GeoPointProtocol]) -> CGPath {
             let path = CGMutablePath()
-            let densified: [GeoPointProtocol] = geodesic ? createInterpolatePoints(ring) : ring
+            let densified: [GeoPointProtocol] = geodesic ? WGS84Geodesic.createInterpolatePoints(ring) : ring
             for fragment in splitByMeridian(densified, geodesic: geodesic) {
                 guard fragment.count >= 2 else { continue }
                 var first = true

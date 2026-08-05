@@ -12,12 +12,10 @@ private struct DistanceResult {
 }
 
 private enum PolylineDefaults {
-    // Android uses `Settings.Default.tapTolerance = 14.dp` and then multiplies by screen density (dp -> px).
-    // On iOS, treat "dp" as points and convert to pixels by multiplying by the screen scale.
-    static let tapToleranceDp: Double = 14.0
-
+    // `Settings.Default.tapTolerance` is expressed in dp on Android and in points here;
+    // convert to pixels by multiplying by the screen scale, as Android does with density.
     static func tapTolerancePx(screenScale: Double = Double(UIScreen.main.scale)) -> Double {
-        tapToleranceDp * max(1.0, screenScale)
+        Double(Settings.Default.tapTolerance) * max(1.0, screenScale)
     }
 }
 
@@ -136,14 +134,14 @@ public final class PolylineManager<ActualPolyline>: PolylineManagerProtocol {
 
                 let hit: (GeoPointProtocol, Double)?
                 if entity.state.geodesic {
-                    hit = pointOnGeodesicSegmentOrNull(
+                    hit = WGS84Geodesic.pointOnLineOrNull(
                         from: points[index],
                         to: points[index + 1],
                         position: position,
                         thresholdMeters: threshold
                     )
                 } else {
-                    hit = isPointOnLinearLine(
+                    hit = Planar.pointOnLineOrNull(
                         from: points[index],
                         to: points[index + 1],
                         position: position,

@@ -27,8 +27,8 @@ public func densifyAndNormalize(
     maxSegmentLength: Double = 10_000.0
 ) -> [GeoPointProtocol] {
     let interpolated = geodesic
-        ? createInterpolatePoints(points, maxSegmentLength: maxSegmentLength)
-        : createLinearInterpolatePoints(points)
+        ? WGS84Geodesic.createInterpolatePoints(points, maxSegmentLength: maxSegmentLength)
+        : Planar.createInterpolatePoints(points)
     return interpolated.map { $0.normalize() }
 }
 

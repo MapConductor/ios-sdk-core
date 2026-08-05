@@ -21,7 +21,7 @@ func interpolateAtMeridianGeodesic(
     var iteration = 0
     while iteration < maxIterations && (high - low) > tolerance {
         let mid = (low + high) / 2.0
-        let interpolatedPoint = Spherical.sphericalInterpolate(from: from, to: to, fraction: mid)
+        let interpolatedPoint = Spherical.interpolate(from: from, to: to, fraction: mid)
         let interpolatedLng = interpolatedPoint.longitude
 
         // Normalize longitude to handle crossing.
@@ -49,7 +49,7 @@ func interpolateAtMeridianGeodesic(
 
     // Final interpolation at the crossing point.
     let finalFraction = (low + high) / 2.0
-    let crossingPoint = Spherical.sphericalInterpolate(from: from, to: to, fraction: finalFraction)
+    let crossingPoint = Spherical.interpolate(from: from, to: to, fraction: finalFraction)
 
     // Snap the longitude exactly to the target meridian.
     return GeoPoint(

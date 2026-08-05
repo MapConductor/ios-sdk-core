@@ -6,7 +6,7 @@ import Foundation
 ///
 /// - Returns: The closest point on the segment and the distance in meters, or
 ///   nil if farther than the threshold.
-func isPointOnLinearLine(
+func linearPointOnLineOrNull(
     from: GeoPointProtocol,
     to: GeoPointProtocol,
     position: GeoPointProtocol,

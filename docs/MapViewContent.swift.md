@@ -86,9 +86,11 @@ Declares an info bubble (callout) overlay associated with a marker.
 public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
     public init<Content: View>(
         marker: MarkerState,
-        tailOffset: CGPoint = CGPoint(x: 0.5, y: 1.0),
-        useDefaultStyle: Bool = true,
-        style: InfoBubbleStyle = .Default,
+        bubbleColor: Color = .white,
+        borderColor: Color = .black,
+        contentPadding: CGFloat = 8.0,
+        cornerRadius: CGFloat = 4.0,
+        tailSize: CGFloat = 8.0,
         @ViewBuilder content: () -> Content
     )
 }
