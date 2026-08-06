@@ -14,8 +14,13 @@ import Foundation
 /// - Parameter separation: 橋の「行き」と「帰り」のエッジを横方向にずらす度数。0 だと橋は
 ///   幅ゼロ（座標が完全に一致する往復エッジ）になり、Android の TomTom はそのまま塗れるが、
 ///   iOS の TomTom (Orbis) や HERE のテッセレータは自己接触リングとして塗りを崩す／穴を
-///   無視する。1e-6 度（約 0.1m）程度を渡すと厳密に単純なリングになり、どの塗り規則でも
-///   穴が正しく抜ける（すき間は画面上では不可視）。
+///   無視する。正の値を渡すと厳密に単純なリングになり、塗り規則によっては穴が抜ける
+///   （すき間は画面上では不可視）。
+///
+///   ただし TomTom (Orbis iOS) はこれでも塗れない。2026-08-06 に iPad 実機で
+///   separation = 1e-6 / 1e-4 の両方を検証したが、いずれも塗りが楔状に崩れ穴も抜けなかった
+///   （`HolePolygonUITests.testTomTomHoleDrift`）。TomTom iOS は `PolygonHoleSplit` の
+///   分割方式（`partitionPolygonByHoles`）を使うこと。
 public func bridgeHolesIntoSingleRing(
     outer: [GeoPointProtocol],
     holes: [[GeoPointProtocol]],

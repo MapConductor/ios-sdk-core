@@ -31,8 +31,8 @@ final class PolygonHoleUnionPlacementTests: XCTestCase {
     private func overlappingHolesState() -> PolygonState {
         PolygonState(
             points: outerRing(),
-            id: "poly-overlapping",
-            holes: [rect(1, 1, 4, 4), rect(3, 3, 6, 6)]
+            holes: [rect(1, 1, 4, 4), rect(3, 3, 6, 6)],
+            id: "poly-overlapping"
         )
     }
 
@@ -63,8 +63,8 @@ final class PolygonHoleUnionPlacementTests: XCTestCase {
     func testDisjointHolesAreNotRecomputedOnEveryInit() {
         let state = PolygonState(
             points: outerRing(),
-            id: "poly-disjoint",
-            holes: [rect(1, 1, 2, 2), rect(7, 7, 8, 8)]
+            holes: [rect(1, 1, 2, 2), rect(7, 7, 8, 8)],
+            id: "poly-disjoint"
         )
 
         _ = Polygon(state: state)
@@ -80,7 +80,7 @@ final class PolygonHoleUnionPlacementTests: XCTestCase {
     /// 穴が 1 つ以下なら何もしない（android-sdk の `holes.size <= 1` ガードと同じ）。
     func testSingleHoleIsUntouched() {
         let hole = rect(2, 2, 5, 5)
-        let state = PolygonState(points: outerRing(), id: "poly-single", holes: [hole])
+        let state = PolygonState(points: outerRing(), holes: [hole], id: "poly-single")
 
         _ = Polygon(state: state)
 
@@ -146,7 +146,7 @@ final class PolygonHoleUnionPlacementTests: XCTestCase {
 
     /// 穴が 1 つ以下ならバックグラウンド版も同じインスタンスを返すこと（無駄な hop を作らない）。
     func testBackgroundUnionSkipsWhenNothingToMerge() async {
-        let state = PolygonState(points: outerRing(), id: "poly-one", holes: [rect(1, 1, 2, 2)])
+        let state = PolygonState(points: outerRing(), holes: [rect(1, 1, 2, 2)], id: "poly-one")
         let resolved = await state.unionHolesInBackground()
         XCTAssertTrue(resolved === state)
     }
@@ -156,13 +156,13 @@ final class PolygonHoleUnionPlacementTests: XCTestCase {
     func testUnionPreservesIdentityAndStyle() {
         let state = PolygonState(
             points: outerRing(),
+            holes: [rect(1, 1, 4, 4), rect(3, 3, 6, 6)],
             id: "poly-keep",
             strokeColor: .blue,
             strokeWidth: 3.0,
             fillColor: .green,
             geodesic: true,
-            zIndex: 42,
-            holes: [rect(1, 1, 4, 4), rect(3, 3, 6, 6)]
+            zIndex: 42
         )
 
         let polygon = Polygon(state: state)

@@ -47,15 +47,18 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
     /// O(n²) の平面アレンジメントを回してしまう。
     var holesUnionApplied = false
 
+    /// 引数順は android-sdk の `PolygonState`
+    /// （points, holes, id, strokeColor, strokeWidth, fillColor, geodesic, zIndex, extra, onClick）
+    /// に合わせてある。Swift は宣言順に引数を並べる必要があるため、順序自体が API の一部になる。
     public init(
         points: [GeoPointProtocol],
+        holes: [[GeoPointProtocol]] = [],
         id: String? = nil,
         strokeColor: UIColor = .black,
         strokeWidth: Double = 2.0,
         fillColor: UIColor = .clear,
         geodesic: Bool = false,
         zIndex: Int = 0,
-        holes: [[GeoPointProtocol]] = [],
         extra: Any? = nil,
         onClick: OnPolygonEventHandler? = nil
     ) {
@@ -82,25 +85,25 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
 
     public func copy(
         points: [GeoPointProtocol]? = nil,
+        holes: [[GeoPointProtocol]]? = nil,
         id: String? = nil,
         strokeColor: UIColor? = nil,
         strokeWidth: Double? = nil,
         fillColor: UIColor? = nil,
         geodesic: Bool? = nil,
         zIndex: Int? = nil,
-        holes: [[GeoPointProtocol]]? = nil,
         extra: Any? = nil,
         onClick: OnPolygonEventHandler? = nil
     ) -> PolygonState {
         PolygonState(
             points: points ?? self.points,
+            holes: holes ?? self.holes,
             id: id ?? self.id,
             strokeColor: strokeColor ?? self.strokeColor,
             strokeWidth: strokeWidth ?? self.strokeWidth,
             fillColor: fillColor ?? self.fillColor,
             geodesic: geodesic ?? self.geodesic,
             zIndex: zIndex ?? self.zIndex,
-            holes: holes ?? self.holes,
             extra: extra ?? self.extra,
             onClick: onClick ?? self.onClick
         )

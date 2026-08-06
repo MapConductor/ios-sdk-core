@@ -30,6 +30,13 @@ public final class OverlayCollector<S: OverlayCollectableState> {
     private var updateHandler: ((S) -> Void)?
     private var shouldApply: () -> Bool
 
+    /// In-place 変更の配信を `Settings.Default.composeEventDebounce`（5ms）でまとめる。
+    /// android-sdk の `ChildCollectorImpl.watchStateChanges` が `sample(updateDebounce)` で
+    /// 行っているのと同じ間引き。ドラッグのように毎フレーム発火する変更でも、1 つの state に
+    /// つき 1 窓 1 回しかコントローラの `update(state:)` を呼ばない。
+    private var pendingUpdates: [String: S] = [:]
+    private var updateFlushTask: Task<Void, Never>?
+
     /// - Parameter shouldApply: Gate that defers membership emission until the
     ///   renderer is ready (e.g. Mapbox/MapLibre style load). Call ``flush()``
     ///   once it becomes `true` to emit any pending set.
@@ -86,8 +93,26 @@ public final class OverlayCollector<S: OverlayCollectableState> {
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self, weak state] _ in
                     guard let self, let state, self.statesById[state.id] != nil else { return }
-                    self.updateHandler?(state)
+                    self.scheduleUpdate(state)
                 }
+        }
+    }
+
+    /// 変更を 5ms 窓にためて、窓の終わりに id ごと最新の 1 件だけ配信する。
+    private func scheduleUpdate(_ state: S) {
+        pendingUpdates[state.id] = state
+        guard updateFlushTask == nil else { return }
+
+        let delay = UInt64(max(0, Settings.Default.composeEventDebounce)) * 1_000_000
+        updateFlushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: delay)
+            guard let self else { return }
+            self.updateFlushTask = nil
+            let batch = self.pendingUpdates
+            self.pendingUpdates.removeAll()
+            for (id, state) in batch where self.statesById[id] === state {
+                self.updateHandler?(state)
+            }
         }
     }
 
@@ -112,5 +137,8 @@ public final class OverlayCollector<S: OverlayCollectableState> {
         statesById.removeAll()
         order.removeAll()
         latest.removeAll()
+        updateFlushTask?.cancel()
+        updateFlushTask = nil
+        pendingUpdates.removeAll()
     }
 }

@@ -123,6 +123,7 @@ public struct Marker: MapOverlayItemProtocol, Identifiable {
         animation: MarkerAnimation? = nil,
         clickable: Bool = true,
         draggable: Bool = false,
+        zIndex: Int? = nil,
         onClick: OnMarkerEventHandler? = nil,
         onDragStart: OnMarkerEventHandler? = nil,
         onDrag: OnMarkerEventHandler? = nil,
@@ -138,6 +139,7 @@ public struct Marker: MapOverlayItemProtocol, Identifiable {
             animation: animation,
             clickable: clickable,
             draggable: draggable,
+            zIndex: zIndex,
             onClick: onClick,
             onDragStart: onDragStart,
             onDrag: onDrag,
@@ -157,6 +159,7 @@ public struct Marker: MapOverlayItemProtocol, Identifiable {
         animation: MarkerAnimation? = nil,
         clickable: Bool = true,
         draggable: Bool = false,
+        zIndex: Int? = nil,
         onClick: OnMarkerEventHandler? = nil,
         onDragStart: OnMarkerEventHandler? = nil,
         onDrag: OnMarkerEventHandler? = nil,
@@ -172,6 +175,7 @@ public struct Marker: MapOverlayItemProtocol, Identifiable {
             animation: animation,
             clickable: clickable,
             draggable: draggable,
+            zIndex: zIndex,
             onClick: onClick,
             onDragStart: onDragStart,
             onDrag: onDrag,
@@ -377,6 +381,7 @@ public struct Polyline: MapOverlayItemProtocol, Identifiable {
         strokeColor: UIColor = .black,
         strokeWidth: Double = 1.0,
         geodesic: Bool = false,
+        zIndex: Int = 0,
         extra: Any? = nil,
         onClick: OnPolylineEventHandler? = nil
     ) {
@@ -386,6 +391,7 @@ public struct Polyline: MapOverlayItemProtocol, Identifiable {
             strokeColor: strokeColor,
             strokeWidth: strokeWidth,
             geodesic: geodesic,
+            zIndex: zIndex,
             extra: extra,
             onClick: onClick
         )
@@ -399,6 +405,7 @@ public struct Polyline: MapOverlayItemProtocol, Identifiable {
         strokeColor: UIColor = .black,
         strokeWidth: Double = 1.0,
         geodesic: Bool = false,
+        zIndex: Int = 0,
         extra: Any? = nil,
         onClick: OnPolylineEventHandler? = nil
     ) {
@@ -416,6 +423,7 @@ public struct Polyline: MapOverlayItemProtocol, Identifiable {
                 strokeColor: strokeColor,
                 strokeWidth: strokeWidth,
                 geodesic: geodesic,
+                zIndex: zIndex,
                 extra: extra,
                 onClick: onClick
             )
@@ -426,6 +434,7 @@ public struct Polyline: MapOverlayItemProtocol, Identifiable {
                 strokeColor: strokeColor,
                 strokeWidth: strokeWidth,
                 geodesic: geodesic,
+                zIndex: zIndex,
                 extra: extra,
                 onClick: onClick
             )
@@ -452,8 +461,12 @@ public struct Polygon: MapOverlayItemProtocol, Identifiable {
         self.id = state.id
     }
 
+    /// 引数順は android-sdk の `Polygon` コンポーザブル
+    /// （points, holes, id, strokeColor, strokeWidth, fillColor, geodesic, zIndex, extra, onClick）
+    /// に合わせてある。Swift は宣言順に引数を並べる必要があるため、順序自体が API の一部になる。
     public init(
         points: [GeoPointProtocol],
+        holes: [[GeoPointProtocol]] = [],
         id: String? = nil,
         strokeColor: UIColor = .black,
         strokeWidth: Double = 1.0,
@@ -466,6 +479,7 @@ public struct Polygon: MapOverlayItemProtocol, Identifiable {
         // すべての初期化子は init(state:) に集約する（穴のユニオンを 1 箇所で適用するため）。
         self.init(state: PolygonState(
             points: points,
+            holes: holes,
             id: id,
             strokeColor: strokeColor,
             strokeWidth: strokeWidth,
@@ -616,17 +630,26 @@ public struct RasterLayer: MapOverlayItemProtocol, Identifiable {
         self.id = state.id
     }
 
+    /// 引数順は android-sdk の `RasterLayer` コンポーザブル
+    /// （source, opacity, visible, zIndex, userAgent, id, extraHeaders）に合わせてある。
+    /// `extra` は iOS 独自の追加引数なので末尾に置く。
     public init(
         source: RasterSource,
         opacity: Double = 1.0,
         visible: Bool = true,
+        zIndex: Int = 0,
+        userAgent: String = "MapConductor/RasterLayerAgent(https://mapconductor.com)",
         id: String? = nil,
+        extraHeaders: [String: String]? = nil,
         extra: Any? = nil
     ) {
         let state = RasterLayerState(
             source: source,
             opacity: opacity,
             visible: visible,
+            zIndex: zIndex,
+            userAgent: userAgent,
+            extraHeaders: extraHeaders,
             id: id,
             extra: extra
         )
