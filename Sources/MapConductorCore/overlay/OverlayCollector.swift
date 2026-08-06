@@ -5,7 +5,7 @@ import Foundation
 ///
 /// This is the iOS analog of the React `OverlayCollector`
 /// (`js-sdk-core/src/overlay/OverlayCollector.ts`) and the Android
-/// `ChildCollector` (`android-sdk-core/.../ChildCollector.kt`): one collector
+/// `OverlayCollector` (`android-sdk-core/.../OverlayCollector.kt`): one collector
 /// per overlay type per map, holding an `id -> state` map, that provider
 /// renderers subscribe to. It generalizes the existing hand-rolled collector in
 /// `StrategyMarkerManager` so every overlay type and provider shares one
@@ -19,6 +19,13 @@ import Foundation
 /// (→ controller `add(data:)`) when the id set or an instance changes, and
 /// subscribes each state so in-place mutations reach the controller's
 /// `update(state:)`.
+///
+/// 変更の届け方は 3 プラットフォームで揃えてある。
+///
+/// - **membership（追加・削除）は debounce**。5ms の無入力窓で、イベントが来るたびに窓を
+///   延長する。android-sdk の `OverlayCollector` が `debounceBatch(5ms, ...)` で行うのと同じ。
+/// - **in-place 変更は sample**。1 つの state につき 1 窓 1 回、最新の値だけを配る。
+///   android-sdk の `sample(updateDebounce)` と同じ。
 @MainActor
 public final class OverlayCollector<S: OverlayCollectableState> {
     private var statesById: [String: S] = [:]
@@ -30,8 +37,22 @@ public final class OverlayCollector<S: OverlayCollectableState> {
     private var updateHandler: ((S) -> Void)?
     private var shouldApply: () -> Bool
 
+    /// membership 配信を `Settings.Default.composeEventDebounce`（5ms）の無入力窓でまとめる。
+    ///
+    /// SwiftUI は 1 フレームの間に `updateUIView` を何度も呼ぶ（`@Published` が複数更新された、
+    /// アニメーション中、親が再評価された、など）。そのたびに `membershipHandler` を叩くと
+    /// コントローラの `add(data:)` が全件差分を取り直すので、オーバーレイが多いほど無駄が効く。
+    ///
+    /// android-sdk の `debounceBatch(5ms, maxSize)` と同じく、窓が閉じるのを待たない
+    /// 打ち切り弁も持つ。android では「窓の中で溜まった add イベント数」だが、iOS の
+    /// `sync(_:)` は 1 回で全件を運ぶので「窓の中で合流した sync 回数」を数える。
+    private static var membershipMaxBatch: Int { 100 }
+    private var membershipDirty = false
+    private var coalescedSyncs = 0
+    private var membershipFlushTask: Task<Void, Never>?
+
     /// In-place 変更の配信を `Settings.Default.composeEventDebounce`（5ms）でまとめる。
-    /// android-sdk の `ChildCollectorImpl.watchStateChanges` が `sample(updateDebounce)` で
+    /// android-sdk の `OverlayCollector.watchStateChanges` が `sample(updateDebounce)` で
     /// 行っているのと同じ間引き。ドラッグのように毎フレーム発火する変更でも、1 つの state に
     /// つき 1 窓 1 回しかコントローラの `update(state:)` を呼ばない。
     private var pendingUpdates: [String: S] = [:]
@@ -84,8 +105,8 @@ public final class OverlayCollector<S: OverlayCollectableState> {
             subscriptions.removeValue(forKey: id)
         }
 
-        if membershipChanged && shouldApply() {
-            membershipHandler?(states)
+        if membershipChanged {
+            scheduleMembership()
         }
 
         for state in states where subscriptions[state.id] == nil {
@@ -98,6 +119,43 @@ public final class OverlayCollector<S: OverlayCollectableState> {
         }
     }
 
+    /// membership 配信を 5ms の無入力窓にためる。窓の中で `sync(_:)` が続く限り窓を延長し、
+    /// 合流した回数が打ち切り弁に達したら待たずに出す。
+    private func scheduleMembership() {
+        membershipDirty = true
+        coalescedSyncs += 1
+        if coalescedSyncs >= Self.membershipMaxBatch {
+            emitMembershipIfPending()
+            return
+        }
+
+        membershipFlushTask?.cancel()
+        let delay = UInt64(max(0, Settings.Default.composeEventDebounce)) * 1_000_000
+        membershipFlushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: delay)
+            guard !Task.isCancelled, let self else { return }
+            self.membershipFlushTask = nil
+            self.emitMembershipIfPending()
+        }
+    }
+
+    /// 保留中の membership を今すぐ配信する。
+    ///
+    /// `shouldApply()` が false のときは **dirty を残したまま何もしない**。レンダラの準備が
+    /// できていないだけなので、準備完了時に呼ばれる ``flush()`` が改めて配る。
+    private func emitMembershipIfPending() {
+        cancelMembershipTimer()
+        guard membershipDirty, shouldApply() else { return }
+        membershipDirty = false
+        membershipHandler?(latest)
+    }
+
+    private func cancelMembershipTimer() {
+        membershipFlushTask?.cancel()
+        membershipFlushTask = nil
+        coalescedSyncs = 0
+    }
+
     /// 変更を 5ms 窓にためて、窓の終わりに id ごと最新の 1 件だけ配信する。
     private func scheduleUpdate(_ state: S) {
         pendingUpdates[state.id] = state
@@ -108,6 +166,10 @@ public final class OverlayCollector<S: OverlayCollectableState> {
             try? await Task.sleep(nanoseconds: delay)
             guard let self else { return }
             self.updateFlushTask = nil
+            // membership が保留なら先に出す。debounce 窓は延長されうるので、待っていると
+            // コントローラがまだ知らない state に対して `update(state:)` が先着しかねない。
+            // 同期配信だった頃は add が必ず先だったので、その順序をここで保つ。
+            self.emitMembershipIfPending()
             let batch = self.pendingUpdates
             self.pendingUpdates.removeAll()
             for (id, state) in batch where self.statesById[id] === state {
@@ -119,6 +181,8 @@ public final class OverlayCollector<S: OverlayCollectableState> {
     /// Re-emit the current set (used once ``shouldApply`` flips to `true`).
     public func flush() {
         guard shouldApply(), !latest.isEmpty else { return }
+        cancelMembershipTimer()
+        membershipDirty = false
         membershipHandler?(latest)
     }
 
@@ -140,5 +204,7 @@ public final class OverlayCollector<S: OverlayCollectableState> {
         updateFlushTask?.cancel()
         updateFlushTask = nil
         pendingUpdates.removeAll()
+        cancelMembershipTimer()
+        membershipDirty = false
     }
 }

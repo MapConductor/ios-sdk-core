@@ -1,4 +1,8 @@
-public protocol OverlayControllerProtocol {
+/// 1 種類のオーバーレイ（マーカー、ポリゴン、…）を受け持つコントローラ。
+///
+/// ``AnyOverlayController`` を継承しているので、型引数を落とした形で
+/// ``OverlayControllerRegistry`` に登録できる。
+public protocol OverlayControllerProtocol: AnyOverlayController {
     associatedtype StateType
     associatedtype EntityType
     associatedtype EventType

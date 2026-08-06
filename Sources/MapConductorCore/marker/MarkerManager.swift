@@ -23,48 +23,45 @@ public final class MarkerManager<ActualMarker> {
         self.minMarkerCount = minMarkerCount
     }
 
-    private func checkNotDestroyedLocked() {
-        // In-flight async work (e.g. Combine subscriptions delivering through
-        // a Task) can legitimately arrive just after destroy() during provider
-        // switches. destroy() clears all state, so post-destroy access is a
-        // harmless no-op on empty state — log instead of crashing.
+    /// 破棄後のアクセスかどうかを返す。破棄後なら警告ログを出して `false` を返す。
+    ///
+    /// 進行中の非同期処理（Combine の配送、await から戻ってきたレンダラ往復、
+    /// コレクタのデバウンス窓に溜まっていた更新）は、プロバイダ切り替えのように
+    /// destroy → 生成が続けて起きる場面で destroy 直後に到着しうる。これは正常な
+    /// 競合なので例外は投げない。
+    ///
+    /// ただし**書き込み系は実行しない**。マネージャはマップ 1 つにつき 1 個で、
+    /// プロバイダを切り替えると新しいマップが自前のマネージャを作る（サンプルアプリも
+    /// プロバイダごとに別の state を持ち、再利用していない）。破棄済みのマネージャに
+    /// 書き戻しても誰も参照せず、破棄済みオブジェクトが再び状態を持つだけになる。
+    /// android-sdk の `MarkerManager.usable(operation)` と同じ意味論。
+    private func usableLocked(_ operation: String) -> Bool {
         if destroyed {
-            NSLog("[MapConductor] MarkerManager accessed after destroy (ignored)")
+            NSLog("[MapConductor] MarkerManager.%@ called after destroy (ignored)", operation)
+            return false
         }
+        return true
     }
 
     public func getEntity(_ id: String) -> MarkerEntity<ActualMarker>? {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        guard usableLocked("getEntity") else { return nil }
         return entities[id]
     }
 
     public func hasEntity(_ id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        guard usableLocked("hasEntity") else { return false }
         return entities[id] != nil
-    }
-
-    public func containsAllEntities(ids: Set<String>) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        checkNotDestroyedLocked()
-        if entities.count != ids.count {
-            return false
-        }
-        for id in ids where entities[id] == nil {
-            return false
-        }
-        return true
     }
 
     @discardableResult
     public func removeEntity(_ id: String) -> MarkerEntity<ActualMarker>? {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        guard usableLocked("removeEntity") else { return nil }
         let removed = entities.removeValue(forKey: id)
         if let removed {
             cellRegistry?.removePoint(entity: removed)
@@ -75,7 +72,7 @@ public final class MarkerManager<ActualMarker> {
     public func registerEntity(_ entity: MarkerEntity<ActualMarker>) {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        guard usableLocked("registerEntity") else { return }
         entities[entity.state.id] = entity
         cellRegistry?.setPoint(entity: entity)
     }
@@ -83,7 +80,7 @@ public final class MarkerManager<ActualMarker> {
     public func updateEntity(_ entity: MarkerEntity<ActualMarker>) {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        guard usableLocked("updateEntity") else { return }
         entities[entity.state.id] = entity
         cellRegistry?.setPoint(entity: entity)
     }
@@ -96,7 +93,8 @@ public final class MarkerManager<ActualMarker> {
     ) -> Double {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        // 純粋な計算で内部状態を触らないため、破棄後でも警告だけ出して計算を続ける。
+        _ = usableLocked("metersPerPixel")
         let pixelsAtZoom = Double(tileSize) * pow(2.0, zoom)
         return Earth.circumferenceMeters / pixelsAtZoom * cos(position.latitude * .pi / 180.0) * pixels
     }
@@ -104,7 +102,7 @@ public final class MarkerManager<ActualMarker> {
     public func findNearest(position: GeoPointProtocol) -> MarkerEntity<ActualMarker>? {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        guard usableLocked("findNearest") else { return nil }
 
         if entities.count > minMarkerCount {
             let registry = ensureCellRegistryLocked()
@@ -139,7 +137,7 @@ public final class MarkerManager<ActualMarker> {
     public func findByIdPrefix(_ prefix: String) -> [HexCell] {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        guard usableLocked("findByIdPrefix") else { return [] }
         return cellRegistry?.findByIdPrefix(prefix) ?? []
     }
 
@@ -157,7 +155,7 @@ public final class MarkerManager<ActualMarker> {
     public func allEntities() -> [MarkerEntity<ActualMarker>] {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        guard usableLocked("allEntities") else { return [] }
         return Array(entities.values)
     }
 
@@ -166,7 +164,7 @@ public final class MarkerManager<ActualMarker> {
 
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        guard usableLocked("findMarkersInBounds") else { return [] }
 
         if entities.count > minMarkerCount,
            let center = bounds.center,
@@ -187,7 +185,7 @@ public final class MarkerManager<ActualMarker> {
     public func getMemoryStats() -> MarkerManagerStats {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        _ = usableLocked("getMemoryStats")
         return MarkerManagerStats(
             entityCount: entities.count,
             hasSpatialIndex: cellRegistry != nil,
@@ -206,7 +204,7 @@ public final class MarkerManager<ActualMarker> {
     public func clear() {
         lock.lock()
         defer { lock.unlock() }
-        checkNotDestroyedLocked()
+        guard usableLocked("clear") else { return }
         entities.removeAll()
         cellRegistry?.clear()
     }

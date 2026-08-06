@@ -556,7 +556,10 @@ public struct Circle: MapOverlayItemProtocol, Identifiable {
         geodesic: Bool = true,
         clickable: Bool = true,
         strokeColor: UIColor = .red,
-        strokeWidth: Double = 1.0,
+        // android-sdk の `Circle` コンポーザブル（strokeWidth = 2.dp）と同じ既定値。
+        // `CircleState` 側の既定は 3 者とも 1 で、コンポーネントだけ 2 という
+        // 差はプラットフォーム共通（Polygon も同じ構図）。
+        strokeWidth: Double = 2.0,
         fillColor: UIColor = UIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.5),
         id: String? = nil,
         zIndex: Int? = nil,
@@ -597,7 +600,9 @@ public struct GroundImage: MapOverlayItemProtocol, Identifiable {
     public init(
         bounds: GeoRectBounds,
         image: UIImage,
-        opacity: Double = 1.0,
+        // android-sdk の `GroundImage` コンポーザブル（opacity = 0.5f）と同じ既定値。
+        // `GroundImageState` 側の既定は 3 者とも 1.0 で、コンポーネントだけ 0.5。
+        opacity: Double = 0.5,
         tileSize: Int = 512,
         id: String? = nil,
         extra: Any? = nil,
@@ -632,16 +637,14 @@ public struct RasterLayer: MapOverlayItemProtocol, Identifiable {
 
     /// 引数順は android-sdk の `RasterLayer` コンポーザブル
     /// （source, opacity, visible, zIndex, userAgent, id, extraHeaders）に合わせてある。
-    /// `extra` は iOS 独自の追加引数なので末尾に置く。
     public init(
         source: RasterSource,
         opacity: Double = 1.0,
         visible: Bool = true,
         zIndex: Int = 0,
-        userAgent: String = "MapConductor/RasterLayerAgent(https://mapconductor.com)",
+        userAgent: String = RasterLayerState.defaultUserAgent,
         id: String? = nil,
-        extraHeaders: [String: String]? = nil,
-        extra: Any? = nil
+        extraHeaders: [String: String]? = nil
     ) {
         let state = RasterLayerState(
             source: source,
@@ -650,8 +653,7 @@ public struct RasterLayer: MapOverlayItemProtocol, Identifiable {
             zIndex: zIndex,
             userAgent: userAgent,
             extraHeaders: extraHeaders,
-            id: id,
-            extra: extra
+            id: id
         )
         self.state = state
         self.id = state.id

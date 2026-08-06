@@ -16,6 +16,15 @@ public protocol MapViewStateProtocol: ObservableObject {
     associatedtype ActualMapDesignType
 
     var id: String { get }
+    /// 現在のカメラ。**カメラを読む正規の経路はここ**で、表示範囲は
+    /// `cameraPosition.visibleRegion?.bounds` から取る。
+    ///
+    /// プロバイダが地図 SDK のカメライベントごとに push する。変化を追いたい場合は
+    /// `onCameraMove` / `onCameraMoveEnd`、拡張モジュールは登録した
+    /// オーバーレイコントローラの `onCameraChanged` を使う。
+    ///
+    /// コントローラ側に `getCameraPosition()` / `getBounds()` を足さないこと。
+    /// 理由は ``MapViewControllerProtocol`` のコメントと /docs/reading-camera を参照。
     var cameraPosition: MapCameraPosition { get }
     var mapDesignType: ActualMapDesignType { get set }
     var uiSettings: MapUISettings { get set }

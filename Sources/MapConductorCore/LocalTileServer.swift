@@ -283,7 +283,11 @@ public final class LocalTileServer {
             return nil
         }
 
-        let lines = headerString.split(separator: "\n", omittingEmptySubsequences: false)
+        // Swift では "\r\n" が 1 つの Character なので、CRLF 区切りの文字列を
+        // `split(separator: "\n")` しても**行が分かれない**（全体が 1 要素になり、
+        // ヘッダが 1 つも取れなくなる）。先に LF へ正規化する。
+        let normalized = headerString.replacingOccurrences(of: "\r\n", with: "\n")
+        let lines = normalized.split(separator: "\n", omittingEmptySubsequences: false)
         var requestLine: Substring?
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)

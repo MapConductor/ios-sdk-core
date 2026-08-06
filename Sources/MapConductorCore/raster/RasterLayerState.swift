@@ -9,7 +9,6 @@ public struct RasterLayerFingerPrint: Equatable, Hashable {
     public let debug: Int
     public let userAgent: Int
     public let extraHeaders: Int
-    public let extra: Int
 }
 
 public struct RasterLayerEvent {
@@ -23,6 +22,14 @@ public struct RasterLayerEvent {
 public typealias OnRasterLayerEventHandler = (RasterLayerEvent) -> Void
 
 public final class RasterLayerState: ObservableObject, Identifiable, Equatable, Hashable {
+    /// `userAgent` を明示しなかったときに入る値。
+    ///
+    /// 定数として公開しているのは、プロバイダ側が「利用者が本当に指定したのか、
+    /// 既定のまま来ただけなのか」を判断するため。HERE のようにヘッダを載せるのに
+    /// 追加のコスト（ローカルプロキシ経由）が要るプロバイダは、既定値のままなら
+    /// そのコストを払わない。react-sdk の `DEFAULT_RASTER_LAYER_USER_AGENT` と同じ値。
+    public static let defaultUserAgent = "MapConductor/RasterLayerAgent(https://mapconductor.com)"
+
     public let id: String
 
     @Published public var source: RasterSource
@@ -32,7 +39,6 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     @Published public var debug: Bool
     @Published public var userAgent: String?
     @Published public var extraHeaders: [String: String]?
-    @Published public var extra: Any?
 
     public init(
         source: RasterSource,
@@ -40,10 +46,9 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         visible: Bool = true,
         zIndex: Int = 0,
         debug: Bool = false,
-        userAgent: String = "MapConductor/RasterLayerAgent(https://mapconductor.com)",
+        userAgent: String = RasterLayerState.defaultUserAgent,
         extraHeaders: [String: String]? = nil,
-        id: String? = nil,
-        extra: Any? = nil
+        id: String? = nil
     ) {
         let resolvedId = id ?? RasterLayerState.makeRasterLayerId(
             source: source,
@@ -60,7 +65,6 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         self.debug = debug
         self.userAgent = userAgent
         self.extraHeaders = extraHeaders
-        self.extra = extra
     }
 
     public func copy(
@@ -71,8 +75,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         debug: Bool? = nil,
         userAgent: String? = nil,
         extraHeaders: [String: String]? = nil,
-        id: String? = nil,
-        extra: Any? = nil
+        id: String? = nil
     ) -> RasterLayerState {
         RasterLayerState(
             source: source ?? self.source,
@@ -81,10 +84,9 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
             zIndex: zIndex ?? self.zIndex,
             debug: debug ?? self.debug,
             userAgent: userAgent ??
-                self.userAgent ?? "MapConductor/RasterLayerAgent(https://mapconductor.com)",
+                self.userAgent ?? RasterLayerState.defaultUserAgent,
             extraHeaders: extraHeaders ?? self.extraHeaders,
-            id: id ?? self.id,
-            extra: extra ?? self.extra
+            id: id ?? self.id
         )
     }
 
@@ -97,8 +99,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
             zIndex: Int(Int32(truncatingIfNeeded: zIndex)),
             debug: javaHash(debug),
             userAgent: javaHash(userAgent),
-            extraHeaders: javaHash(extraHeaders),
-            extra: javaHash(extra)
+            extraHeaders: javaHash(extraHeaders)
         )
     }
 
@@ -117,8 +118,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
                     zIndex: Int(Int32(truncatingIfNeeded: zIndex)),
                     debug: javaHash(debug),
                     userAgent: 0,
-                    extraHeaders: 0,
-                    extra: 0
+                    extraHeaders: 0
                 )
             }
             .combineLatest($userAgent)
@@ -131,8 +131,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
                     zIndex: finger.zIndex,
                     debug: finger.debug,
                     userAgent: javaHash(userAgent),
-                    extraHeaders: 0,
-                    extra: 0
+                    extraHeaders: 0
                 )
             }
             .combineLatest($extraHeaders)
@@ -145,22 +144,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
                     zIndex: finger.zIndex,
                     debug: finger.debug,
                     userAgent: finger.userAgent,
-                    extraHeaders: javaHash(extraHeaders),
-                    extra: 0
-                )
-            }
-            .combineLatest($extra)
-            .map { finger, extra in
-                RasterLayerFingerPrint(
-                    id: finger.id,
-                    source: finger.source,
-                    opacity: finger.opacity,
-                    visible: finger.visible,
-                    zIndex: finger.zIndex,
-                    debug: finger.debug,
-                    userAgent: finger.userAgent,
-                    extraHeaders: finger.extraHeaders,
-                    extra: javaHash(extra)
+                    extraHeaders: javaHash(extraHeaders)
                 )
             }
             .removeDuplicates()
@@ -178,7 +162,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     public func hashCode() -> Int {
         // android-sdk と同じフィールド集合: source, opacity, visible, zIndex, debug,
         // extraHeaders, userAgent（zIndex/debug を含める。以前は除外していたため
-        // zIndex や debug のみ異なるレイヤーが等価扱いになっていた）。extra は iOS 独自。
+        // zIndex や debug のみ異なるレイヤーが等価扱いになっていた）。
         var result: Int32 = Int32(truncatingIfNeeded: javaHash(source))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(opacity))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(visible))
@@ -186,7 +170,6 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(debug))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(extraHeaders))
         result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(userAgent))
-        result = result &* 31 &+ Int32(truncatingIfNeeded: javaHash(extra))
         return Int(result)
     }
 
@@ -198,7 +181,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         extraHeaders: [String: String]?
     ) -> String {
         // android-sdk / react-sdk と同じフィールド集合・順序: source, opacity, visible,
-        // debug, extraHeaders（userAgent / extra は id に含めない）。
+        // debug, extraHeaders（userAgent は id に含めない）。
         let hashCodes = [
             javaHash(source),
             javaHash(opacity),

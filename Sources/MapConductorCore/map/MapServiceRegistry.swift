@@ -57,6 +57,24 @@ public final class MutableMapServiceRegistry: MapServiceRegistry {
     }
 }
 
+public extension MutableMapServiceRegistry {
+    /// プロバイダがこのマップに登録した capability をまとめて取り下げる。
+    ///
+    /// レジストリの持ち主は state で、ビューより長生きする。ビューが消えるときに取り下げないと、
+    /// 破棄済みのコントローラを掴んだままの capability が残る。
+    ///
+    /// ``clear()`` ではなく ``remove(_:)`` を並べているのは、拡張モジュールが同じマップへ
+    /// 登録した他の capability を巻き添えにしないため。android-sdk の `MapViewBase` の
+    /// `DisposableEffect`、react-sdk の `useMarkerRenderingSupport` のクリーンアップと同じ位置づけで、
+    /// 各プロバイダの `unbind()` から呼ぶ。
+    ///
+    /// プロバイダが登録する capability を増やしたら、ここにも足すこと。
+    func removeProviderRegistrations() {
+        remove(MarkerRenderingSupportKey.self)
+        remove(OverlayControllerRegistryKey.self)
+    }
+}
+
 /// Registry that never resolves anything — the value ``MapServiceRegistryScope/current``
 /// reports outside of any map. Mirrors Android's `EmptyMapServiceRegistry`.
 public final class EmptyMapServiceRegistry: MapServiceRegistry {

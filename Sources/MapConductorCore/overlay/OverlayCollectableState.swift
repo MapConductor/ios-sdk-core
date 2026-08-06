@@ -4,7 +4,7 @@ import Combine
 ///
 /// Mirrors the `ComponentState { id }` contract of the React/Android SDKs
 /// (`js-sdk-core/src/overlay/OverlayCollector.ts`,
-/// `android-sdk-core/.../ChildCollector.kt`). Every overlay state is a reference
+/// `android-sdk-core/.../OverlayCollector.kt`). Every overlay state is a reference
 /// type (`AnyObject`) so the collector can hold it by identity, diff instances
 /// with `!==`, and subscribe to it weakly.
 ///

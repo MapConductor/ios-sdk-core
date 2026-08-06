@@ -122,11 +122,21 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         internalAnimation
     }
 
+    /// Copies this state, carrying every property over unless overridden.
+    ///
+    /// `animation` is copied like everything else. It used to be hard-coded to
+    /// `nil` here, so `marker.copy(position:)` on a bouncing marker returned a
+    /// still one. Nothing about a copy implies "stop animating", and
+    /// android-sdk / react-sdk both carry it over.
+    ///
+    /// The double optional is the same trick `zIndex` uses: `nil` means "not
+    /// passed, keep mine", `.some(nil)` means "explicitly clear the animation".
     public func copy(
         id: String? = nil,
         position: GeoPoint? = nil,
         extra: Any? = nil,
         icon: (any MarkerIconProtocol)? = nil,
+        animation: MarkerAnimation?? = nil,
         clickable: Bool? = nil,
         draggable: Bool? = nil,
         zIndex: Int?? = nil,
@@ -143,6 +153,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         let finalPosition = position ?? self.position
         let finalExtra = extra ?? self.extra
         let finalIcon = icon ?? self.icon
+        let finalAnimation = animation ?? self.internalAnimation
         let finalClickable = clickable ?? self.clickable
         let finalDraggable = draggable ?? self.draggable
         let finalZIndex = zIndex ?? self.zIndex
@@ -159,7 +170,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
             id: finalId,
             extra: finalExtra,
             icon: finalIcon,
-            animation: nil,
+            animation: finalAnimation,
             clickable: finalClickable,
             draggable: finalDraggable,
             zIndex: finalZIndex,
