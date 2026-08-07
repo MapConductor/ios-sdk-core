@@ -50,7 +50,8 @@ public enum MarkerIngestionEngine {
                         marker: nil,
                         state: state,
                         visible: prevEntity.visible,
-                        isRendered: true
+                        isRendered: true,
+                        tiling: true
                     ))
                     tiledDataChanged = true
                 } else {
@@ -63,7 +64,11 @@ public enum MarkerIngestionEngine {
                             marker: prevEntity.marker,
                             state: state,
                             visible: prevEntity.visible,
-                            isRendered: true
+                            isRendered: true,
+                            // タイル担当から降ろす途中なので、レンダラには「直前まで
+                            // タイルだった」ことを伝える。マネージャへ書き戻す最終 entity
+                            // （下の onChange 後）は tiling = false になる。
+                            tiling: wasTiled
                         ),
                         bitmapIcon: markerIcon,
                         prev: prevEntity
@@ -77,7 +82,8 @@ public enum MarkerIngestionEngine {
                         marker: nil,
                         state: state,
                         visible: true,
-                        isRendered: true
+                        isRendered: true,
+                        tiling: true
                     ))
                     tiledDataChanged = true
                 } else {

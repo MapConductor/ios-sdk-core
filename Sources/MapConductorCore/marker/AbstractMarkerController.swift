@@ -273,12 +273,18 @@ open class AbstractMarkerController<
                 return nil
             }
 
+            // tiling は prevEntity から引き継ぐ。ここは「担当替え」をする場所ではない
+            // （タイル ⇄ ネイティブの昇格・降格は各プロバイダの update / ingest が行う）。
+            // 落とすと、タイル担当のマーカーが 1 回更新されただけで
+            // `MarkerTileRenderer` の絞り込みから外れ、ネイティブマーカーも持たないため
+            // 地図から消える。
             markerManager.updateEntity(
                 MarkerEntity(
                     marker: prevEntity.marker,
                     state: state,
                     visible: prevEntity.visible,
-                    isRendered: prevEntity.isRendered
+                    isRendered: prevEntity.isRendered,
+                    tiling: prevEntity.tiling
                 )
             )
 

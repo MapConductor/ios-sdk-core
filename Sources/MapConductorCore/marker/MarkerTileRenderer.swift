@@ -271,7 +271,16 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         let latPad = span.latitude * padNorm
         let lonPad = span.longitude * padNorm
         let expanded = bounds.expandedByDegrees(latPad: latPad, lonPad: lonPad)
-        return markerManager.findMarkersInBounds(expanded)
+        // タイルに描くのは「タイル担当」の entity だけ。
+        //
+        // 多くのプロバイダはコントローラの markerManager をそのままこのレンダラへ渡すため、
+        // 絞らないとネイティブマーカーとして描いているもの（draggable / animation 付き）まで
+        // PNG に焼かれ、同じ場所へ二重に出る。地図を回転させるとタイル側だけ傾くので、
+        // ゴーストとして見える。
+        //
+        // longdo のようにタイル専用の manager を別に持つプロバイダでは全 entity が
+        // tiling = true なので、この絞り込みは何もしない。
+        return markerManager.findMarkersInBounds(expanded).filter { $0.tiling }
     }
 
     private func tileToGeoPoint(x: Double, y: Double, z: Double) -> GeoPoint {

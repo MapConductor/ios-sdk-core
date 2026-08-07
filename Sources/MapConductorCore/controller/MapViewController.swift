@@ -54,7 +54,7 @@ public protocol MapViewControllerProtocol {
     ///
     /// 各プロバイダのコントローラが 1 つ保持する。
     /// android-sdk では `BaseMapViewController` がこの状態を持ち、
-    /// `registerOverlayController` / `getControllers` を提供している。
+    /// `registerOverlayController` を提供している。
     var overlayControllers: OverlayControllerRegistry { get }
 
     /// 地図を破棄する／プロバイダを差し替えるときに呼ぶ後始末。
@@ -111,12 +111,6 @@ public extension MapViewControllerProtocol {
     /// 解除漏れは前のプロバイダのレンダラを掴んだままになる。
     func unregisterOverlayController(_ controller: any AnyOverlayController) {
         overlayControllers.unregister(controller)
-    }
-
-    /// 登録済みのオーバーレイコントローラを zIndex 昇順で返す。
-    /// android-sdk の `getControllers()` に対応する。
-    func getControllers() -> [any AnyOverlayController] {
-        overlayControllers.all()
     }
 
     /// 既定の後始末。登録済みオーバーレイコントローラをすべて破棄する。
