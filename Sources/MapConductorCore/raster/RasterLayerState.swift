@@ -32,7 +32,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
 
     public let id: String
 
-    @Published public var source: RasterSource
+    @Published public var source: RasterLayerSource
     @Published public var opacity: Double
     @Published public var visible: Bool
     @Published public var zIndex: Int
@@ -41,7 +41,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     @Published public var extraHeaders: [String: String]?
 
     public init(
-        source: RasterSource,
+        source: RasterLayerSource,
         opacity: Double = 1.0,
         visible: Bool = true,
         zIndex: Int = 0,
@@ -68,7 +68,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     }
 
     public func copy(
-        source: RasterSource? = nil,
+        source: RasterLayerSource? = nil,
         opacity: Double? = nil,
         visible: Bool? = nil,
         zIndex: Int? = nil,
@@ -174,7 +174,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     }
 
     private static func makeRasterLayerId(
-        source: RasterSource,
+        source: RasterLayerSource,
         opacity: Double,
         visible: Bool,
         debug: Bool,
@@ -259,7 +259,7 @@ private func javaHash(_ value: Any?) -> Int {
     return 0
 }
 
-private func javaHash(_ source: RasterSource) -> Int {
+private func javaHash(_ source: RasterLayerSource) -> Int {
     switch source {
     case let .urlTemplate(template, tileSize, minZoom, maxZoom, attributionRules, scheme):
         let hashCodes = [

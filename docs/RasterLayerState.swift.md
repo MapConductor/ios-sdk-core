@@ -9,7 +9,7 @@ State object controlling a raster tile layer overlay on the map. Conforms to `Ob
 public final class RasterLayerState: ObservableObject, Identifiable, Equatable, Hashable {
     public let id: String
 
-    @Published public var source: RasterSource
+    @Published public var source: RasterLayerSource
     @Published public var opacity: Double
     @Published public var visible: Bool
     @Published public var userAgent: String?
@@ -17,7 +17,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     @Published public var extra: Any?
 
     public init(
-        source: RasterSource,
+        source: RasterLayerSource,
         opacity: Double = 1.0,
         visible: Bool = true,
         userAgent: String? = nil,
@@ -31,7 +31,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
 ## Constructor Parameters
 
 - `source`
-    - Type: `RasterSource`
+    - Type: `RasterLayerSource`
     - Description: The tile source (URL template, TileJSON, or ArcGIS service).
 - `opacity`
     - Type: `Double`
@@ -66,7 +66,7 @@ Returns a new `RasterLayerState` with any of the given values overriding the cur
 
 ```swift
 public func copy(
-    source: RasterSource? = nil,
+    source: RasterLayerSource? = nil,
     opacity: Double? = nil,
     visible: Bool? = nil,
     userAgent: String? = nil,

@@ -19,8 +19,9 @@ import Foundation
 ///
 ///   ただし TomTom (Orbis iOS) はこれでも塗れない。2026-08-06 に iPad 実機で
 ///   separation = 1e-6 / 1e-4 の両方を検証したが、いずれも塗りが楔状に崩れ穴も抜けなかった
-///   （`HolePolygonUITests.testTomTomHoleDrift`）。TomTom iOS は `PolygonHoleSplit` の
-///   分割方式（`partitionPolygonByHoles`）を使うこと。
+///   （`HolePolygonUITests.testTomTomHoleDrift`）。SDK を 0.47.5 → 0.73.1 に上げた
+///   2026-08-07 に iPad 実機で再検証しても同じく崩れた。TomTom iOS は
+///   `PolygonHoleSplit` の分割方式（`partitionPolygonByHoles`）を使うこと。
 public func bridgeHolesIntoSingleRing(
     outer: [GeoPointProtocol],
     holes: [[GeoPointProtocol]],

@@ -59,7 +59,7 @@ public final class LocalTileServer {
 
     @available(*, deprecated, message: "`version` is ignored. Use `urlTemplate(routeId:tileSize:)` instead.")
     public func urlTemplate(routeId: String, version: Int64) -> String {
-        urlTemplate(routeId: routeId, tileSize: RasterSource.defaultTileSize)
+        urlTemplate(routeId: routeId, tileSize: RasterLayerSource.defaultTileSize)
     }
 
     public func stop() {

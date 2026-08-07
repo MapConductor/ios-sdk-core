@@ -1,4 +1,4 @@
-# RasterSource
+# RasterLayerSource
 
 Types describing the source of raster tile data for a `RasterLayerState`.
 
@@ -22,17 +22,17 @@ public enum TileScheme: String, Hashable {
 
 ---
 
-# RasterSource
+# RasterLayerSource
 
 An enum representing the kind of tile source.
 
 ## Signature
 
 ```swift
-public enum RasterSource: Hashable {
+public enum RasterLayerSource: Hashable {
     case urlTemplate(
         template: String,
-        tileSize: Int = RasterSource.defaultTileSize,
+        tileSize: Int = RasterLayerSource.defaultTileSize,
         minZoom: Int? = nil,
         maxZoom: Int? = nil,
         attribution: String? = nil,
@@ -66,7 +66,7 @@ public enum RasterSource: Hashable {
 ## Example
 
 ```swift
-let source = RasterSource.urlTemplate(
+let source = RasterLayerSource.urlTemplate(
     template: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     scheme: .XYZ
 )

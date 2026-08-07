@@ -233,7 +233,7 @@ public struct RasterLayer: MapOverlayItemProtocol, Identifiable {
     public init(state: RasterLayerState)
 
     public init(
-        source: RasterSource,
+        source: RasterLayerSource,
         opacity: Double = 1.0,
         visible: Bool = true,
         id: String? = nil,

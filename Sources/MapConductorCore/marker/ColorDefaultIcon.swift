@@ -1,7 +1,9 @@
 import CoreText
 import UIKit
 
-public final class DefaultMarkerIcon: MarkerIconProtocol {
+/// 単色で塗る既定アイコン（カラーフィル版の DefaultIcon）。
+/// `DefaultMarkerIcon` はこれの別名。
+public final class ColorDefaultIcon: MarkerIconProtocol {
     public static let defaultIconSize: CGFloat = Settings.Default.iconSize
     public static let defaultStrokeWidth: CGFloat = Settings.Default.iconStroke
     public static let defaultFillColor: UIColor = .red
@@ -56,8 +58,8 @@ public final class DefaultMarkerIcon: MarkerIconProtocol {
         self.infoAnchor = infoAnchor
         self.iconSize = iconSize
         self.debug = debug
-        self.anchor = DefaultMarkerIcon.defaultAnchor
-        self.bitmapIcon = DefaultMarkerIcon.makeIcon(
+        self.anchor = ColorDefaultIcon.defaultAnchor
+        self.bitmapIcon = ColorDefaultIcon.makeIcon(
             iconSize: iconSize,
             scale: scale,
             fillColor: fillColor,
@@ -68,7 +70,7 @@ public final class DefaultMarkerIcon: MarkerIconProtocol {
             labelTextSize: labelTextSize,
             labelTypeFace: labelTypeFace,
             labelStrokeColor: labelStrokeColor,
-            anchor: DefaultMarkerIcon.defaultAnchor,
+            anchor: ColorDefaultIcon.defaultAnchor,
             infoAnchor: infoAnchor,
             debug: debug
         )
@@ -107,8 +109,8 @@ public final class DefaultMarkerIcon: MarkerIconProtocol {
         labelStrokeColor: UIColor? = nil,
         iconSize: CGFloat? = nil,
         debug: Bool? = nil
-    ) -> DefaultMarkerIcon {
-        DefaultMarkerIcon(
+    ) -> ColorDefaultIcon {
+        ColorDefaultIcon(
             fillColor: fillColor ?? self.fillColor,
             strokeColor: strokeColor ?? self.strokeColor,
             strokeWidth: strokeWidth ?? self.strokeWidth,
@@ -397,3 +399,7 @@ public final class DefaultMarkerIcon: MarkerIconProtocol {
         return path
     }
 }
+
+/// 歴史的経緯で使われてきた `ColorDefaultIcon` の別名。
+/// android-sdk の `typealias DefaultMarkerIcon = ColorDefaultIcon` と同じ位置づけ。
+public typealias DefaultMarkerIcon = ColorDefaultIcon

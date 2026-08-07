@@ -52,7 +52,7 @@ public struct RasterLayer: MapOverlayItemProtocol, Identifiable {
     /// 引数順は android-sdk の `RasterLayer` コンポーザブル
     /// （source, opacity, visible, zIndex, userAgent, id, extraHeaders）に合わせてある。
     public init(
-        source: RasterSource,
+        source: RasterLayerSource,
         opacity: Double = 1.0,
         visible: Bool = true,
         zIndex: Int = 0,

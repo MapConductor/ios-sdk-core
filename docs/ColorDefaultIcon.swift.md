@@ -1,4 +1,6 @@
-# DefaultMarkerIcon
+# ColorDefaultIcon
+
+`DefaultMarkerIcon` は本型の別名（typealias）。
 
 A `MarkerIconProtocol` implementation that renders the SDK's built-in teardrop/pin shape.
 Customize color, size, label, and stroke via constructor parameters or `copy()`.
@@ -6,7 +8,7 @@ Customize color, size, label, and stroke via constructor parameters or `copy()`.
 ## Signature
 
 ```swift
-public final class DefaultMarkerIcon: MarkerIconProtocol {
+public final class ColorDefaultIcon: MarkerIconProtocol {
     public static let defaultIconSize: CGFloat = 48.0
     public static let defaultStrokeWidth: CGFloat = 1.0
     public static let defaultFillColor: UIColor = .red
@@ -59,7 +61,7 @@ public final class DefaultMarkerIcon: MarkerIconProtocol {
 
 ### `copy(...)`
 
-Returns a new `DefaultMarkerIcon` with any of the given values overriding the current ones.
+Returns a new `ColorDefaultIcon` with any of the given values overriding the current ones.
 
 ```swift
 public func copy(
@@ -74,7 +76,7 @@ public func copy(
     labelStrokeColor: UIColor? = nil,
     iconSize: CGFloat? = nil,
     debug: Bool? = nil
-) -> DefaultMarkerIcon
+) -> ColorDefaultIcon
 ```
 
 ## Notes
@@ -85,9 +87,9 @@ public func copy(
 ## Example
 
 ```swift
-let redPin = DefaultMarkerIcon()
-let bluePin = DefaultMarkerIcon(fillColor: .blue, strokeColor: .white)
-let labelledPin = DefaultMarkerIcon(fillColor: .green, label: "42")
+let redPin = ColorDefaultIcon()
+let bluePin = ColorDefaultIcon(fillColor: .blue, strokeColor: .white)
+let labelledPin = ColorDefaultIcon(fillColor: .green, label: "42")
 
 let marker = MarkerState(
     position: GeoPoint(latitude: 35.6812, longitude: 139.7671),

@@ -167,11 +167,11 @@ public final class RasterHeaderRuleSet: @unchecked Sendable {
     private static let warnedLock = NSLock()
     private nonisolated(unsafe) static var warnedKeys = Set<String>()
 
-    /// `RasterSource` から、ホストを取り出せる形の URL 文字列にする。
+    /// `RasterLayerSource` から、ホストを取り出せる形の URL 文字列にする。
     ///
     /// `{z}/{x}/{y}` のような差し込み記法が入ったままだと `URL(string:)` が
     /// 失敗することがあるので、最初の `{` より前で切る。ホストが取れれば十分。
-    private static func templateUrlString(of source: RasterSource) -> String {
+    private static func templateUrlString(of source: RasterLayerSource) -> String {
         let raw: String
         switch source {
         case let .urlTemplate(template, _, _, _, _, _): raw = template

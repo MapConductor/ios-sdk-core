@@ -3,10 +3,10 @@ public enum TileScheme: String, Hashable {
     case TMS
 }
 
-public enum RasterSource: Hashable {
+public enum RasterLayerSource: Hashable {
     case urlTemplate(
         template: String,
-        tileSize: Int = RasterSource.defaultTileSize,
+        tileSize: Int = RasterLayerSource.defaultTileSize,
         minZoom: Int? = nil,
         maxZoom: Int? = nil,
         attributionRules: [AttributionRule] = [],
