@@ -52,6 +52,14 @@ public protocol MarkerEventHostProtocol: AnyObject {
 /// ios-for-maplibre / maptiler が 84 行ずつ持っており、**import 文以外は
 /// 1 文字も違わなかった**（diff を取って確認済み）。
 ///
+/// ## ios-for-here をここに寄せていない理由
+///
+/// HERE は `hitTest(at:where:)` で **「条件を満たすマーカーのうち一番近いもの」** を引く。
+/// このクラスは「一番近いマーカーを引いてから clickable / draggable を見る」ので、
+/// clickable なマーカーと draggable なマーカーが重なったときに選ぶものが変わる。
+/// アプリから観測できる挙動差なので、HERE は自前の経路のままにしてある
+/// （ios-for-tomtom のクリックカスケードを寄せなかったのと同じ判断）。
+///
 /// ## パン抑止は「掴む前の値へ戻す」こと
 ///
 /// `isScrollEnabled` を無条件に `true` へ戻すと、アプリが
@@ -121,6 +129,12 @@ open class DefaultMarkerEventController {
                   let state = host.markerState(for: markerId) else {
                 restoreScroll()
                 return false
+            }
+            // 離した点で位置を確定させてから dragEnd を配送する。
+            // react-sdk の `finishDrag` と ios-for-here の `.end` が同じことをしており、
+            // maplibre / maptiler だけが最後の .changed の位置のまま配送していた。
+            if let position = surface.geoPoint(atScreenPoint: point) {
+                state.position = position
             }
             host.dispatchDragEnd(state: state)
             restoreScroll()

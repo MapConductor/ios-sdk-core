@@ -109,6 +109,21 @@ final class DefaultMarkerEventControllerTests: XCTestCase {
         XCTAssertEqual(host.bubbleUpdates, ["m1", "m1", "m1"], "吹き出しはマーカーに追従する")
     }
 
+    /// 離した点で位置を確定させる。react-sdk の `finishDrag` と同じ。
+    func testDragEndCommitsReleasePosition() {
+        let (_, host, controller) = fixture()
+        let marker = makeMarker(id: "m1", draggable: true)
+        host.markerIdAtPoint = "m1"
+        host.states["m1"] = marker
+
+        XCTAssertTrue(controller.handleLongPress(state: .began, at: CGPoint(x: 1, y: 2)))
+        XCTAssertTrue(controller.handleLongPress(state: .changed, at: CGPoint(x: 10, y: 10)))
+        XCTAssertTrue(controller.handleLongPress(state: .ended, at: CGPoint(x: 55, y: 66)))
+
+        XCTAssertEqual(marker.position.latitude, 66)
+        XCTAssertEqual(marker.position.longitude, 55)
+    }
+
     func testDraggableFalseIsNotGrabbed() {
         let (surface, host, controller) = fixture()
         host.markerIdAtPoint = "m1"
