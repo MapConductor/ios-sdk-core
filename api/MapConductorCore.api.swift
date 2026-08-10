@@ -1528,6 +1528,39 @@ final public class ColorDefaultIcon : MapConductorCore.MarkerIconProtocol {
   @objc deinit
 }
 public typealias DefaultMarkerIcon = MapConductorCore.ColorDefaultIcon
+public protocol MarkerDragSurface : AnyObject {
+  var isScrollEnabled: Swift.Bool { get set }
+  func geoPoint(atScreenPoint point: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
+}
+public protocol MarkerEventHostProtocol : AnyObject {
+  func markerId(atScreenPoint point: CoreFoundation.CGPoint) -> Swift.String?
+  func markerState(for id: Swift.String) -> MapConductorCore.MarkerState?
+  func handleTiledMarkerTap(atScreenPoint point: CoreFoundation.CGPoint) -> Swift.Bool
+  func dispatchClick(state: MapConductorCore.MarkerState)
+  func dispatchDragStart(state: MapConductorCore.MarkerState)
+  func dispatchDrag(state: MapConductorCore.MarkerState)
+  func dispatchDragEnd(state: MapConductorCore.MarkerState)
+  func onUpdateInfoBubble(_ markerId: Swift.String)
+}
+@_Concurrency.MainActor open class DefaultMarkerEventController {
+  @_Concurrency.MainActor public init(surface: (any MapConductorCore.MarkerDragSurface)?, host: any MapConductorCore.MarkerEventHostProtocol)
+  @_Concurrency.MainActor open func handleTap(at point: CoreFoundation.CGPoint) -> Swift.Bool
+  @_Concurrency.MainActor open func handleLongPress(state recognizerState: MapConductorCore.MarkerDragGestureState, at point: CoreFoundation.CGPoint) -> Swift.Bool
+  @_Concurrency.MainActor open func unbind()
+  @objc deinit
+}
+public enum MarkerDragGestureState {
+  case began
+  case changed
+  case ended
+  case cancelled
+  case other
+  public static func == (a: MapConductorCore.MarkerDragGestureState, b: MapConductorCore.MarkerDragGestureState) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
 final public class ImageDefaultIcon : MapConductorCore.MarkerIconProtocol {
   public static let defaultIconSize: CoreFoundation.CGFloat
   public static let defaultStrokeWidth: CoreFoundation.CGFloat
@@ -2944,6 +2977,9 @@ extension MapConductorCore.MapDiagnosticLevel : Swift.Equatable {}
 extension MapConductorCore.MapDiagnosticLevel : Swift.Hashable {}
 extension MapConductorCore.MapDiagnosticLevel : Swift.RawRepresentable {}
 extension MapConductorCore.MapServiceRegistryScope : Swift.Sendable {}
+extension MapConductorCore.DefaultMarkerEventController : Swift.Sendable {}
+extension MapConductorCore.MarkerDragGestureState : Swift.Equatable {}
+extension MapConductorCore.MarkerDragGestureState : Swift.Hashable {}
 extension MapConductorCore.MarkerAnimationOverlayCoordinator : Swift.Sendable {}
 extension MapConductorCore.AnyMarkerOverlayRenderer : Swift.Sendable {}
 extension MapConductorCore.MarkerAnimation : Swift.Equatable {}
