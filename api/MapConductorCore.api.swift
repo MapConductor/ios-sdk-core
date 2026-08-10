@@ -2760,6 +2760,34 @@ public enum WGS84Geodesic {
   public static func computeArea(_ path: [any MapConductorCore.GeoPointProtocol]) -> Swift.Double
   public static func interpolate(from: any MapConductorCore.GeoPointProtocol, to: any MapConductorCore.GeoPointProtocol, fraction: Swift.Double) -> MapConductorCore.GeoPoint
 }
+public enum AbstractZoomAltitudeConverter {
+  public static let defaultZoom0Altitude: Swift.Double
+  public static let zoomFactor: Swift.Double
+  public static let minZoomLevel: Swift.Double
+  public static let maxZoomLevel: Swift.Double
+  public static let minAltitude: Swift.Double
+  public static let maxAltitude: Swift.Double
+  public static let minCosLat: Swift.Double
+  public static let minCosTilt: Swift.Double
+  public static let webMercatorInitialMpp256: Swift.Double
+}
+open class WebMercatorZoomAltitudeConverter : MapConductorCore.ZoomAltitudeConverterProtocol {
+  final public let zoom0Altitude: Swift.Double
+  public init(zoom0Altitude: Swift.Double = AbstractZoomAltitudeConverter.defaultZoom0Altitude, zoomOffset: Swift.Double = 0.0)
+  open func zoomOffset(at _: Swift.Double) -> Swift.Double
+  public func toUnifiedZoom(_ nativeZoom: Swift.Double, latitude: Swift.Double = 0.0) -> Swift.Double
+  public func toNativeZoom(_ unifiedZoom: Swift.Double, latitude: Swift.Double = 0.0) -> Swift.Double
+  public func cosLatitudeFactor(_ latitudeDeg: Swift.Double) -> Swift.Double
+  public func cosTiltFactor(_ tiltDeg: Swift.Double) -> Swift.Double
+  public func zoomLevelToAltitude(zoomLevel: Swift.Double, latitude: Swift.Double, tilt: Swift.Double) -> Swift.Double
+  public func altitudeToZoomLevel(altitude: Swift.Double, latitude: Swift.Double, tilt: Swift.Double) -> Swift.Double
+  @objc deinit
+}
+open class GroundScaleZoomAltitudeConverter : MapConductorCore.WebMercatorZoomAltitudeConverter {
+  public init(zoom0Altitude: Swift.Double = AbstractZoomAltitudeConverter.defaultZoom0Altitude, baseZoomOffset: Swift.Double)
+  override public func zoomOffset(at latitude: Swift.Double) -> Swift.Double
+  @objc deinit
+}
 public protocol ZoomAltitudeConverterProtocol {
   var zoom0Altitude: Swift.Double { get }
   func zoomLevelToAltitude(zoomLevel: Swift.Double, latitude: Swift.Double, tilt: Swift.Double) -> Swift.Double

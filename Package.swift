@@ -33,7 +33,9 @@ let package = Package(
         ),
         .testTarget(
             name: "MapConductorCoreTests",
-            dependencies: ["MapConductorCore"]
+            dependencies: ["MapConductorCore"],
+            // ズーム換算のゴールデン表。移行前の ios-for-* の実装が返した値そのもの。
+            resources: [.process("Resources")]
         ),
     ]
 )
