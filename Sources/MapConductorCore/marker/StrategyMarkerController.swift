@@ -156,4 +156,7 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
         markerManager.hasEntity(id)
     }
 
+    /// マーカーは別経路。ここでは当たらない。
+    public func resolveTap(position _: GeoPointProtocol) -> OverlayHit? { nil }
+
 }

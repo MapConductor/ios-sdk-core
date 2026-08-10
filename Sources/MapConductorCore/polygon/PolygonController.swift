@@ -146,4 +146,11 @@ where Renderer.ActualPolygon == ActualPolygon {
         polygonManager.hasEntity(id)
     }
 
+    public func resolveTap(position: GeoPointProtocol) -> OverlayHit? {
+        guard let entity = find(position: position) else { return nil }
+        return OverlayHit(kind: .polygon, clicked: position) { [weak self] in
+            self?.dispatchClick(event: PolygonEvent(state: entity.state, clicked: position))
+        }
+    }
+
 }

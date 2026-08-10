@@ -365,6 +365,9 @@ open class AbstractMarkerController<
     public func hasId(_ id: String) -> Bool {
         markerManager.hasEntity(id)
     }
+
+    /// マーカーは判定に画面投影が要るのでカスケードの別経路で扱う。ここでは当たらない。
+    public func resolveTap(position _: GeoPointProtocol) -> OverlayHit? { nil }
 }
 
 /// android-sdk の `MARKER_RENDER_BATCH_SIZE` と同値。

@@ -163,4 +163,14 @@ where Renderer.ActualPolyline == ActualPolyline {
         polylineManager.hasEntity(id)
     }
 
+    /// ポリラインだけ配送座標がタップ点ではない。**線上の最近傍点**を返す。
+    /// 線の上をきっかりタップすることはないので、タップ点をそのまま返すと
+    /// 線から外れた座標がアプリへ渡る。3 プラットフォーム共通の既存契約。
+    public func resolveTap(position: GeoPointProtocol) -> OverlayHit? {
+        guard let hit = findWithClosestPoint(position: position) else { return nil }
+        return OverlayHit(kind: .polyline, clicked: hit.closestPoint) { [weak self] in
+            self?.dispatchClick(event: PolylineEvent(state: hit.entity.state, clicked: hit.closestPoint))
+        }
+    }
+
 }

@@ -37,6 +37,16 @@ final class OverlaySlotTests: XCTestCase {
         }
 
         func hasId(_ id: String) -> Bool { ids.contains(id) }
+
+        /// このテストは順序解決だけを見るので、当たりの中身は使わない。
+        var hits = false
+        private(set) var dispatched = 0
+        func resolveTap(position: GeoPointProtocol) -> OverlayHit? {
+            guard hits else { return nil }
+            return OverlayHit(kind: kind, clicked: position) { [weak self] in
+                self?.dispatched += 1
+            }
+        }
         func onCameraChanged(mapCameraPosition: MapCameraPosition) async { cameras.append(mapCameraPosition) }
         func destroy() { destroyed = true }
     }

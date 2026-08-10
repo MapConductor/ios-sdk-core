@@ -37,12 +37,27 @@ public enum OverlayKind: String, CaseIterable, Sendable {
 /// カメラ購読のためだけに登録する拡張モジュール（ヒートマップなど）は
 /// これに準拠しないので、スロットに巻き込まれない。
 ///
-/// - Note: `resolveTap` は Step 6（クリックカスケード）でここへ足す。
 public protocol SlottedOverlayController: AnyOverlayController {
     var kind: OverlayKind { get }
 
     /// この id のオーバーレイを保持しているか。`hasXxx` 相当の判定に使う。
     func hasId(_ id: String) -> Bool
+
+    /// タップの当たり判定と、当たったときの配送手段。当たらなければ nil。
+    ///
+    /// クリックカスケード（``OverlayHitResolver``）の 1 段。解決するだけで配送はしない
+    /// （呼び出し側が ``OverlayHit/dispatch()`` を呼ぶまで副作用は起きない）。
+    ///
+    /// ## これも `kind` と同じく**必須メンバ**にしてある
+    ///
+    /// 既定で nil を返せるようにすると、実装を忘れたコントローラが
+    /// 「タップに反応しないが、ビルドもテストも通る」状態になる。実際
+    /// android-for-maplibre / mapbox のポリゴンがそれで、カスケードからも
+    /// `hasPolygon` からも黙って漏れていた。
+    ///
+    /// クリックを持たない種別は明示的に nil を返すこと（``RasterLayerController``）。
+    /// マーカーは判定に画面投影が要るため別経路で、ここでは nil を返す。
+    func resolveTap(position: GeoPointProtocol) -> OverlayHit?
 }
 
 public extension OverlayControllerRegistry {

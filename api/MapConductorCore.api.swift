@@ -368,6 +368,7 @@ open class CircleController<ActualCircle, Renderer> : MapConductorCore.OverlayCo
     get
   }
   public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
   @objc deinit
 }
 public protocol CircleEntityProtocol {
@@ -650,6 +651,26 @@ final public class OverlayControllerRegistry {
 public enum OverlayControllerRegistryKey : MapConductorCore.MapServiceKey {
   public typealias Value = MapConductorCore.OverlayControllerRegistry
 }
+final public class OverlayHit {
+  final public let kind: MapConductorCore.OverlayKind
+  final public let clicked: any MapConductorCore.GeoPointProtocol
+  public init(kind: MapConductorCore.OverlayKind, clicked: any MapConductorCore.GeoPointProtocol, deliver: @escaping () -> Swift.Void)
+  final public func dispatch()
+  @objc deinit
+}
+public enum OverlayHitResolver {
+  public static let canonicalOrder: [MapConductorCore.OverlayKind]
+  public static func firstHit<T>(_ controllers: [any MapConductorCore.AnyOverlayController], order: [MapConductorCore.OverlayKind] = canonicalOrder, probe: (any MapConductorCore.SlottedOverlayController) -> T?) -> T?
+  public static func resolve(_ controllers: [any MapConductorCore.AnyOverlayController], position: any MapConductorCore.GeoPointProtocol, order: [MapConductorCore.OverlayKind] = canonicalOrder) -> MapConductorCore.OverlayHit?
+}
+extension MapConductorCore.OverlayControllerRegistry {
+  @discardableResult
+  final public func dispatchOverlayTap(position: any MapConductorCore.GeoPointProtocol, order: [MapConductorCore.OverlayKind] = OverlayHitResolver.canonicalOrder) -> Swift.Bool
+}
+extension MapConductorCore.MapViewControllerProtocol {
+  @discardableResult
+  public func dispatchOverlayTap(position: any MapConductorCore.GeoPointProtocol) -> Swift.Bool
+}
 public enum OverlayKind : Swift.String, Swift.CaseIterable, Swift.Sendable {
   case marker
   case circle
@@ -670,6 +691,7 @@ public enum OverlayKind : Swift.String, Swift.CaseIterable, Swift.Sendable {
 public protocol SlottedOverlayController : MapConductorCore.AnyOverlayController {
   var kind: MapConductorCore.OverlayKind { get }
   func hasId(_ id: Swift.String) -> Swift.Bool
+  func resolveTap(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
 }
 extension MapConductorCore.OverlayControllerRegistry {
   final public func slotted() -> [any MapConductorCore.SlottedOverlayController]
@@ -929,6 +951,7 @@ open class GroundImageController<ActualGroundImage, Renderer> : MapConductorCore
     get
   }
   public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
   @objc deinit
 }
 public protocol GroundImageEntityProtocol {
@@ -1468,6 +1491,7 @@ open class AbstractMarkerController<ActualMarker, Renderer> : MapConductorCore.O
     get
   }
   public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position _: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
   @objc deinit
 }
 open class AbstractViewportStrategy<ActualMarker> : MapConductorCore.AbstractMarkerRenderingStrategy<ActualMarker> {
@@ -1975,6 +1999,7 @@ final public class StrategyMarkerController<ActualMarker, Strategy, Renderer> : 
     get
   }
   final public func hasId(_ id: Swift.String) -> Swift.Bool
+  final public func resolveTap(position _: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
   @objc deinit
 }
 @_Concurrency.MainActor final public class StrategyMarkerManager<ActualMarker, Renderer> : MapConductorCore.MarkerRenderingSupport where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol {
@@ -2083,6 +2108,7 @@ open class PolygonController<ActualPolygon, Renderer> : MapConductorCore.Overlay
     get
   }
   public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
   @objc deinit
 }
 public protocol PolygonEntityProtocol {
@@ -2332,6 +2358,7 @@ open class PolylineController<ActualPolyline, Renderer> : MapConductorCore.Overl
     get
   }
   public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
   @objc deinit
 }
 public protocol PolylineEntityProtocol {
@@ -2566,6 +2593,7 @@ open class RasterLayerController<ActualLayer, Renderer> : MapConductorCore.Overl
     get
   }
   public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position _: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
   @objc deinit
 }
 public protocol RasterLayerEntityProtocol {

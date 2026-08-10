@@ -189,4 +189,7 @@ where Renderer.ActualLayer == ActualLayer {
         rasterLayerManager.hasEntity(id)
     }
 
+    /// ラスターレイヤはクリックを持たない。**明示的に nil を返す**（実装忘れと区別するため）。
+    public func resolveTap(position _: GeoPointProtocol) -> OverlayHit? { nil }
+
 }

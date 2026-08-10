@@ -145,4 +145,11 @@ where Renderer.ActualCircle == ActualCircle {
         circleManager.hasEntity(id)
     }
 
+    public func resolveTap(position: GeoPointProtocol) -> OverlayHit? {
+        guard let entity = find(position: position) else { return nil }
+        return OverlayHit(kind: .circle, clicked: position) { [weak self] in
+            self?.dispatchClick(event: CircleEvent(state: entity.state, clicked: position))
+        }
+    }
+
 }
