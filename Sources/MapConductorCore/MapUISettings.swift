@@ -61,31 +61,30 @@ public enum MapGesture: String, CaseIterable, Sendable {
 /// so a SwiftUI view that re-renders on every camera move does not flood the
 /// console.
 public enum MapUISettingsDiagnostics {
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var warned: Set<String> = []
-
     /// Logs once if `requested` is `false` — i.e. the app asked to disable a
     /// gesture this provider cannot disable. A `true` value needs no warning,
     /// because leaving a gesture enabled is always achievable.
+    ///
+    /// 実体は ``MapDiagnostics`` に一般化済み。ジェスチャは「無効化を要求されたのに
+    /// できない」という向きなので、`requested = !requested` として渡している。
     public static func warnIfRequested(
         _ requested: Bool,
         gesture: MapGesture,
         provider: String,
         reason: String
     ) {
-        guard !requested else { return }
-        let key = "\(provider).\(gesture.rawValue)"
-        lock.lock()
-        let isNew = warned.insert(key).inserted
-        lock.unlock()
-        guard isNew else { return }
-        print("MapConductor: \(gesture.settingName) is not supported by \(provider) (\(reason)); the setting is ignored.")
+        MapDiagnostics.reportIfRequested(
+            !requested,
+            capability: gesture.capability,
+            level: .ignored,
+            provider: provider,
+            reason: reason,
+            subject: gesture.settingName
+        )
     }
 
     /// Test hook — forget which warnings have already been printed.
     public static func resetWarnings() {
-        lock.lock()
-        warned.removeAll()
-        lock.unlock()
+        MapDiagnostics.resetWarnings()
     }
 }

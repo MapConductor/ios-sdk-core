@@ -12,6 +12,9 @@ import _Concurrency
 import _StringProcessing
 import _SwiftConcurrencyShims
 import os
+public enum InternalMapConductorApi {
+  public static let spiGroup: Swift.String
+}
 @_hasMissingDesignatedInitializers final public class LocalTileServer {
   final public var baseUrl: Swift.String {
     get
@@ -1183,6 +1186,63 @@ final public class MapCameraPosition : MapConductorCore.MapCameraPositionProtoco
   public static let Default: MapConductorCore.MapCameraPosition
   @objc deinit
 }
+public enum MapCapability : Swift.String, Swift.CaseIterable, Swift.Sendable {
+  case marker
+  case polyline
+  case polygon
+  case circle
+  case groundImage
+  case rasterLayer
+  case polygonHoles
+  case clickPassthrough
+  case markerDrag
+  case cameraTilt
+  case cameraRotate
+  case cameraRestriction
+  case screenProjectionSync
+  case gestureScroll
+  case gestureZoom
+  case gestureRotate
+  case gestureTilt
+  public var id: Swift.String {
+    get
+  }
+  public static func fromId(_ id: Swift.String) -> MapConductorCore.MapCapability?
+  public init?(rawValue: Swift.String)
+  public typealias AllCases = [MapConductorCore.MapCapability]
+  public typealias RawValue = Swift.String
+  nonisolated public static var allCases: [MapConductorCore.MapCapability] {
+    get
+  }
+  public var rawValue: Swift.String {
+    get
+  }
+}
+extension MapConductorCore.MapGesture {
+  public var capability: MapConductorCore.MapCapability {
+    get
+  }
+}
+public enum MapCapabilityStatus : Swift.Equatable, Swift.Sendable {
+  case supported
+  case degraded(Swift.String)
+  case approximated(Swift.String)
+  case unsupported(Swift.String)
+  case unknown
+  public var reason: Swift.String? {
+    get
+  }
+  public var isFullySupported: Swift.Bool {
+    get
+  }
+  public var isUsable: Swift.Bool {
+    get
+  }
+  public var isKnownUnsupported: Swift.Bool {
+    get
+  }
+  public static func == (a: MapConductorCore.MapCapabilityStatus, b: MapConductorCore.MapCapabilityStatus) -> Swift.Bool
+}
 public protocol MapDesignTypeProtocol {
   associatedtype Identifier
   var id: Self.Identifier { get }
@@ -1191,6 +1251,29 @@ public protocol MapDesignTypeProtocol {
 }
 extension MapConductorCore.MapDesignTypeProtocol {
   public var attributionRules: [MapConductorCore.AttributionRule] {
+    get
+  }
+}
+public enum MapDiagnostics {
+  public typealias Sink = @Sendable (Swift.String) -> Swift.Void
+  public static var sink: MapConductorCore.MapDiagnostics.Sink {
+    get
+    set
+  }
+  @discardableResult
+  public static func report(capability: MapConductorCore.MapCapability, level: MapConductorCore.MapDiagnosticLevel, provider: Swift.String, reason: Swift.String, subject: Swift.String? = nil) -> Swift.Bool
+  @discardableResult
+  public static func reportIfRequested(_ requested: Swift.Bool, capability: MapConductorCore.MapCapability, level: MapConductorCore.MapDiagnosticLevel, provider: Swift.String, reason: Swift.String, subject: Swift.String? = nil) -> Swift.Bool
+  public static func resetWarnings()
+}
+public enum MapDiagnosticLevel : Swift.String, Swift.Sendable {
+  case unsupported
+  case degraded
+  case approximated
+  case ignored
+  public init?(rawValue: Swift.String)
+  public typealias RawValue = Swift.String
+  public var rawValue: Swift.String {
     get
   }
 }
@@ -1222,15 +1305,46 @@ public enum MapProjection : Swift.Hashable, Swift.Sendable {
 }
 public protocol MapServiceKey {
   associatedtype Value
+  static var capability: MapConductorCore.MapCapability? { get }
+}
+extension MapConductorCore.MapServiceKey {
+  public static var capability: MapConductorCore.MapCapability? {
+    get
+  }
 }
 public protocol MapServiceRegistry : AnyObject {
   func get<Key>(_ key: Key.Type) -> Key.Value? where Key : MapConductorCore.MapServiceKey
+  func has<Key>(_ key: Key.Type) -> Swift.Bool where Key : MapConductorCore.MapServiceKey
+  func capabilityStatus(_ capability: MapConductorCore.MapCapability) -> MapConductorCore.MapCapabilityStatus
+}
+extension MapConductorCore.MapServiceRegistry {
+  public func has<Key>(_ key: Key.Type) -> Swift.Bool where Key : MapConductorCore.MapServiceKey
+  public func capabilityStatus(_: MapConductorCore.MapCapability) -> MapConductorCore.MapCapabilityStatus
+}
+@_hasMissingDesignatedInitializers final public class MapServiceRegistration {
+  final public func dispose()
+  @objc deinit
+}
+final public class MapServiceRegistrations {
+  public init()
+  @discardableResult
+  final public func add(_ registration: MapConductorCore.MapServiceRegistration) -> MapConductorCore.MapServiceRegistration
+  final public func disposeAll()
+  @objc deinit
 }
 final public class MutableMapServiceRegistry : MapConductorCore.MapServiceRegistry {
   public init()
   final public func put<Key>(_ key: Key.Type, _ value: Key.Value) where Key : MapConductorCore.MapServiceKey
+  @discardableResult
+  final public func register<Key>(_ key: Key.Type, _ value: Key.Value) -> MapConductorCore.MapServiceRegistration where Key : MapConductorCore.MapServiceKey
   final public func remove<Key>(_ key: Key.Type) where Key : MapConductorCore.MapServiceKey
   final public func clear()
+  @discardableResult
+  final public func declare(_ capability: MapConductorCore.MapCapability, _ status: MapConductorCore.MapCapabilityStatus) -> MapConductorCore.MapServiceRegistration
+  @discardableResult
+  final public func declareUnsupported(_ capability: MapConductorCore.MapCapability, _ reason: Swift.String) -> MapConductorCore.MapServiceRegistration
+  final public func declaredCapabilities() -> [MapConductorCore.MapCapability : MapConductorCore.MapCapabilityStatus]
+  final public func capabilityStatus(_ capability: MapConductorCore.MapCapability) -> MapConductorCore.MapCapabilityStatus
   final public func get<Key>(_ key: Key.Type) -> Key.Value? where Key : MapConductorCore.MapServiceKey
   @objc deinit
 }
@@ -2692,6 +2806,12 @@ extension MapConductorCore.Direction6 : Swift.Hashable {}
 extension MapConductorCore.DefaultInfoBubbleView : Swift.Sendable {}
 extension MapConductorCore.InfoBubbleOverlayCoordinator : Swift.Sendable {}
 extension MapConductorCore.MapAttributionOverlay : Swift.Sendable {}
+extension MapConductorCore.MapCapability : Swift.Equatable {}
+extension MapConductorCore.MapCapability : Swift.Hashable {}
+extension MapConductorCore.MapCapability : Swift.RawRepresentable {}
+extension MapConductorCore.MapDiagnosticLevel : Swift.Equatable {}
+extension MapConductorCore.MapDiagnosticLevel : Swift.Hashable {}
+extension MapConductorCore.MapDiagnosticLevel : Swift.RawRepresentable {}
 extension MapConductorCore.MapServiceRegistryScope : Swift.Sendable {}
 extension MapConductorCore.MarkerAnimationOverlayCoordinator : Swift.Sendable {}
 extension MapConductorCore.AnyMarkerOverlayRenderer : Swift.Sendable {}
