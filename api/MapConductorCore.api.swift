@@ -595,6 +595,17 @@ final public class CircleState : Combine.ObservableObject, Swift.Identifiable, S
     get
   }
 }
+public enum MapDriverConformance {
+  public struct ViolationError : Swift.Error, Swift.CustomStringConvertible {
+    public let description: Swift.String
+    public init(_ description: Swift.String)
+  }
+  public static func checkZoomConverter(_ converter: MapConductorCore.WebMercatorZoomAltitudeConverter, latitudes: [Swift.Double] = [0.0, 35.0, 60.0, 85.0, -85.0], zooms: [Swift.Double] = [0.0, 1.0, 5.5, 10.0, 15.25, 22.0]) throws
+  public static func checkOverlaySlots(_ controllers: [any MapConductorCore.AnyOverlayController], expected: Swift.Set<MapConductorCore.OverlayKind> = Set(OverlayKind.allCases)) throws
+  public static func checkCascadeOrder(_ order: [MapConductorCore.OverlayKind] = OverlayHitResolver.canonicalOrder) throws
+  public static func checkCapabilityDeclarations(_ registry: any MapConductorCore.MapServiceRegistry) throws
+  public static func checkProjectionRoundTrip(toScreen: (any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?, fromScreen: (CoreFoundation.CGPoint) -> (any MapConductorCore.GeoPointProtocol)?, samples: [any MapConductorCore.GeoPointProtocol]) throws
+}
 public typealias OnMapInitializedHandler = (MapConductorCore.InitState) -> Swift.Void
 public protocol MapViewControllerProtocol {
   var holder: MapConductorCore.AnyMapViewHolder { get }
@@ -1435,6 +1446,7 @@ public protocol MapViewHolderProtocol {
   func toScreenOffset(position: any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?
   func fromScreenOffset(offset: CoreFoundation.CGPoint) async -> MapConductorCore.GeoPoint?
   func fromScreenOffsetSync(offset: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
+  func viewportSizePx() -> CoreFoundation.CGSize?
 }
 extension MapConductorCore.MapViewHolderProtocol {
   public func fromScreenOffset(offset: CoreFoundation.CGPoint) async -> MapConductorCore.GeoPoint?
@@ -1449,6 +1461,7 @@ public struct AnyMapViewHolder : MapConductorCore.MapViewHolderProtocol {
   public func toScreenOffset(position: any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?
   public func fromScreenOffset(offset: CoreFoundation.CGPoint) async -> MapConductorCore.GeoPoint?
   public func fromScreenOffsetSync(offset: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
+  public func viewportSizePx() -> CoreFoundation.CGSize?
 }
 public enum ScreenProjectionRequirement {
   @discardableResult
