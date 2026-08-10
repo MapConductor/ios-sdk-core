@@ -283,7 +283,10 @@ extension MapConductorCore.MapViewStateProtocol {
 }
 open class MapViewState<ActualMapDesignType> : Combine.ObservableObject, MapConductorCore.MapViewStateProtocol {
   final public let serviceRegistry: MapConductorCore.MutableMapServiceRegistry
-  public init()
+  public var attachedMapController: (any MapConductorCore.MapViewControllerProtocol)? {
+    get
+  }
+  public init(id: Swift.String = UUID().uuidString, initialCameraPosition: MapConductorCore.MapCameraPosition = .Default, uiSettings: MapConductorCore.MapUISettings = MapUISettings(), optimisticCameraUpdate: Swift.Bool = false)
   open var id: Swift.String {
     get
   }
@@ -298,8 +301,11 @@ open class MapViewState<ActualMapDesignType> : Combine.ObservableObject, MapCond
     get
     set
   }
-  open func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition, durationMillis: MapConductorCore.Long?)
-  open func moveCameraTo(position: MapConductorCore.GeoPoint, durationMillis: MapConductorCore.Long?)
+  public func attachController(_ controller: (any MapConductorCore.MapViewControllerProtocol)?, moveToInitialCamera: Swift.Bool = true)
+  public func detachController()
+  public func setCameraPositionInternal(_ cameraPosition: MapConductorCore.MapCameraPosition)
+  open func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition, durationMillis: MapConductorCore.Long? = 0)
+  open func moveCameraTo(position: MapConductorCore.GeoPoint, durationMillis: MapConductorCore.Long? = 0)
   open func fitBounds(bounds: MapConductorCore.GeoRectBounds, padding: Swift.Int)
   open func getMapViewHolder() -> MapConductorCore.AnyMapViewHolder?
   public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
@@ -1383,6 +1389,11 @@ public struct AnyMapViewHolder : MapConductorCore.MapViewHolderProtocol {
   public func toScreenOffset(position: any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?
   public func fromScreenOffset(offset: CoreFoundation.CGPoint) async -> MapConductorCore.GeoPoint?
   public func fromScreenOffsetSync(offset: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
+}
+extension MapConductorCore.MapViewHolderProtocol {
+  public func buildVisibleRegion(inset: CoreFoundation.CGFloat = 0, requireAllCorners: Swift.Bool = true) -> MapConductorCore.VisibleRegion?
+  public func buildVisibleRegion(size: CoreFoundation.CGSize, inset: CoreFoundation.CGFloat = 0, requireAllCorners: Swift.Bool = true) -> MapConductorCore.VisibleRegion?
+  public func viewportSizePx() -> CoreFoundation.CGSize?
 }
 open class AbstractMarkerController<ActualMarker, Renderer> : MapConductorCore.OverlayControllerProtocol where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol {
   public typealias StateType = MapConductorCore.MarkerState
