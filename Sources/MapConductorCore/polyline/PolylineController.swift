@@ -1,6 +1,6 @@
 import Foundation
 
-open class PolylineController<ActualPolyline, Renderer: PolylineOverlayRendererProtocol>: OverlayControllerProtocol
+open class PolylineController<ActualPolyline, Renderer: PolylineOverlayRendererProtocol>: OverlayControllerProtocol, SlottedOverlayController
 where Renderer.ActualPolyline == ActualPolyline {
     public typealias StateType = PolylineState
     public typealias EntityType = PolylineEntity<ActualPolyline>
@@ -152,4 +152,15 @@ where Renderer.ActualPolyline == ActualPolyline {
     open func destroy() {
         polylineManager.destroy()
     }
+    // ── SlottedOverlayController ────────────────────────────────────────
+    //
+    // kind は**必須メンバ**。既定値を持たせると、宣言忘れがコンパイルを通ってしまい
+    // カスケードとスロットから黙って漏れる（android-sdk で実際に踏んだ）。
+
+    public var kind: OverlayKind { .polyline }
+
+    public func hasId(_ id: String) -> Bool {
+        polylineManager.hasEntity(id)
+    }
+
 }

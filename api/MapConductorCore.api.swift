@@ -347,7 +347,7 @@ final public class CoroutineScope {
   public init()
   @objc deinit
 }
-open class CircleController<ActualCircle, Renderer> : MapConductorCore.OverlayControllerProtocol where ActualCircle == Renderer.ActualCircle, Renderer : MapConductorCore.CircleOverlayRendererProtocol {
+open class CircleController<ActualCircle, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualCircle == Renderer.ActualCircle, Renderer : MapConductorCore.CircleOverlayRendererProtocol {
   public typealias StateType = MapConductorCore.CircleState
   public typealias EntityType = MapConductorCore.CircleEntity<ActualCircle>
   public typealias EventType = MapConductorCore.CircleEvent
@@ -363,6 +363,10 @@ open class CircleController<ActualCircle, Renderer> : MapConductorCore.OverlayCo
   open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.CircleEntity<ActualCircle>?
   open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
   open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
   @objc deinit
 }
 public protocol CircleEntityProtocol {
@@ -645,6 +649,33 @@ final public class OverlayControllerRegistry {
 public enum OverlayControllerRegistryKey : MapConductorCore.MapServiceKey {
   public typealias Value = MapConductorCore.OverlayControllerRegistry
 }
+public enum OverlayKind : Swift.String, Swift.CaseIterable, Swift.Sendable {
+  case marker
+  case circle
+  case groundImage
+  case polyline
+  case polygon
+  case rasterLayer
+  public init?(rawValue: Swift.String)
+  public typealias AllCases = [MapConductorCore.OverlayKind]
+  public typealias RawValue = Swift.String
+  nonisolated public static var allCases: [MapConductorCore.OverlayKind] {
+    get
+  }
+  public var rawValue: Swift.String {
+    get
+  }
+}
+public protocol SlottedOverlayController : MapConductorCore.AnyOverlayController {
+  var kind: MapConductorCore.OverlayKind { get }
+  func hasId(_ id: Swift.String) -> Swift.Bool
+}
+extension MapConductorCore.OverlayControllerRegistry {
+  final public func slotted() -> [any MapConductorCore.SlottedOverlayController]
+  final public func primary(_ kind: MapConductorCore.OverlayKind) -> (any MapConductorCore.SlottedOverlayController)?
+  final public func controllers(of kind: MapConductorCore.OverlayKind) -> [any MapConductorCore.SlottedOverlayController]
+  final public func hasOverlay(_ kind: MapConductorCore.OverlayKind, id: Swift.String) -> Swift.Bool
+}
 public enum MCLog {
   public static let isEnabled: Swift.Bool
   public static func marker(_ message: Swift.String)
@@ -877,7 +908,7 @@ public func buildPolygonRings(points: [any MapConductorCore.GeoPointProtocol], h
 public func buildUnwrappedPolylinePath(_ points: [any MapConductorCore.GeoPointProtocol], geodesic: Swift.Bool, maxSegmentLength: Swift.Double = 10_000.0) -> [any MapConductorCore.GeoPointProtocol]
 public func buildUnwrappedPolygonRings(points: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]], geodesic: Swift.Bool, maxSegmentLength: Swift.Double = 10_000.0) -> MapConductorCore.PolygonRings
 public func splitRingByMeridian(_ ring: [any MapConductorCore.GeoPointProtocol], geodesic: Swift.Bool) -> [[any MapConductorCore.GeoPointProtocol]]
-open class GroundImageController<ActualGroundImage, Renderer> : MapConductorCore.OverlayControllerProtocol where ActualGroundImage == Renderer.ActualGroundImage, Renderer : MapConductorCore.GroundImageOverlayRendererProtocol {
+open class GroundImageController<ActualGroundImage, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualGroundImage == Renderer.ActualGroundImage, Renderer : MapConductorCore.GroundImageOverlayRendererProtocol {
   public typealias StateType = MapConductorCore.GroundImageState
   public typealias EntityType = MapConductorCore.GroundImageEntity<ActualGroundImage>
   public typealias EventType = MapConductorCore.GroundImageEvent
@@ -893,6 +924,10 @@ open class GroundImageController<ActualGroundImage, Renderer> : MapConductorCore
   open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.GroundImageEntity<ActualGroundImage>?
   open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
   open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
   @objc deinit
 }
 public protocol GroundImageEntityProtocol {
@@ -1395,7 +1430,7 @@ extension MapConductorCore.MapViewHolderProtocol {
   public func buildVisibleRegion(size: CoreFoundation.CGSize, inset: CoreFoundation.CGFloat = 0, requireAllCorners: Swift.Bool = true) -> MapConductorCore.VisibleRegion?
   public func viewportSizePx() -> CoreFoundation.CGSize?
 }
-open class AbstractMarkerController<ActualMarker, Renderer> : MapConductorCore.OverlayControllerProtocol where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol {
+open class AbstractMarkerController<ActualMarker, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol {
   public typealias StateType = MapConductorCore.MarkerState
   public typealias EntityType = MapConductorCore.MarkerEntity<ActualMarker>
   public typealias EventType = MapConductorCore.MarkerState
@@ -1423,6 +1458,10 @@ open class AbstractMarkerController<ActualMarker, Renderer> : MapConductorCore.O
   open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
   open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.MarkerEntity<ActualMarker>?
   open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
   @objc deinit
 }
 open class AbstractViewportStrategy<ActualMarker> : MapConductorCore.AbstractMarkerRenderingStrategy<ActualMarker> {
@@ -1898,7 +1937,7 @@ public struct MarkerTilingOptions {
   public static let Default: MapConductorCore.MarkerTilingOptions
   public init(enabled: Swift.Bool = true, debugTileOverlay: Swift.Bool = false, minMarkerCount: Swift.Int = 2000, cacheSize: Swift.Int = 8 * 1024 * 1024, iconScaleCallback: ((MapConductorCore.MarkerState, Swift.Int) -> Swift.Double)? = nil)
 }
-final public class StrategyMarkerController<ActualMarker, Strategy, Renderer> : MapConductorCore.OverlayControllerProtocol where ActualMarker == Strategy.ActualMarker, Strategy : MapConductorCore.MarkerRenderingStrategyProtocol, Renderer : MapConductorCore.MarkerOverlayRendererProtocol, Strategy.ActualMarker == Renderer.ActualMarker {
+final public class StrategyMarkerController<ActualMarker, Strategy, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualMarker == Strategy.ActualMarker, Strategy : MapConductorCore.MarkerRenderingStrategyProtocol, Renderer : MapConductorCore.MarkerOverlayRendererProtocol, Strategy.ActualMarker == Renderer.ActualMarker {
   public typealias StateType = MapConductorCore.MarkerState
   public typealias EntityType = MapConductorCore.MarkerEntity<ActualMarker>
   public typealias EventType = MapConductorCore.MarkerState
@@ -1926,6 +1965,10 @@ final public class StrategyMarkerController<ActualMarker, Strategy, Renderer> : 
   final public func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.MarkerEntity<ActualMarker>?
   final public func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
   final public func destroy()
+  final public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  final public func hasId(_ id: Swift.String) -> Swift.Bool
   @objc deinit
 }
 @_Concurrency.MainActor final public class StrategyMarkerManager<ActualMarker, Renderer> : MapConductorCore.MarkerRenderingSupport where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol {
@@ -2014,7 +2057,7 @@ extension MapConductorCore.RasterLayerState : MapConductorCore.OverlayCollectabl
 @_Concurrency.MainActor public func bindOverlayCollector<S, C>(_ collector: MapConductorCore.OverlayCollector<S>, to controller: C) where S : MapConductorCore.OverlayCollectableState, S == C.StateType, C : MapConductorCore.OverlayControllerProtocol
 public func bridgeHolesIntoSingleRing(outer: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]], separation: Swift.Double = 0.0) -> [any MapConductorCore.GeoPointProtocol]
 public func bridgeHolesIntoSingleRingWrapAware(outer: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]], separation: Swift.Double = 0.0) -> [any MapConductorCore.GeoPointProtocol]
-open class PolygonController<ActualPolygon, Renderer> : MapConductorCore.OverlayControllerProtocol where ActualPolygon == Renderer.ActualPolygon, Renderer : MapConductorCore.PolygonOverlayRendererProtocol {
+open class PolygonController<ActualPolygon, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualPolygon == Renderer.ActualPolygon, Renderer : MapConductorCore.PolygonOverlayRendererProtocol {
   public typealias StateType = MapConductorCore.PolygonState
   public typealias EntityType = MapConductorCore.PolygonEntity<ActualPolygon>
   public typealias EventType = MapConductorCore.PolygonEvent
@@ -2030,6 +2073,10 @@ open class PolygonController<ActualPolygon, Renderer> : MapConductorCore.Overlay
   open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.PolygonEntity<ActualPolygon>?
   open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
   open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
   @objc deinit
 }
 public protocol PolygonEntityProtocol {
@@ -2257,7 +2304,7 @@ extension MapConductorCore.PolygonState {
 public func polygonSignedArea(_ ring: [any MapConductorCore.GeoPointProtocol]) -> Swift.Double
 public func ensureCounterClockwise(_ ring: [any MapConductorCore.GeoPointProtocol]) -> [any MapConductorCore.GeoPointProtocol]
 public func ensureClockwiseRing(_ ring: [any MapConductorCore.GeoPointProtocol]) -> [any MapConductorCore.GeoPointProtocol]
-open class PolylineController<ActualPolyline, Renderer> : MapConductorCore.OverlayControllerProtocol where ActualPolyline == Renderer.ActualPolyline, Renderer : MapConductorCore.PolylineOverlayRendererProtocol {
+open class PolylineController<ActualPolyline, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualPolyline == Renderer.ActualPolyline, Renderer : MapConductorCore.PolylineOverlayRendererProtocol {
   public typealias StateType = MapConductorCore.PolylineState
   public typealias EntityType = MapConductorCore.PolylineEntity<ActualPolyline>
   public typealias EventType = MapConductorCore.PolylineEvent
@@ -2275,6 +2322,10 @@ open class PolylineController<ActualPolyline, Renderer> : MapConductorCore.Overl
   public func setCurrentCameraPosition(_ cameraPosition: MapConductorCore.MapCameraPosition?)
   open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
   open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
   @objc deinit
 }
 public protocol PolylineEntityProtocol {
@@ -2487,7 +2538,7 @@ final public class RasterHeaderRuleSet : @unchecked Swift.Sendable {
   public static func warnUnsupported(provider: Swift.String, state: MapConductorCore.RasterLayerState, supportsUserAgent: Swift.Bool = false)
   @objc deinit
 }
-open class RasterLayerController<ActualLayer, Renderer> : MapConductorCore.OverlayControllerProtocol where ActualLayer == Renderer.ActualLayer, Renderer : MapConductorCore.RasterLayerOverlayRendererProtocol {
+open class RasterLayerController<ActualLayer, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualLayer == Renderer.ActualLayer, Renderer : MapConductorCore.RasterLayerOverlayRendererProtocol {
   public typealias StateType = MapConductorCore.RasterLayerState
   public typealias EntityType = MapConductorCore.RasterLayerEntity<ActualLayer>
   public typealias EventType = MapConductorCore.RasterLayerEvent
@@ -2505,6 +2556,10 @@ open class RasterLayerController<ActualLayer, Renderer> : MapConductorCore.Overl
   open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.RasterLayerEntity<ActualLayer>?
   open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
   open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
   @objc deinit
 }
 public protocol RasterLayerEntityProtocol {
@@ -2840,6 +2895,9 @@ extension MapConductorCore.MapViewBase : Swift.Sendable {}
 extension MapConductorCore.MapViewCoordinatorBase : Swift.Sendable {}
 extension MapConductorCore.InitState : Swift.Equatable {}
 extension MapConductorCore.InitState : Swift.Hashable {}
+extension MapConductorCore.OverlayKind : Swift.Equatable {}
+extension MapConductorCore.OverlayKind : Swift.Hashable {}
+extension MapConductorCore.OverlayKind : Swift.RawRepresentable {}
 extension MapConductorCore.Direction6 : Swift.Equatable {}
 extension MapConductorCore.Direction6 : Swift.Hashable {}
 extension MapConductorCore.DefaultInfoBubbleView : Swift.Sendable {}

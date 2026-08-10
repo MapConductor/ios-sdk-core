@@ -1,6 +1,6 @@
 import CoreGraphics
 
-public final class StrategyMarkerController<ActualMarker, Strategy: MarkerRenderingStrategyProtocol, Renderer: MarkerOverlayRendererProtocol>: OverlayControllerProtocol
+public final class StrategyMarkerController<ActualMarker, Strategy: MarkerRenderingStrategyProtocol, Renderer: MarkerOverlayRendererProtocol>: OverlayControllerProtocol, SlottedOverlayController
 where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMarker {
     public typealias StateType = MarkerState
     public typealias EntityType = MarkerEntity<ActualMarker>
@@ -145,4 +145,15 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
     public func destroy() {
         strategy.clear()
     }
+    // ── SlottedOverlayController ────────────────────────────────────────
+    //
+    // kind は**必須メンバ**。既定値を持たせると、宣言忘れがコンパイルを通ってしまい
+    // カスケードとスロットから黙って漏れる（android-sdk で実際に踏んだ）。
+
+    public var kind: OverlayKind { .marker }
+
+    public func hasId(_ id: String) -> Bool {
+        markerManager.hasEntity(id)
+    }
+
 }
