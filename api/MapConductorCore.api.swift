@@ -251,78 +251,6 @@ public struct MapViewContent {
   @_disfavoredOverload public static func buildExpression(_ expression: any MapConductorCore.MapOverlayItemProtocol) -> MapConductorCore.MapViewContent
   public static func buildExpression(_ expression: MapConductorCore.MapViewContent) -> MapConductorCore.MapViewContent
 }
-public enum InitState {
-  case NotStarted
-  case Initializing
-  case SdkInitialized
-  case MapViewCreated
-  case MapCreating
-  case MapCreated
-  case MapLoaded
-  case Failed
-  public static func == (a: MapConductorCore.InitState, b: MapConductorCore.InitState) -> Swift.Bool
-  public func hash(into hasher: inout Swift.Hasher)
-  public var hashValue: Swift.Int {
-    get
-  }
-}
-public protocol MapViewStateProtocol : Combine.ObservableObject {
-  associatedtype ActualMapDesignType
-  var id: Swift.String { get }
-  var cameraPosition: MapConductorCore.MapCameraPosition { get }
-  var mapDesignType: Self.ActualMapDesignType { get set }
-  var uiSettings: MapConductorCore.MapUISettings { get set }
-  var serviceRegistry: MapConductorCore.MutableMapServiceRegistry { get }
-  func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition, durationMillis: MapConductorCore.Long?)
-  func moveCameraTo(position: MapConductorCore.GeoPoint, durationMillis: MapConductorCore.Long?)
-  func fitBounds(bounds: MapConductorCore.GeoRectBounds, padding: Swift.Int)
-  func getMapViewHolder() -> MapConductorCore.AnyMapViewHolder?
-}
-extension MapConductorCore.MapViewStateProtocol {
-  public func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition)
-  public func moveCameraTo(position: MapConductorCore.GeoPoint)
-}
-open class MapViewState<ActualMapDesignType> : Combine.ObservableObject, MapConductorCore.MapViewStateProtocol {
-  final public let serviceRegistry: MapConductorCore.MutableMapServiceRegistry
-  public var attachedMapController: (any MapConductorCore.MapViewControllerProtocol)? {
-    get
-  }
-  public init(id: Swift.String = UUID().uuidString, initialCameraPosition: MapConductorCore.MapCameraPosition = .Default, uiSettings: MapConductorCore.MapUISettings = MapUISettings(), optimisticCameraUpdate: Swift.Bool = false)
-  open var id: Swift.String {
-    get
-  }
-  open var cameraPosition: MapConductorCore.MapCameraPosition {
-    get
-  }
-  open var mapDesignType: ActualMapDesignType {
-    get
-    set
-  }
-  open var uiSettings: MapConductorCore.MapUISettings {
-    get
-    set
-  }
-  public func attachController(_ controller: (any MapConductorCore.MapViewControllerProtocol)?, moveToInitialCamera: Swift.Bool = true)
-  public func detachController()
-  public func setCameraPositionInternal(_ cameraPosition: MapConductorCore.MapCameraPosition)
-  open func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition, durationMillis: MapConductorCore.Long? = 0)
-  open func moveCameraTo(position: MapConductorCore.GeoPoint, durationMillis: MapConductorCore.Long? = 0)
-  open func fitBounds(bounds: MapConductorCore.GeoRectBounds, padding: Swift.Int)
-  open func getMapViewHolder() -> MapConductorCore.AnyMapViewHolder?
-  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
-  @objc deinit
-}
-public protocol MapOverlayProtocol : AnyObject {
-  associatedtype DataType
-  var flow: Combine.CurrentValueSubject<[Swift.String : Self.DataType], Swift.Never> { get }
-  func render(data: [Swift.String : Self.DataType], controller: any MapConductorCore.MapViewControllerProtocol) async
-}
-final public class MapOverlayRegistry {
-  public init()
-  final public func register(overlay: any MapConductorCore.MapOverlayProtocol)
-  final public func getAll() -> [any MapConductorCore.MapOverlayProtocol]
-  @objc deinit
-}
 public protocol TileProvider : AnyObject {
   func renderTile(request: MapConductorCore.TileRequest) -> Foundation.Data?
 }
@@ -1462,6 +1390,78 @@ public struct AnyMapViewHolder : MapConductorCore.MapViewHolderProtocol {
   public func fromScreenOffset(offset: CoreFoundation.CGPoint) async -> MapConductorCore.GeoPoint?
   public func fromScreenOffsetSync(offset: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
   public func viewportSizePx() -> CoreFoundation.CGSize?
+}
+public enum InitState {
+  case NotStarted
+  case Initializing
+  case SdkInitialized
+  case MapViewCreated
+  case MapCreating
+  case MapCreated
+  case MapLoaded
+  case Failed
+  public static func == (a: MapConductorCore.InitState, b: MapConductorCore.InitState) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public protocol MapViewStateProtocol : Combine.ObservableObject {
+  associatedtype ActualMapDesignType
+  var id: Swift.String { get }
+  var cameraPosition: MapConductorCore.MapCameraPosition { get }
+  var mapDesignType: Self.ActualMapDesignType { get set }
+  var uiSettings: MapConductorCore.MapUISettings { get set }
+  var serviceRegistry: MapConductorCore.MutableMapServiceRegistry { get }
+  func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition, durationMillis: MapConductorCore.Long?)
+  func moveCameraTo(position: MapConductorCore.GeoPoint, durationMillis: MapConductorCore.Long?)
+  func fitBounds(bounds: MapConductorCore.GeoRectBounds, padding: Swift.Int)
+  func getMapViewHolder() -> MapConductorCore.AnyMapViewHolder?
+}
+extension MapConductorCore.MapViewStateProtocol {
+  public func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition)
+  public func moveCameraTo(position: MapConductorCore.GeoPoint)
+}
+open class MapViewState<ActualMapDesignType> : Combine.ObservableObject, MapConductorCore.MapViewStateProtocol {
+  final public let serviceRegistry: MapConductorCore.MutableMapServiceRegistry
+  public var attachedMapController: (any MapConductorCore.MapViewControllerProtocol)? {
+    get
+  }
+  public init(id: Swift.String = UUID().uuidString, initialCameraPosition: MapConductorCore.MapCameraPosition = .Default, uiSettings: MapConductorCore.MapUISettings = MapUISettings(), optimisticCameraUpdate: Swift.Bool = false)
+  open var id: Swift.String {
+    get
+  }
+  open var cameraPosition: MapConductorCore.MapCameraPosition {
+    get
+  }
+  open var mapDesignType: ActualMapDesignType {
+    get
+    set
+  }
+  open var uiSettings: MapConductorCore.MapUISettings {
+    get
+    set
+  }
+  public func attachController(_ controller: (any MapConductorCore.MapViewControllerProtocol)?, moveToInitialCamera: Swift.Bool = true)
+  public func detachController()
+  public func setCameraPositionInternal(_ cameraPosition: MapConductorCore.MapCameraPosition)
+  open func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition, durationMillis: MapConductorCore.Long? = 0)
+  open func moveCameraTo(position: MapConductorCore.GeoPoint, durationMillis: MapConductorCore.Long? = 0)
+  open func fitBounds(bounds: MapConductorCore.GeoRectBounds, padding: Swift.Int)
+  open func getMapViewHolder() -> MapConductorCore.AnyMapViewHolder?
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+}
+public protocol MapOverlayProtocol : AnyObject {
+  associatedtype DataType
+  var flow: Combine.CurrentValueSubject<[Swift.String : Self.DataType], Swift.Never> { get }
+  func render(data: [Swift.String : Self.DataType], controller: any MapConductorCore.MapViewControllerProtocol) async
+}
+final public class MapOverlayRegistry {
+  public init()
+  final public func register(overlay: any MapConductorCore.MapOverlayProtocol)
+  final public func getAll() -> [any MapConductorCore.MapOverlayProtocol]
+  @objc deinit
 }
 public enum ScreenProjectionRequirement {
   @discardableResult
@@ -2973,8 +2973,6 @@ extension MapConductorCore.MapGesture : Swift.Hashable {}
 extension MapConductorCore.MapGesture : Swift.RawRepresentable {}
 extension MapConductorCore.MapViewBase : Swift.Sendable {}
 extension MapConductorCore.MapViewCoordinatorBase : Swift.Sendable {}
-extension MapConductorCore.InitState : Swift.Equatable {}
-extension MapConductorCore.InitState : Swift.Hashable {}
 extension MapConductorCore.OverlayKind : Swift.Equatable {}
 extension MapConductorCore.OverlayKind : Swift.Hashable {}
 extension MapConductorCore.OverlayKind : Swift.RawRepresentable {}
@@ -2990,6 +2988,8 @@ extension MapConductorCore.MapDiagnosticLevel : Swift.Equatable {}
 extension MapConductorCore.MapDiagnosticLevel : Swift.Hashable {}
 extension MapConductorCore.MapDiagnosticLevel : Swift.RawRepresentable {}
 extension MapConductorCore.MapServiceRegistryScope : Swift.Sendable {}
+extension MapConductorCore.InitState : Swift.Equatable {}
+extension MapConductorCore.InitState : Swift.Hashable {}
 extension MapConductorCore.DefaultMarkerEventController : Swift.Sendable {}
 extension MapConductorCore.MarkerDragGestureState : Swift.Equatable {}
 extension MapConductorCore.MarkerDragGestureState : Swift.Hashable {}
