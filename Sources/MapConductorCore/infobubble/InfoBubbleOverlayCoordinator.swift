@@ -22,6 +22,10 @@ public final class InfoBubbleOverlayCoordinator {
 
     private weak var container: UIView?
     private let project: Projection
+
+    /// 同期投影が使えないと**分かっている**プロバイダでは吹き出しを出さない。
+    /// 既定は常に true。``MapViewCoordinatorBase/screenProjectionGate(feature:)`` を渡す。
+    private let projectionGate: () -> Bool
     private let resolveMarkerStateForIcon: MarkerStateResolver
     private let iconMetrics: IconMetricsProvider
 
@@ -32,11 +36,13 @@ public final class InfoBubbleOverlayCoordinator {
     public init(
         container: UIView,
         project: @escaping Projection,
+        projectionGate: @escaping () -> Bool = { true },
         resolveMarkerStateForIcon: @escaping MarkerStateResolver = { _, bubbleMarker in bubbleMarker },
         iconMetrics: @escaping IconMetricsProvider
     ) {
         self.container = container
         self.project = project
+        self.projectionGate = projectionGate
         self.resolveMarkerStateForIcon = resolveMarkerStateForIcon
         self.iconMetrics = iconMetrics
 
@@ -123,6 +129,7 @@ public final class InfoBubbleOverlayCoordinator {
     public func updateInfoBubblePosition(for id: String) {
         guard let container, !container.bounds.isEmpty else { return }
         guard let bubble = infoBubblesById[id],
+              projectionGate(),
               let screenPoint = project(bubble.marker.position) else { return }
         updateInfoBubblePosition(for: id, bubble: bubble, host: infoBubbleHosts[id], screenPoint: screenPoint)
     }

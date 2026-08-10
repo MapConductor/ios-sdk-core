@@ -193,6 +193,7 @@ extension MapConductorCore.MapViewBase where TopContent == SwiftUICore.EmptyView
     get
   }
   @_Concurrency.MainActor public init(state: State, handlers: MapConductorCore.MapViewHandlers<State>)
+  @_Concurrency.MainActor public func screenProjectionGate(feature: Swift.String) -> () -> Swift.Bool
   @_Concurrency.MainActor public var onMapLoaded: MapConductorCore.OnMapLoadedHandler<State>? {
     get
   }
@@ -1127,7 +1128,7 @@ public struct MarkerIconMetrics {
   public typealias Projection = (any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?
   public typealias MarkerStateResolver = (_ markerId: Swift.String, _ bubbleMarker: MapConductorCore.MarkerState) -> MapConductorCore.MarkerState
   public typealias IconMetricsProvider = (_ markerState: MapConductorCore.MarkerState) -> MapConductorCore.MarkerIconMetrics
-  @_Concurrency.MainActor public init(container: UIKit.UIView, project: @escaping MapConductorCore.InfoBubbleOverlayCoordinator.Projection, resolveMarkerStateForIcon: @escaping MapConductorCore.InfoBubbleOverlayCoordinator.MarkerStateResolver = { _, bubbleMarker in bubbleMarker }, iconMetrics: @escaping MapConductorCore.InfoBubbleOverlayCoordinator.IconMetricsProvider)
+  @_Concurrency.MainActor public init(container: UIKit.UIView, project: @escaping MapConductorCore.InfoBubbleOverlayCoordinator.Projection, projectionGate: @escaping () -> Swift.Bool = { true }, resolveMarkerStateForIcon: @escaping MapConductorCore.InfoBubbleOverlayCoordinator.MarkerStateResolver = { _, bubbleMarker in bubbleMarker }, iconMetrics: @escaping MapConductorCore.InfoBubbleOverlayCoordinator.IconMetricsProvider)
   @_Concurrency.MainActor final public func syncInfoBubbles(_ bubbles: [MapConductorCore.InfoBubble])
   @_Concurrency.MainActor final public func removeInfoBubbleView(for id: Swift.String)
   @_Concurrency.MainActor final public func updateAllLayouts()
@@ -1413,7 +1414,8 @@ public protocol MapViewHolderProtocol {
   func fromScreenOffsetSync(offset: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
 }
 extension MapConductorCore.MapViewHolderProtocol {
-  public func fromScreenOffsetSync(offset: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
+  public func fromScreenOffset(offset: CoreFoundation.CGPoint) async -> MapConductorCore.GeoPoint?
+  public func fromScreenOffsetSync(offset _: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
 }
 public struct AnyMapViewHolder : MapConductorCore.MapViewHolderProtocol {
   public typealias ActualMapView = Any
@@ -1424,6 +1426,10 @@ public struct AnyMapViewHolder : MapConductorCore.MapViewHolderProtocol {
   public func toScreenOffset(position: any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?
   public func fromScreenOffset(offset: CoreFoundation.CGPoint) async -> MapConductorCore.GeoPoint?
   public func fromScreenOffsetSync(offset: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
+}
+public enum ScreenProjectionRequirement {
+  @discardableResult
+  public static func check(registry: any MapConductorCore.MapServiceRegistry, provider: Swift.String, feature: Swift.String) -> Swift.Bool
 }
 extension MapConductorCore.MapViewHolderProtocol {
   public func buildVisibleRegion(inset: CoreFoundation.CGFloat = 0, requireAllCorners: Swift.Bool = true) -> MapConductorCore.VisibleRegion?
@@ -1555,7 +1561,7 @@ public struct MarkerAnimationOverlayEntry {
 }
 @_Concurrency.MainActor final public class MarkerAnimationOverlayCoordinator : MapConductorCore.MarkerAnimationOverlayHost {
   public typealias Projection = (any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?
-  @_Concurrency.MainActor public init(container: UIKit.UIView, project: @escaping MapConductorCore.MarkerAnimationOverlayCoordinator.Projection)
+  @_Concurrency.MainActor public init(container: UIKit.UIView, project: @escaping MapConductorCore.MarkerAnimationOverlayCoordinator.Projection, projectionGate: @escaping () -> Swift.Bool = { true })
   @_Concurrency.MainActor final public func start(_ entry: MapConductorCore.MarkerAnimationOverlayEntry)
   @_Concurrency.MainActor final public func unbind()
   @objc deinit

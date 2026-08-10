@@ -62,6 +62,10 @@ public final class MarkerAnimationOverlayCoordinator: MarkerAnimationOverlayHost
     private weak var container: UIView?
     private let project: Projection
 
+    /// 同期投影が使えないと**分かっている**プロバイダではアニメーションを出さない。
+    /// 既定は常に true。``MapViewCoordinatorBase/screenProjectionGate(feature:)`` を渡す。
+    private let projectionGate: () -> Bool
+
     /// Clips the animated icons to the map bounds (the icon starts above the
     /// container's top edge) without forcing clipping on the shared
     /// info-bubble container.
@@ -88,9 +92,14 @@ public final class MarkerAnimationOverlayCoordinator: MarkerAnimationOverlayHost
     private var active: [String: ActiveAnimation] = [:]
     private var displayLink: CADisplayLink?
 
-    public init(container: UIView, project: @escaping Projection) {
+    public init(
+        container: UIView,
+        project: @escaping Projection,
+        projectionGate: @escaping () -> Bool = { true }
+    ) {
         self.container = container
         self.project = project
+        self.projectionGate = projectionGate
     }
 
     public func start(_ entry: MarkerAnimationOverlayEntry) {
@@ -192,7 +201,7 @@ public final class MarkerAnimationOverlayCoordinator: MarkerAnimationOverlayHost
         // position is not projectable (e.g. rotated behind the globe), hide
         // the image but keep the clock running so the native marker is still
         // revealed at the end.
-        guard let target = project(animation.entry.state.position) else {
+        guard projectionGate(), let target = project(animation.entry.state.position) else {
             animation.view.isHidden = true
             return
         }
