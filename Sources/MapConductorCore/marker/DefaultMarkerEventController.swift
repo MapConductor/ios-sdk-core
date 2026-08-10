@@ -59,7 +59,12 @@ public protocol MarkerEventHostProtocol: AnyObject {
 /// 掴んだ時点の値を覚えて戻す。3 プラットフォーム共通の契約。
 @MainActor
 open class DefaultMarkerEventController {
-    private weak var surface: (any MarkerDragSurface)?
+    /// **強参照で持つこと。** ここは地図ビューそのものではなく、呼び出し側が
+    /// `super.init` の引数として作る薄いアダプタで、他に持ち主がいない。
+    /// weak にすると生成直後に解放され、`handleLongPress` が常に false を返す
+    /// ——ドラッグだけが黙って死ぬ（タップは surface を使わないので気づけない）。
+    /// アダプタ側が地図ビューを weak で持つので循環はしない。
+    private var surface: (any MarkerDragSurface)?
     private let host: any MarkerEventHostProtocol
 
     private var draggingMarkerId: String?

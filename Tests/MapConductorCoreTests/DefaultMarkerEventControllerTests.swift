@@ -160,6 +160,25 @@ final class DefaultMarkerEventControllerTests: XCTestCase {
         XCTAssertFalse(controller.handleLongPress(state: .other, at: .zero))
     }
 
+    /// **回帰の本命その2。** `surface` は呼び出し側が `super.init` の引数として作る
+    /// 薄いアダプタで、他に持ち主がいない。コアが weak で持つと生成直後に解放され、
+    /// **ドラッグだけが黙って死ぬ**（タップは surface を使わないので気づけない）。
+    ///
+    /// 実際に一度この形で壊し、実機の A/B 比較で拾った。ここで固定する。
+    func testSurfaceIsRetainedWhenCallerKeepsNoReference() {
+        let host = FakeHost()
+        host.markerIdAtPoint = "m1"
+        host.states["m1"] = makeMarker(id: "m1", draggable: true)
+        // FakeSurface をローカルにも保持しない。プロバイダの書き方をそのまま再現する。
+        let controller = DefaultMarkerEventController(surface: FakeSurface(), host: host)
+
+        XCTAssertTrue(
+            controller.handleLongPress(state: .began, at: .zero),
+            "surface を weak で持つとここが false になる"
+        )
+        XCTAssertEqual(host.log, ["dragStart:m1"])
+    }
+
     func testUnbindRestoresScrollWhileGrabbed() {
         let (surface, host, controller) = fixture()
         host.markerIdAtPoint = "m1"
