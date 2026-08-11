@@ -31,7 +31,8 @@ public struct MapAttributionOverlay: View {
                         .background(Color.white.opacity(0.85))
                 }
                 .padding(.trailing, 4)
-                .padding(.bottom, 24)
+                // 下辺は地図にぴったり付ける。浮かせると「地図の外の帯」に見えてしまい、
+                // どの地図に対する出典なのかが伝わりにくい。3 プラットフォームとも同じ。
             }
         }
     }
