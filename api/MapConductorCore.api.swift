@@ -93,8 +93,8 @@ public struct InfoBubble : MapConductorCore.MapOverlayItemProtocol, Swift.Identi
   public var uiViewContent: UIKit.UIView? {
     get
   }
-  public init<Content>(marker: MapConductorCore.MarkerState, bubbleColor: SwiftUICore.Color = .white, borderColor: SwiftUICore.Color = .black, contentPadding: CoreFoundation.CGFloat = 8.0, cornerRadius: CoreFoundation.CGFloat = 4.0, tailSize: CoreFoundation.CGFloat = 8.0, @SwiftUICore.ViewBuilder content: () -> Content) where Content : SwiftUICore.View
-  public init<Content>(position: MapConductorCore.GeoPoint, id: Swift.String? = nil, bubbleColor: SwiftUICore.Color = .white, borderColor: SwiftUICore.Color = .black, contentPadding: CoreFoundation.CGFloat = 8.0, cornerRadius: CoreFoundation.CGFloat = 4.0, tailSize: CoreFoundation.CGFloat = 8.0, @SwiftUICore.ViewBuilder content: () -> Content) where Content : SwiftUICore.View
+  public init<Content>(marker: MapConductorCore.MarkerState, bubbleColor: SwiftUICore.Color = .white, borderColor: SwiftUICore.Color = .black, borderWidth: CoreFoundation.CGFloat = 2.0, contentPadding: CoreFoundation.CGFloat = 8.0, cornerRadius: CoreFoundation.CGFloat = 4.0, tailSize: CoreFoundation.CGFloat = 8.0, @SwiftUICore.ViewBuilder content: () -> Content) where Content : SwiftUICore.View
+  public init<Content>(position: MapConductorCore.GeoPoint, id: Swift.String? = nil, bubbleColor: SwiftUICore.Color = .white, borderColor: SwiftUICore.Color = .black, borderWidth: CoreFoundation.CGFloat = 2.0, contentPadding: CoreFoundation.CGFloat = 8.0, cornerRadius: CoreFoundation.CGFloat = 4.0, tailSize: CoreFoundation.CGFloat = 8.0, @SwiftUICore.ViewBuilder content: () -> Content) where Content : SwiftUICore.View
   public init(marker: MapConductorCore.MarkerState, tailOffset: CoreFoundation.CGPoint = CGPoint(x: 0.5, y: 1.0), uiViewContent: UIKit.UIView)
   public init(position: MapConductorCore.GeoPoint, id: Swift.String? = nil, tailOffset: CoreFoundation.CGPoint = CGPoint(x: 0.5, y: 1.0), uiViewContent: UIKit.UIView)
   public func append(to content: inout MapConductorCore.MapViewContent)
@@ -851,6 +851,10 @@ public struct WebMercatorProjection : MapConductorCore.ProjectionProtocol {
   public func project(_ point: any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint
   public func unproject(_ point: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint
 }
+public enum WebMercatorScreenProjection {
+  public static func toScreenOffset(_ position: any MapConductorCore.GeoPointProtocol, camera: MapConductorCore.MapCameraPosition, size: CoreFoundation.CGSize) -> CoreFoundation.CGPoint?
+  public static func fromScreenOffset(_ offset: CoreFoundation.CGPoint, camera: MapConductorCore.MapCameraPosition, size: CoreFoundation.CGSize) -> MapConductorCore.GeoPoint?
+}
 public let defaultCircleSegments: Swift.Int
 public func circleToRing(center: any MapConductorCore.GeoPointProtocol, radiusMeters: Swift.Double, geodesic: Swift.Bool, segments: Swift.Int = defaultCircleSegments) -> [any MapConductorCore.GeoPointProtocol]
 public func closeRing(_ ring: [any MapConductorCore.GeoPointProtocol]) -> [any MapConductorCore.GeoPointProtocol]
@@ -1074,7 +1078,7 @@ final public class GroundImageTileProvider : MapConductorCore.TileProvider {
   @objc deinit
 }
 @_Concurrency.MainActor @preconcurrency public struct DefaultInfoBubbleView : SwiftUICore.View {
-  @_Concurrency.MainActor @preconcurrency public init(bubbleColor: SwiftUICore.Color = .white, borderColor: SwiftUICore.Color = .black, contentPadding: CoreFoundation.CGFloat = 8.0, cornerRadius: CoreFoundation.CGFloat = 4.0, tailSize: CoreFoundation.CGFloat = 8.0, content: SwiftUICore.AnyView)
+  @_Concurrency.MainActor @preconcurrency public init(bubbleColor: SwiftUICore.Color = .white, borderColor: SwiftUICore.Color = .black, borderWidth: CoreFoundation.CGFloat = 2.0, contentPadding: CoreFoundation.CGFloat = 8.0, cornerRadius: CoreFoundation.CGFloat = 4.0, tailSize: CoreFoundation.CGFloat = 8.0, content: SwiftUICore.AnyView)
   @_Concurrency.MainActor @preconcurrency public var body: some SwiftUICore.View {
     get
   }
@@ -2012,6 +2016,7 @@ public struct MarkerTilingOptions {
   public static let Disabled: MapConductorCore.MarkerTilingOptions
   public static let Default: MapConductorCore.MarkerTilingOptions
   public init(enabled: Swift.Bool = true, debugTileOverlay: Swift.Bool = false, minMarkerCount: Swift.Int = 2000, cacheSize: Swift.Int = 8 * 1024 * 1024, iconScaleCallback: ((MapConductorCore.MarkerState, Swift.Int) -> Swift.Double)? = nil)
+  public func shouldUseTiles(markerCount: Swift.Int) -> Swift.Bool
 }
 final public class StrategyMarkerController<ActualMarker, Strategy, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualMarker == Strategy.ActualMarker, Strategy : MapConductorCore.MarkerRenderingStrategyProtocol, Renderer : MapConductorCore.MarkerOverlayRendererProtocol, Strategy.ActualMarker == Renderer.ActualMarker {
   public typealias StateType = MapConductorCore.MarkerState
