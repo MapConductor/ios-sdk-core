@@ -1,6 +1,6 @@
 import Foundation
 
-open class PolylineController<ActualPolyline, Renderer: PolylineOverlayRendererProtocol>: OverlayControllerProtocol
+open class PolylineController<ActualPolyline, Renderer: PolylineOverlayRendererProtocol>: OverlayControllerProtocol, SlottedOverlayController
 where Renderer.ActualPolyline == ActualPolyline {
     public typealias StateType = PolylineState
     public typealias EntityType = PolylineEntity<ActualPolyline>
@@ -152,4 +152,25 @@ where Renderer.ActualPolyline == ActualPolyline {
     open func destroy() {
         polylineManager.destroy()
     }
+    // ── SlottedOverlayController ────────────────────────────────────────
+    //
+    // kind は**必須メンバ**。既定値を持たせると、宣言忘れがコンパイルを通ってしまい
+    // カスケードとスロットから黙って漏れる（android-sdk で実際に踏んだ）。
+
+    public var kind: OverlayKind { .polyline }
+
+    public func hasId(_ id: String) -> Bool {
+        polylineManager.hasEntity(id)
+    }
+
+    /// ポリラインだけ配送座標がタップ点ではない。**線上の最近傍点**を返す。
+    /// 線の上をきっかりタップすることはないので、タップ点をそのまま返すと
+    /// 線から外れた座標がアプリへ渡る。3 プラットフォーム共通の既存契約。
+    public func resolveTap(position: GeoPointProtocol) -> OverlayHit? {
+        guard let hit = findWithClosestPoint(position: position) else { return nil }
+        return OverlayHit(kind: .polyline, clicked: hit.closestPoint) { [weak self] in
+            self?.dispatchClick(event: PolylineEvent(state: hit.entity.state, clicked: hit.closestPoint))
+        }
+    }
+
 }

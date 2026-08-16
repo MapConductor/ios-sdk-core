@@ -1,0 +1,3009 @@
+import Combine
+import CoreGraphics
+import CoreLocation
+import CoreText
+import Foundation
+import Network
+import QuartzCore
+import Swift
+import SwiftUI
+import UIKit
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+import os
+public enum InternalMapConductorApi {
+  public static let spiGroup: Swift.String
+}
+@_hasMissingDesignatedInitializers final public class LocalTileServer {
+  final public var baseUrl: Swift.String {
+    get
+  }
+  final public func register(routeId: Swift.String, provider: any MapConductorCore.TileProvider)
+  final public func unregister(routeId: Swift.String)
+  final public var isListening: Swift.Bool {
+    get
+  }
+  final public func setForceNoStoreCache(_ value: Swift.Bool)
+  final public func urlTemplate(routeId: Swift.String, tileSize: Swift.Int) -> Swift.String
+  final public func urlTemplate(routeId: Swift.String, tileSize: Swift.Int, cacheKey: Swift.String) -> Swift.String
+  @available(*, deprecated, message: "`version` is ignored. Use `urlTemplate(routeId:tileSize:)` instead.")
+  final public func urlTemplate(routeId: Swift.String, version: Swift.Int64) -> Swift.String
+  final public func stop()
+  public static func startServer(forceNoStoreCache: Swift.Bool = false) -> MapConductorCore.LocalTileServer
+  @objc deinit
+}
+public struct Markers : MapConductorCore.MapOverlayItemProtocol {
+  public init(_ states: [MapConductorCore.MarkerState])
+  public func append(to content: inout MapConductorCore.MapViewContent)
+}
+public struct Circles : MapConductorCore.MapOverlayItemProtocol {
+  public init(_ states: [MapConductorCore.CircleState])
+  public func append(to content: inout MapConductorCore.MapViewContent)
+}
+public struct Polylines : MapConductorCore.MapOverlayItemProtocol {
+  public init(_ states: [MapConductorCore.PolylineState])
+  public func append(to content: inout MapConductorCore.MapViewContent)
+}
+public struct Polygons : MapConductorCore.MapOverlayItemProtocol {
+  public init(_ states: [MapConductorCore.PolygonState])
+  public func append(to content: inout MapConductorCore.MapViewContent)
+}
+public struct GroundImages : MapConductorCore.MapOverlayItemProtocol {
+  public init(_ states: [MapConductorCore.GroundImageState])
+  public func append(to content: inout MapConductorCore.MapViewContent)
+}
+public struct ForArray<Data> : MapConductorCore.MapOverlayItemProtocol where Data : Swift.RandomAccessCollection {
+  public init(_ data: Data, @MapConductorCore.MapViewContentBuilder content: (Data.Element) -> MapConductorCore.MapViewContent)
+  public func append(to content: inout MapConductorCore.MapViewContent)
+}
+public struct GroundImage : MapConductorCore.MapOverlayItemProtocol, Swift.Identifiable {
+  public let id: Swift.String
+  public let state: MapConductorCore.GroundImageState
+  public init(state: MapConductorCore.GroundImageState)
+  public init(bounds: MapConductorCore.GeoRectBounds, image: UIKit.UIImage, opacity: Swift.Double = 0.5, tileSize: Swift.Int = 512, id: Swift.String? = nil, extra: Any? = nil, onClick: MapConductorCore.OnGroundImageEventHandler? = nil)
+  public func append(to content: inout MapConductorCore.MapViewContent)
+  public typealias ID = Swift.String
+}
+public struct RasterLayer : MapConductorCore.MapOverlayItemProtocol, Swift.Identifiable {
+  public let id: Swift.String
+  public let state: MapConductorCore.RasterLayerState
+  public init(state: MapConductorCore.RasterLayerState)
+  public init(source: MapConductorCore.RasterLayerSource, opacity: Swift.Double = 1.0, visible: Swift.Bool = true, zIndex: Swift.Int = 0, userAgent: Swift.String = RasterLayerState.defaultUserAgent, id: Swift.String? = nil, extraHeaders: [Swift.String : Swift.String]? = nil)
+  public func append(to content: inout MapConductorCore.MapViewContent)
+  public typealias ID = Swift.String
+}
+public struct Marker : MapConductorCore.MapOverlayItemProtocol, Swift.Identifiable {
+  public let id: Swift.String
+  public let state: MapConductorCore.MarkerState
+  public init(state: MapConductorCore.MarkerState)
+  public init(position: MapConductorCore.GeoPoint, id: Swift.String? = nil, extra: Any? = nil, icon: (any MapConductorCore.MarkerIconProtocol)? = nil, animation: MapConductorCore.MarkerAnimation? = nil, clickable: Swift.Bool = true, draggable: Swift.Bool = false, zIndex: Swift.Int? = nil, onClick: MapConductorCore.OnMarkerEventHandler? = nil, onDragStart: MapConductorCore.OnMarkerEventHandler? = nil, onDrag: MapConductorCore.OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore.OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore.OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore.OnMarkerEventHandler? = nil)
+  public init(position: MapConductorCore.GeoPoint, id: Swift.String? = nil, extra: Any? = nil, icon: MapConductorCore.DefaultMarkerIcon, animation: MapConductorCore.MarkerAnimation? = nil, clickable: Swift.Bool = true, draggable: Swift.Bool = false, zIndex: Swift.Int? = nil, onClick: MapConductorCore.OnMarkerEventHandler? = nil, onDragStart: MapConductorCore.OnMarkerEventHandler? = nil, onDrag: MapConductorCore.OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore.OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore.OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore.OnMarkerEventHandler? = nil)
+  public func append(to content: inout MapConductorCore.MapViewContent)
+  public typealias ID = Swift.String
+}
+public struct InfoBubble : MapConductorCore.MapOverlayItemProtocol, Swift.Identifiable {
+  public let id: Swift.String
+  public let marker: MapConductorCore.MarkerState
+  public let tailOffset: CoreFoundation.CGPoint
+  public let useIconMetrics: Swift.Bool
+  public var swiftUIContent: SwiftUICore.AnyView? {
+    get
+  }
+  public var uiViewContent: UIKit.UIView? {
+    get
+  }
+  public init<Content>(marker: MapConductorCore.MarkerState, bubbleColor: SwiftUICore.Color = .white, borderColor: SwiftUICore.Color = .black, borderWidth: CoreFoundation.CGFloat = 2.0, contentPadding: CoreFoundation.CGFloat = 8.0, cornerRadius: CoreFoundation.CGFloat = 4.0, tailSize: CoreFoundation.CGFloat = 8.0, @SwiftUICore.ViewBuilder content: () -> Content) where Content : SwiftUICore.View
+  public init<Content>(position: MapConductorCore.GeoPoint, id: Swift.String? = nil, bubbleColor: SwiftUICore.Color = .white, borderColor: SwiftUICore.Color = .black, borderWidth: CoreFoundation.CGFloat = 2.0, contentPadding: CoreFoundation.CGFloat = 8.0, cornerRadius: CoreFoundation.CGFloat = 4.0, tailSize: CoreFoundation.CGFloat = 8.0, @SwiftUICore.ViewBuilder content: () -> Content) where Content : SwiftUICore.View
+  public init(marker: MapConductorCore.MarkerState, tailOffset: CoreFoundation.CGPoint = CGPoint(x: 0.5, y: 1.0), uiViewContent: UIKit.UIView)
+  public init(position: MapConductorCore.GeoPoint, id: Swift.String? = nil, tailOffset: CoreFoundation.CGPoint = CGPoint(x: 0.5, y: 1.0), uiViewContent: UIKit.UIView)
+  public func append(to content: inout MapConductorCore.MapViewContent)
+  public typealias ID = Swift.String
+}
+public struct InfoBubbleCustom : MapConductorCore.MapOverlayItemProtocol, Swift.Identifiable {
+  public let id: Swift.String
+  public init<Content>(marker: MapConductorCore.MarkerState, tailOffset: CoreFoundation.CGPoint, @SwiftUICore.ViewBuilder content: () -> Content) where Content : SwiftUICore.View
+  public init(marker: MapConductorCore.MarkerState, tailOffset: CoreFoundation.CGPoint, uiViewContent: UIKit.UIView)
+  public func append(to content: inout MapConductorCore.MapViewContent)
+  public typealias ID = Swift.String
+}
+public struct Polyline : MapConductorCore.MapOverlayItemProtocol, Swift.Identifiable {
+  public let id: Swift.String
+  public let state: MapConductorCore.PolylineState
+  public init(state: MapConductorCore.PolylineState)
+  public init(points: [any MapConductorCore.GeoPointProtocol], id: Swift.String? = nil, strokeColor: UIKit.UIColor = .black, strokeWidth: Swift.Double = 1.0, geodesic: Swift.Bool = false, zIndex: Swift.Int = 0, extra: Any? = nil, onClick: MapConductorCore.OnPolylineEventHandler? = nil)
+  public init(bounds: MapConductorCore.GeoRectBounds, id: Swift.String? = nil, strokeColor: UIKit.UIColor = .black, strokeWidth: Swift.Double = 1.0, geodesic: Swift.Bool = false, zIndex: Swift.Int = 0, extra: Any? = nil, onClick: MapConductorCore.OnPolylineEventHandler? = nil)
+  public func append(to content: inout MapConductorCore.MapViewContent)
+  public typealias ID = Swift.String
+}
+public struct Polygon : MapConductorCore.MapOverlayItemProtocol, Swift.Identifiable {
+  public let id: Swift.String
+  public let state: MapConductorCore.PolygonState
+  public init(state: MapConductorCore.PolygonState)
+  public init(points: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]] = [], id: Swift.String? = nil, strokeColor: UIKit.UIColor = .black, strokeWidth: Swift.Double = 1.0, fillColor: UIKit.UIColor = .clear, geodesic: Swift.Bool = false, zIndex: Swift.Int = 0, extra: Any? = nil, onClick: MapConductorCore.OnPolygonEventHandler? = nil)
+  public init(bounds: MapConductorCore.GeoRectBounds, id: Swift.String? = nil, strokeColor: UIKit.UIColor = .black, strokeWidth: Swift.Double = 1.0, fillColor: UIKit.UIColor = .clear, geodesic: Swift.Bool = false, zIndex: Swift.Int = 0, extra: Any? = nil, onClick: MapConductorCore.OnPolygonEventHandler? = nil)
+  public func append(to content: inout MapConductorCore.MapViewContent)
+  public typealias ID = Swift.String
+}
+public struct Circle : MapConductorCore.MapOverlayItemProtocol, Swift.Identifiable {
+  public let id: Swift.String
+  public let state: MapConductorCore.CircleState
+  public init(state: MapConductorCore.CircleState)
+  public init(center: any MapConductorCore.GeoPointProtocol, radiusMeters: Swift.Double, geodesic: Swift.Bool = true, clickable: Swift.Bool = true, strokeColor: UIKit.UIColor = .red, strokeWidth: Swift.Double = 2.0, fillColor: UIKit.UIColor = UIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.5), id: Swift.String? = nil, zIndex: Swift.Int? = nil, extra: Any? = nil, onClick: MapConductorCore.OnCircleEventHandler? = nil)
+  public func append(to content: inout MapConductorCore.MapViewContent)
+  public typealias ID = Swift.String
+}
+public struct MapUISettings : Swift.Equatable {
+  public var scrollGesture: Swift.Bool
+  public var zoomGesture: Swift.Bool
+  public var rotateGesture: Swift.Bool
+  public var tiltGesture: Swift.Bool
+  public init(scrollGesture: Swift.Bool = true, zoomGesture: Swift.Bool = true, rotateGesture: Swift.Bool = true, tiltGesture: Swift.Bool = true)
+  public static let Default: MapConductorCore.MapUISettings
+  public static let None: MapConductorCore.MapUISettings
+  public static func == (a: MapConductorCore.MapUISettings, b: MapConductorCore.MapUISettings) -> Swift.Bool
+}
+public enum MapGesture : Swift.String, Swift.CaseIterable, Swift.Sendable {
+  case scroll
+  case zoom
+  case rotate
+  case tilt
+  public var settingName: Swift.String {
+    get
+  }
+  public init?(rawValue: Swift.String)
+  public typealias AllCases = [MapConductorCore.MapGesture]
+  public typealias RawValue = Swift.String
+  nonisolated public static var allCases: [MapConductorCore.MapGesture] {
+    get
+  }
+  public var rawValue: Swift.String {
+    get
+  }
+}
+public enum MapUISettingsDiagnostics {
+  public static func warnIfRequested(_ requested: Swift.Bool, gesture: MapConductorCore.MapGesture, provider: Swift.String, reason: Swift.String)
+  public static func resetWarnings()
+}
+public struct MapViewHandlers<State> where State : MapConductorCore.MapViewStateProtocol {
+  public let onMapLoaded: MapConductorCore.OnMapLoadedHandler<State>?
+  public let onMapClick: MapConductorCore.OnMapEventHandler?
+  public let onMapLongClick: MapConductorCore.OnMapEventHandler?
+  public let onCameraMoveStart: MapConductorCore.OnCameraMoveHandler?
+  public let onCameraMove: MapConductorCore.OnCameraMoveHandler?
+  public let onCameraMoveEnd: MapConductorCore.OnCameraMoveHandler?
+  public let sdkInitialize: (() -> Swift.Void)?
+  public init(onMapLoaded: MapConductorCore.OnMapLoadedHandler<State>? = nil, onMapClick: MapConductorCore.OnMapEventHandler? = nil, onMapLongClick: MapConductorCore.OnMapEventHandler? = nil, onCameraMoveStart: MapConductorCore.OnCameraMoveHandler? = nil, onCameraMove: MapConductorCore.OnCameraMoveHandler? = nil, onCameraMoveEnd: MapConductorCore.OnCameraMoveHandler? = nil, sdkInitialize: (() -> Swift.Void)? = nil)
+}
+@_Concurrency.MainActor @preconcurrency public struct MapViewBase<MapContent, TopContent> : SwiftUICore.View where MapContent : SwiftUICore.View, TopContent : SwiftUICore.View {
+  @_Concurrency.MainActor @preconcurrency public init(attributionRules: [MapConductorCore.AttributionRule], camera: any MapConductorCore.MapCameraPositionProtocol, content: MapConductorCore.MapViewContent, @SwiftUICore.ViewBuilder mapContent: @escaping () -> MapContent, @SwiftUICore.ViewBuilder topContent: @escaping () -> TopContent)
+  @_Concurrency.MainActor @preconcurrency public var body: some SwiftUICore.View {
+    get
+  }
+  public typealias Body = @_opaqueReturnTypeOf("$s16MapConductorCore0A8ViewBaseV4bodyQrvp", 0) __<MapContent, TopContent>
+}
+extension MapConductorCore.MapViewBase where TopContent == SwiftUICore.EmptyView {
+  @_Concurrency.MainActor @preconcurrency public init(attributionRules: [MapConductorCore.AttributionRule], camera: any MapConductorCore.MapCameraPositionProtocol, content: MapConductorCore.MapViewContent, @SwiftUICore.ViewBuilder mapContent: @escaping () -> MapContent)
+}
+@_Concurrency.MainActor open class MapViewCoordinatorBase<State> : ObjectiveC.NSObject where State : MapConductorCore.MapViewStateProtocol {
+  @_Concurrency.MainActor final public let state: State
+  @_Concurrency.MainActor final public let handlers: MapConductorCore.MapViewHandlers<State>
+  @_Concurrency.MainActor final public let infoBubbleContainer: MapConductorCore.PassthroughContainerView
+  @_Concurrency.MainActor public var didCallMapLoaded: Swift.Bool {
+    get
+  }
+  @_Concurrency.MainActor public init(state: State, handlers: MapConductorCore.MapViewHandlers<State>)
+  @_Concurrency.MainActor public func screenProjectionGate(feature: Swift.String) -> () -> Swift.Bool
+  @_Concurrency.MainActor public var onMapLoaded: MapConductorCore.OnMapLoadedHandler<State>? {
+    get
+  }
+  @_Concurrency.MainActor public var onMapClick: MapConductorCore.OnMapEventHandler? {
+    get
+  }
+  @_Concurrency.MainActor public var onMapLongClick: MapConductorCore.OnMapEventHandler? {
+    get
+  }
+  @_Concurrency.MainActor public var onCameraMoveStart: MapConductorCore.OnCameraMoveHandler? {
+    get
+  }
+  @_Concurrency.MainActor public var onCameraMove: MapConductorCore.OnCameraMoveHandler? {
+    get
+  }
+  @_Concurrency.MainActor public var onCameraMoveEnd: MapConductorCore.OnCameraMoveHandler? {
+    get
+  }
+  @_Concurrency.MainActor public static func runOnce(_ initializer: () -> Swift.Void)
+  @_Concurrency.MainActor public func performMapLoadedOnce(_ body: () -> Swift.Void)
+  @_Concurrency.MainActor public func applyCameraRestriction(_ restriction: MapConductorCore.CameraRestriction?, to controller: (any MapConductorCore.MapViewControllerProtocol)?)
+  @_Concurrency.MainActor public func reapplyCameraRestriction(to controller: (any MapConductorCore.MapViewControllerProtocol)?)
+  @_Concurrency.MainActor public func attachInfoBubbleContainer(to hostView: UIKit.UIView)
+  @objc deinit
+}
+public typealias OnMapLoadedHandler<State> = (State) -> Swift.Void where State : MapConductorCore.MapViewStateProtocol
+public typealias OnMapEventHandler = (MapConductorCore.GeoPoint) -> Swift.Void
+public typealias OnCameraMoveHandler = (MapConductorCore.MapCameraPosition) -> Swift.Void
+public protocol MapOverlayItemProtocol {
+  func append(to content: inout MapConductorCore.MapViewContent)
+}
+public protocol ViewBasedMapOverlay : MapConductorCore.MapOverlayItemProtocol, SwiftUICore.View {
+}
+public struct MapViewContent {
+  public var markers: [MapConductorCore.Marker]
+  public var infoBubbles: [MapConductorCore.InfoBubble]
+  public var polylines: [MapConductorCore.Polyline]
+  public var polygons: [MapConductorCore.Polygon]
+  public var circles: [MapConductorCore.Circle]
+  public var groundImages: [MapConductorCore.GroundImage]
+  public var rasterLayers: [MapConductorCore.RasterLayer]
+  public var views: [SwiftUICore.AnyView]
+  public var markerTilingOptions: MapConductorCore.MarkerTilingOptions
+  public var polygonSyncHandlers: [any MapConductorCore.PolygonSyncHandler]
+  public init()
+}
+@_functionBuilder public enum MapViewContentBuilder {
+  public static func buildBlock() -> MapConductorCore.MapViewContent
+  public static func buildBlock(_ components: MapConductorCore.MapViewContent...) -> MapConductorCore.MapViewContent
+  public static func buildOptional(_ component: MapConductorCore.MapViewContent?) -> MapConductorCore.MapViewContent
+  public static func buildEither(first component: MapConductorCore.MapViewContent) -> MapConductorCore.MapViewContent
+  public static func buildEither(second component: MapConductorCore.MapViewContent) -> MapConductorCore.MapViewContent
+  public static func buildArray(_ components: [MapConductorCore.MapViewContent]) -> MapConductorCore.MapViewContent
+  public static func buildExpression<T>(_ expression: T) -> MapConductorCore.MapViewContent where T : MapConductorCore.ViewBasedMapOverlay
+  @_disfavoredOverload public static func buildExpression(_ expression: any MapConductorCore.MapOverlayItemProtocol) -> MapConductorCore.MapViewContent
+  public static func buildExpression(_ expression: MapConductorCore.MapViewContent) -> MapConductorCore.MapViewContent
+}
+public protocol TileProvider : AnyObject {
+  func renderTile(request: MapConductorCore.TileRequest) -> Foundation.Data?
+}
+public struct TileRequest : Swift.Hashable {
+  public let x: Swift.Int
+  public let y: Swift.Int
+  public let z: Swift.Int
+  public let pixelRatio: Swift.Int
+  public init(x: Swift.Int, y: Swift.Int, z: Swift.Int, pixelRatio: Swift.Int = 1)
+  public static func == (a: MapConductorCore.TileRequest, b: MapConductorCore.TileRequest) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public enum TileServerRegistry {
+  public static func get() -> MapConductorCore.LocalTileServer
+  public static func get(forceNoStoreCache: Swift.Bool) -> MapConductorCore.LocalTileServer
+  public static func setForceNoStoreCache(_ value: Swift.Bool)
+}
+public typealias Long = Swift.Int64
+final public class CoroutineScope {
+  public init()
+  @objc deinit
+}
+open class CircleController<ActualCircle, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualCircle == Renderer.ActualCircle, Renderer : MapConductorCore.CircleOverlayRendererProtocol {
+  public typealias StateType = MapConductorCore.CircleState
+  public typealias EntityType = MapConductorCore.CircleEntity<ActualCircle>
+  public typealias EventType = MapConductorCore.CircleEvent
+  final public let circleManager: MapConductorCore.CircleManager<ActualCircle>
+  open var renderer: Renderer
+  final public let zIndex: Swift.Int
+  public var clickListener: ((MapConductorCore.CircleEvent) -> Swift.Void)?
+  public init(circleManager: MapConductorCore.CircleManager<ActualCircle>, renderer: Renderer, clickListener: ((MapConductorCore.CircleEvent) -> Swift.Void)? = nil)
+  public func dispatchClick(event: MapConductorCore.CircleEvent)
+  open func add(data: [MapConductorCore.CircleState]) async
+  open func update(state: MapConductorCore.CircleState) async
+  open func clear() async
+  open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.CircleEntity<ActualCircle>?
+  open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+  open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
+  @objc deinit
+}
+public protocol CircleEntityProtocol {
+  associatedtype ActualCircle
+  var circle: Self.ActualCircle? { get set }
+  var state: MapConductorCore.CircleState { get }
+  var fingerPrint: MapConductorCore.CircleFingerPrint { get }
+}
+final public class CircleEntity<ActualCircle> : MapConductorCore.CircleEntityProtocol {
+  final public var circle: ActualCircle?
+  final public let state: MapConductorCore.CircleState
+  final public let fingerPrint: MapConductorCore.CircleFingerPrint
+  public init(circle: ActualCircle?, state: MapConductorCore.CircleState)
+  @objc deinit
+}
+public protocol CircleManagerProtocol {
+  associatedtype ActualCircle
+  func registerEntity(_ entity: MapConductorCore.CircleEntity<Self.ActualCircle>)
+  func removeEntity(_ id: Swift.String) -> MapConductorCore.CircleEntity<Self.ActualCircle>?
+  func getEntity(_ id: Swift.String) -> MapConductorCore.CircleEntity<Self.ActualCircle>?
+  func hasEntity(_ id: Swift.String) -> Swift.Bool
+  func allEntities() -> [MapConductorCore.CircleEntity<Self.ActualCircle>]
+  func clear()
+  func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.CircleEntity<Self.ActualCircle>?
+}
+final public class CircleManager<ActualCircle> : MapConductorCore.CircleManagerProtocol {
+  public init()
+  final public func registerEntity(_ entity: MapConductorCore.CircleEntity<ActualCircle>)
+  final public func removeEntity(_ id: Swift.String) -> MapConductorCore.CircleEntity<ActualCircle>?
+  final public func getEntity(_ id: Swift.String) -> MapConductorCore.CircleEntity<ActualCircle>?
+  final public func hasEntity(_ id: Swift.String) -> Swift.Bool
+  final public func allEntities() -> [MapConductorCore.CircleEntity<ActualCircle>]
+  final public func clear()
+  final public func destroy()
+  final public var isDestroyed: Swift.Bool {
+    get
+  }
+  final public func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.CircleEntity<ActualCircle>?
+  @objc deinit
+}
+public protocol CircleOverlayRendererProtocol {
+  associatedtype ActualCircle
+  func onAdd(data: [MapConductorCore.CircleOverlayAddParams]) async -> [Self.ActualCircle?]
+  func onChange(data: [MapConductorCore.CircleOverlayChangeParams<Self.ActualCircle>]) async -> [Self.ActualCircle?]
+  func onRemove(data: [MapConductorCore.CircleEntity<Self.ActualCircle>]) async
+  func onPostProcess() async
+}
+open class AbstractCircleOverlayRenderer<ActualCircle> : MapConductorCore.CircleOverlayRendererProtocol {
+  public init()
+  open func onPostProcess() async
+  open func createCircle(state: MapConductorCore.CircleState) async -> ActualCircle?
+  open func updateCircleProperties(circle: ActualCircle, current: MapConductorCore.CircleEntity<ActualCircle>, prev: MapConductorCore.CircleEntity<ActualCircle>) async -> ActualCircle?
+  open func removeCircle(entity: MapConductorCore.CircleEntity<ActualCircle>) async
+  public func onAdd(data: [MapConductorCore.CircleOverlayAddParams]) async -> [ActualCircle?]
+  public func onChange(data: [MapConductorCore.CircleOverlayChangeParams<ActualCircle>]) async -> [ActualCircle?]
+  public func onRemove(data: [MapConductorCore.CircleEntity<ActualCircle>]) async
+  @objc deinit
+}
+public struct CircleOverlayAddParams {
+  public let state: MapConductorCore.CircleState
+  public init(state: MapConductorCore.CircleState)
+}
+public struct CircleOverlayChangeParams<ActualCircle> {
+  public let current: MapConductorCore.CircleEntity<ActualCircle>
+  public let prev: MapConductorCore.CircleEntity<ActualCircle>
+  public init(current: MapConductorCore.CircleEntity<ActualCircle>, prev: MapConductorCore.CircleEntity<ActualCircle>)
+}
+public struct CircleFingerPrint : Swift.Equatable, Swift.Hashable {
+  public let id: Swift.Int
+  public let center: Swift.Int
+  public let radiusMeters: Swift.Int
+  public let clickable: Swift.Int
+  public let geodesic: Swift.Int
+  public let strokeColor: Swift.Int
+  public let strokeWidth: Swift.Int
+  public let fillColor: Swift.Int
+  public let zIndex: Swift.Int
+  public let extra: Swift.Int
+  public static func == (a: MapConductorCore.CircleFingerPrint, b: MapConductorCore.CircleFingerPrint) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct CircleEvent {
+  public let state: MapConductorCore.CircleState
+  public let clicked: any MapConductorCore.GeoPointProtocol
+  public init(state: MapConductorCore.CircleState, clicked: any MapConductorCore.GeoPointProtocol)
+}
+public typealias OnCircleEventHandler = (MapConductorCore.CircleEvent) -> Swift.Void
+final public class CircleState : Combine.ObservableObject, Swift.Identifiable, Swift.Equatable, Swift.Hashable {
+  final public let id: Swift.String
+  @Combine.Published<any MapConductorCore.GeoPointProtocol> @_projectedValueProperty($center) final public var center: any MapConductorCore.GeoPointProtocol {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $center: Combine.Published<any MapConductorCore.GeoPointProtocol>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Double> @_projectedValueProperty($radiusMeters) final public var radiusMeters: Swift.Double {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $radiusMeters: Combine.Published<Swift.Double>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Bool> @_projectedValueProperty($geodesic) final public var geodesic: Swift.Bool {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $geodesic: Combine.Published<Swift.Bool>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Bool> @_projectedValueProperty($clickable) final public var clickable: Swift.Bool {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $clickable: Combine.Published<Swift.Bool>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<UIKit.UIColor> @_projectedValueProperty($strokeColor) final public var strokeColor: UIKit.UIColor {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $strokeColor: Combine.Published<UIKit.UIColor>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Double> @_projectedValueProperty($strokeWidth) final public var strokeWidth: Swift.Double {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $strokeWidth: Combine.Published<Swift.Double>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<UIKit.UIColor> @_projectedValueProperty($fillColor) final public var fillColor: UIKit.UIColor {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $fillColor: Combine.Published<UIKit.UIColor>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Any?> @_projectedValueProperty($extra) final public var extra: Any? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $extra: Combine.Published<Any?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Int?> @_projectedValueProperty($zIndex) final public var zIndex: Swift.Int? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $zIndex: Combine.Published<Swift.Int?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.OnCircleEventHandler?> @_projectedValueProperty($onClick) final public var onClick: MapConductorCore.OnCircleEventHandler? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $onClick: Combine.Published<MapConductorCore.OnCircleEventHandler?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  public init(center: any MapConductorCore.GeoPointProtocol, radiusMeters: Swift.Double, geodesic: Swift.Bool = true, clickable: Swift.Bool = true, strokeColor: UIKit.UIColor = .red, strokeWidth: Swift.Double = 1.0, fillColor: UIKit.UIColor = UIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.5), id: Swift.String? = nil, zIndex: Swift.Int? = nil, extra: Any? = nil, onClick: MapConductorCore.OnCircleEventHandler? = nil)
+  final public func copy(center: (any MapConductorCore.GeoPointProtocol)? = nil, radiusMeters: Swift.Double? = nil, geodesic: Swift.Bool? = nil, clickable: Swift.Bool? = nil, strokeColor: UIKit.UIColor? = nil, strokeWidth: Swift.Double? = nil, fillColor: UIKit.UIColor? = nil, id: Swift.String? = nil, zIndex: Swift.Int? = nil, extra: Any? = nil, onClick: MapConductorCore.OnCircleEventHandler? = nil) -> MapConductorCore.CircleState
+  final public func fingerPrint() -> MapConductorCore.CircleFingerPrint
+  final public func asFlow() -> Combine.AnyPublisher<MapConductorCore.CircleFingerPrint, Swift.Never>
+  public static func == (lhs: MapConductorCore.CircleState, rhs: MapConductorCore.CircleState) -> Swift.Bool
+  final public func hash(into hasher: inout Swift.Hasher)
+  final public func hashCode() -> Swift.Int
+  public typealias ID = Swift.String
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+  final public var hashValue: Swift.Int {
+    get
+  }
+}
+public enum MapDriverConformance {
+  public struct ViolationError : Swift.Error, Swift.CustomStringConvertible {
+    public let description: Swift.String
+    public init(_ description: Swift.String)
+  }
+  public static func checkZoomConverter(_ converter: MapConductorCore.WebMercatorZoomAltitudeConverter, latitudes: [Swift.Double] = [0.0, 35.0, 60.0, 85.0, -85.0], zooms: [Swift.Double] = [0.0, 1.0, 5.5, 10.0, 15.25, 22.0]) throws
+  public static func checkOverlaySlots(_ controllers: [any MapConductorCore.AnyOverlayController], expected: Swift.Set<MapConductorCore.OverlayKind> = Set(OverlayKind.allCases)) throws
+  public static func checkCascadeOrder(_ order: [MapConductorCore.OverlayKind] = OverlayHitResolver.canonicalOrder) throws
+  public static func checkCapabilityDeclarations(_ registry: any MapConductorCore.MapServiceRegistry) throws
+  public static func checkProjectionRoundTrip(toScreen: (any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?, fromScreen: (CoreFoundation.CGPoint) -> (any MapConductorCore.GeoPointProtocol)?, samples: [any MapConductorCore.GeoPointProtocol]) throws
+}
+public typealias OnMapInitializedHandler = (MapConductorCore.InitState) -> Swift.Void
+public protocol MapViewControllerProtocol {
+  var holder: MapConductorCore.AnyMapViewHolder { get }
+  var coroutine: MapConductorCore.CoroutineScope { get }
+  func clearOverlays() async
+  func setCameraMoveStartListener(listener: MapConductorCore.OnCameraMoveHandler?)
+  func setCameraMoveListener(listener: MapConductorCore.OnCameraMoveHandler?)
+  func setCameraMoveEndListener(listener: MapConductorCore.OnCameraMoveHandler?)
+  func setMapClickListener(listener: MapConductorCore.OnMapEventHandler?)
+  func setMapLongClickListener(listener: MapConductorCore.OnMapEventHandler?)
+  func setMapInitializedListener(listener: MapConductorCore.OnMapInitializedHandler?)
+  func moveCamera(position: MapConductorCore.MapCameraPosition)
+  func animateCamera(position: MapConductorCore.MapCameraPosition, duration: MapConductorCore.Long)
+  func fitBounds(bounds: MapConductorCore.GeoRectBounds, padding: Swift.Int)
+  var overlayControllers: MapConductorCore.OverlayControllerRegistry { get }
+  func destroy()
+  func applyUISettings(_ settings: MapConductorCore.MapUISettings)
+  func setCameraRestriction(_ restriction: MapConductorCore.CameraRestriction?)
+}
+extension MapConductorCore.MapViewControllerProtocol {
+  public func setCameraRestriction(_ restriction: MapConductorCore.CameraRestriction?)
+  public func registerOverlayController(_ controller: any MapConductorCore.AnyOverlayController)
+  public func unregisterOverlayController(_ controller: any MapConductorCore.AnyOverlayController)
+  public func destroy()
+  public func applyUISettings(_ settings: MapConductorCore.MapUISettings)
+}
+public protocol OverlayControllerProtocol : MapConductorCore.AnyOverlayController {
+  associatedtype StateType
+  associatedtype EntityType
+  associatedtype EventType
+  var zIndex: Swift.Int { get }
+  func add(data: [Self.StateType]) async
+  func update(state: Self.StateType) async
+  func clear() async
+  var clickListener: ((Self.EventType) -> Swift.Void)? { get set }
+  func find(position: any MapConductorCore.GeoPointProtocol) -> Self.EntityType?
+  func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+  func destroy()
+}
+public protocol AnyOverlayController : AnyObject {
+  var zIndex: Swift.Int { get }
+  func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+  func destroy()
+}
+final public class OverlayControllerRegistry {
+  public init()
+  final public func register(_ controller: any MapConductorCore.AnyOverlayController)
+  final public func unregister(_ controller: any MapConductorCore.AnyOverlayController)
+  final public func all() -> [any MapConductorCore.AnyOverlayController]
+  final public func dispatchCameraChanged(_ mapCameraPosition: MapConductorCore.MapCameraPosition)
+  final public func destroyAll()
+  @objc deinit
+}
+public enum OverlayControllerRegistryKey : MapConductorCore.MapServiceKey {
+  public typealias Value = MapConductorCore.OverlayControllerRegistry
+}
+final public class OverlayHit {
+  final public let kind: MapConductorCore.OverlayKind
+  final public let clicked: any MapConductorCore.GeoPointProtocol
+  public init(kind: MapConductorCore.OverlayKind, clicked: any MapConductorCore.GeoPointProtocol, deliver: @escaping () -> Swift.Void)
+  final public func dispatch()
+  @objc deinit
+}
+public enum OverlayHitResolver {
+  public static let canonicalOrder: [MapConductorCore.OverlayKind]
+  public static func firstHit<T>(_ controllers: [any MapConductorCore.AnyOverlayController], order: [MapConductorCore.OverlayKind] = canonicalOrder, probe: (any MapConductorCore.SlottedOverlayController) -> T?) -> T?
+  public static func resolve(_ controllers: [any MapConductorCore.AnyOverlayController], position: any MapConductorCore.GeoPointProtocol, order: [MapConductorCore.OverlayKind] = canonicalOrder) -> MapConductorCore.OverlayHit?
+}
+extension MapConductorCore.OverlayControllerRegistry {
+  @discardableResult
+  final public func dispatchOverlayTap(position: any MapConductorCore.GeoPointProtocol, order: [MapConductorCore.OverlayKind] = OverlayHitResolver.canonicalOrder) -> Swift.Bool
+}
+extension MapConductorCore.MapViewControllerProtocol {
+  @discardableResult
+  public func dispatchOverlayTap(position: any MapConductorCore.GeoPointProtocol) -> Swift.Bool
+}
+public enum OverlayKind : Swift.String, Swift.CaseIterable, Swift.Sendable {
+  case marker
+  case circle
+  case groundImage
+  case polyline
+  case polygon
+  case rasterLayer
+  public init?(rawValue: Swift.String)
+  public typealias AllCases = [MapConductorCore.OverlayKind]
+  public typealias RawValue = Swift.String
+  nonisolated public static var allCases: [MapConductorCore.OverlayKind] {
+    get
+  }
+  public var rawValue: Swift.String {
+    get
+  }
+}
+public protocol SlottedOverlayController : MapConductorCore.AnyOverlayController {
+  var kind: MapConductorCore.OverlayKind { get }
+  func hasId(_ id: Swift.String) -> Swift.Bool
+  func resolveTap(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
+}
+extension MapConductorCore.OverlayControllerRegistry {
+  final public func slotted() -> [any MapConductorCore.SlottedOverlayController]
+  final public func primary(_ kind: MapConductorCore.OverlayKind) -> (any MapConductorCore.SlottedOverlayController)?
+  final public func controllers(of kind: MapConductorCore.OverlayKind) -> [any MapConductorCore.SlottedOverlayController]
+  final public func hasOverlay(_ kind: MapConductorCore.OverlayKind, id: Swift.String) -> Swift.Bool
+}
+public enum MCLog {
+  public static let isEnabled: Swift.Bool
+  public static func marker(_ message: Swift.String)
+  public static func map(_ message: Swift.String)
+}
+public protocol GeoPointProtocol {
+  func wrap() -> any MapConductorCore.GeoPointProtocol
+  var latitude: Swift.Double { get }
+  var longitude: Swift.Double { get }
+  var altitude: Swift.Double? { get }
+}
+public struct GeoPoint : MapConductorCore.GeoPointProtocol, Swift.Equatable, Swift.Hashable {
+  public let latitude: Swift.Double
+  public let longitude: Swift.Double
+  public var altitude: Swift.Double? {
+    get
+  }
+  public init(latitude: Swift.Double, longitude: Swift.Double, altitude: Swift.Double = 0.0)
+  public func toUrlValue(precision: Swift.Int = 6) -> Swift.String
+  public static func == (lhs: MapConductorCore.GeoPoint, rhs: MapConductorCore.GeoPoint) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public func wrap() -> any MapConductorCore.GeoPointProtocol
+  public static func fromLatLong(latitude: Swift.Double, longitude: Swift.Double) -> MapConductorCore.GeoPoint
+  public static func fromLongLat(longitude: Swift.Double, latitude: Swift.Double) -> MapConductorCore.GeoPoint
+  public static func from(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.GeoPoint
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+extension MapConductorCore.GeoPointProtocol {
+  public func normalize() -> MapConductorCore.GeoPoint
+  public func isValid() -> Swift.Bool
+}
+final public class GeoRectBounds : Swift.Equatable, Swift.Hashable {
+  public init(southWest: MapConductorCore.GeoPoint? = nil, northEast: MapConductorCore.GeoPoint? = nil)
+  final public var isEmpty: Swift.Bool {
+    get
+  }
+  final public var southWest: MapConductorCore.GeoPoint? {
+    get
+  }
+  final public var northEast: MapConductorCore.GeoPoint? {
+    get
+  }
+  final public func extend(point: any MapConductorCore.GeoPointProtocol)
+  final public func contains(point: any MapConductorCore.GeoPointProtocol) -> Swift.Bool
+  final public var center: MapConductorCore.GeoPoint? {
+    get
+  }
+  final public func union(other: MapConductorCore.GeoRectBounds) -> MapConductorCore.GeoRectBounds
+  final public func toSpan() -> MapConductorCore.GeoPoint?
+  final public func toUrlValue(precision: Swift.Int = 6) -> Swift.String
+  final public func expandedByDegrees(latPad: Swift.Double, lonPad: Swift.Double) -> MapConductorCore.GeoRectBounds
+  final public func intersects(other: MapConductorCore.GeoRectBounds) -> Swift.Bool
+  final public func equals(other: MapConductorCore.GeoRectBounds) -> Swift.Bool
+  final public func toString() -> Swift.String
+  public static func == (lhs: MapConductorCore.GeoRectBounds, rhs: MapConductorCore.GeoRectBounds) -> Swift.Bool
+  final public func hash(into hasher: inout Swift.Hasher)
+  @objc deinit
+  final public var hashValue: Swift.Int {
+    get
+  }
+}
+public enum Earth {
+  public static let radiusMeters: Swift.Double
+  public static let circumferenceMeters: Swift.Double
+  public static let flattening: Swift.Double
+  public static let semiMinorAxisMeters: Swift.Double
+  public static let eccentricitySquared: Swift.Double
+}
+final public class HexCellRegistry<ActualMarker> {
+  public init(geocell: any MapConductorCore.HexGeocellProtocol, zoom: Swift.Double)
+  final public func getCell(entity: MapConductorCore.MarkerEntity<ActualMarker>) -> MapConductorCore.HexCell
+  @discardableResult
+  final public func setPoint(entity: MapConductorCore.MarkerEntity<ActualMarker>) -> MapConductorCore.HexCell
+  final public func contains(hexId: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func removePoint(entity: MapConductorCore.MarkerEntity<ActualMarker>) -> Swift.Bool
+  final public func clear()
+  final public func findNearest(point: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.HexCell?
+  final public func findNearestWithDistance(point: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.HexCellWithDistance?
+  final public func findNearestKWithDistance(point: any MapConductorCore.GeoPointProtocol, k: Swift.Int) -> [MapConductorCore.HexCellWithDistance]
+  final public func findWithinRadiusWithDistance(point: any MapConductorCore.GeoPointProtocol, radius: Swift.Double) -> [MapConductorCore.HexCellWithDistance]
+  final public func all() -> [MapConductorCore.HexCell]
+  final public func getEntryIDsByHexCell(_ hexCell: MapConductorCore.HexCell) -> Swift.Set<Swift.String>?
+  final public func metersPerPixel(position: any MapConductorCore.GeoPointProtocol, zoom: Swift.Double, pixels: Swift.Double, tileSize: Swift.Int = 256) -> Swift.Double
+  final public func findWithinPixelRadius(position: any MapConductorCore.GeoPointProtocol, zoom: Swift.Double, pixels: Swift.Double, tileSize: Swift.Int = 256) -> [MapConductorCore.HexCellWithDistance]
+  final public func findByIdPrefix(_ prefix: Swift.String) -> [MapConductorCore.HexCell]
+  final public func getStats() -> MapConductorCore.RegistryStats
+  @objc deinit
+}
+public struct RegistryStats : Swift.Sendable, Swift.Hashable {
+  public let totalCells: Swift.Int
+  public let totalEntries: Swift.Int
+  public let kdTreeBuilt: Swift.Bool
+  public let needsRebuild: Swift.Bool
+  public static func == (a: MapConductorCore.RegistryStats, b: MapConductorCore.RegistryStats) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct HexCoord : Swift.Sendable, Swift.Hashable, Swift.CustomStringConvertible {
+  public let q: Swift.Int
+  public let r: Swift.Int
+  public let depth: Swift.Int
+  public init(q: Swift.Int, r: Swift.Int, depth: Swift.Int = 0)
+  public var description: Swift.String {
+    get
+  }
+  public var s: Swift.Int {
+    get
+  }
+  public func neighbors() -> [MapConductorCore.HexCoord]
+  public static func == (a: MapConductorCore.HexCoord, b: MapConductorCore.HexCoord) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public enum Direction6 : Swift.CaseIterable, Swift.Sendable {
+  case right
+  case rightUp
+  case leftUp
+  case left
+  case leftDown
+  case rightDown
+  public static func == (a: MapConductorCore.Direction6, b: MapConductorCore.Direction6) -> Swift.Bool
+  public typealias AllCases = [MapConductorCore.Direction6]
+  nonisolated public static var allCases: [MapConductorCore.Direction6] {
+    get
+  }
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct HexCell : Swift.Sendable, Swift.Hashable {
+  public let coord: MapConductorCore.HexCoord
+  public let centerLatLng: MapConductorCore.GeoPoint
+  public let centerXY: CoreFoundation.CGPoint
+  public let id: Swift.String
+  public init(coord: MapConductorCore.HexCoord, centerLatLng: MapConductorCore.GeoPoint, centerXY: CoreFoundation.CGPoint, id: Swift.String)
+  public func idPrefix(levels: Swift.Int) -> Swift.String
+  public static func == (lhs: MapConductorCore.HexCell, rhs: MapConductorCore.HexCell) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct HexCellWithDistance : Swift.Sendable, Swift.Hashable {
+  public let cell: MapConductorCore.HexCell
+  public let distanceMeters: Swift.Double
+  public static func == (a: MapConductorCore.HexCellWithDistance, b: MapConductorCore.HexCellWithDistance) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct IdentifiedHexCell : Swift.Sendable, Swift.Hashable {
+  public let id: Swift.String
+  public let cell: MapConductorCore.HexCell
+  public static func == (a: MapConductorCore.IdentifiedHexCell, b: MapConductorCore.IdentifiedHexCell) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public protocol HexGeocellProtocol : Swift.Sendable {
+  var projection: any MapConductorCore.ProjectionProtocol { get }
+  var baseHexSideLength: Swift.Int { get }
+  func latLngToHexCoord(position: any MapConductorCore.GeoPointProtocol, zoom: Swift.Double) -> MapConductorCore.HexCoord
+  func latLngToHexCell(position: any MapConductorCore.GeoPointProtocol, zoom: Swift.Double) -> MapConductorCore.HexCell
+  func hexToLatLngCenter(coord: MapConductorCore.HexCoord, latHint: Swift.Double, zoom: Swift.Double) -> MapConductorCore.GeoPoint
+  func hexToCellId(coord: MapConductorCore.HexCoord, zoom: Swift.Double) -> Swift.String
+  func hexToPolygonLatLng(coord: MapConductorCore.HexCoord, latHint: Swift.Double, zoom: Swift.Double) -> [MapConductorCore.GeoPoint]
+  func enclosingCell(of points: [MapConductorCore.MarkerState], zoom: Swift.Double) -> MapConductorCore.HexCell
+  func hexCellsForPointsWithId(points: [MapConductorCore.MarkerState], zoom: Swift.Double) -> Swift.Set<MapConductorCore.IdentifiedHexCell>
+  func hexDistance(a: MapConductorCore.HexCoord, b: MapConductorCore.HexCoord) -> Swift.Int
+  func hexRange(center: MapConductorCore.HexCoord, radius: Swift.Int) -> [MapConductorCore.HexCoord]
+}
+public struct HexGeocell : MapConductorCore.HexGeocellProtocol {
+  public let projection: any MapConductorCore.ProjectionProtocol
+  public let baseHexSideLength: Swift.Int
+  public init(projection: any MapConductorCore.ProjectionProtocol, baseHexSideLength: Swift.Int = 1_000)
+  public func latLngToHexCoord(position: any MapConductorCore.GeoPointProtocol, zoom: Swift.Double) -> MapConductorCore.HexCoord
+  public func latLngToHexCell(position: any MapConductorCore.GeoPointProtocol, zoom: Swift.Double) -> MapConductorCore.HexCell
+  public func hexToLatLngCenter(coord: MapConductorCore.HexCoord, latHint: Swift.Double, zoom: Swift.Double) -> MapConductorCore.GeoPoint
+  public func hexToCellId(coord: MapConductorCore.HexCoord, zoom: Swift.Double) -> Swift.String
+  public func hexToPolygonLatLng(coord: MapConductorCore.HexCoord, latHint: Swift.Double, zoom: Swift.Double) -> [MapConductorCore.GeoPoint]
+  public func enclosingCell(of points: [MapConductorCore.MarkerState], zoom: Swift.Double) -> MapConductorCore.HexCell
+  public func hexCellsForPointsWithId(points: [MapConductorCore.MarkerState], zoom: Swift.Double) -> Swift.Set<MapConductorCore.IdentifiedHexCell>
+  public func hexDistance(a: MapConductorCore.HexCoord, b: MapConductorCore.HexCoord) -> Swift.Int
+  public func hexRange(center: MapConductorCore.HexCoord, radius: Swift.Int) -> [MapConductorCore.HexCoord]
+  public static func defaultGeocell() -> any MapConductorCore.HexGeocellProtocol
+}
+final public class KDTree : Swift.Sendable {
+  public init(points: [MapConductorCore.HexCell])
+  final public func nearest(query: CoreFoundation.CGPoint) -> MapConductorCore.HexCell?
+  final public func nearestWithDistance(query: CoreFoundation.CGPoint) -> MapConductorCore.HexCellWithDistance?
+  final public func nearestKWithDistance(query: CoreFoundation.CGPoint, k: Swift.Int) -> [MapConductorCore.HexCellWithDistance]
+  final public func withinRadiusWithDistance(query: CoreFoundation.CGPoint, radius: Swift.Double) -> [MapConductorCore.HexCellWithDistance]
+  @objc deinit
+}
+public protocol ProjectionProtocol : Swift.Sendable {
+  func project(_ point: any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint
+  func unproject(_ point: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint
+}
+public struct WebMercatorProjection : MapConductorCore.ProjectionProtocol {
+  public init()
+  public func project(_ point: any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint
+  public func unproject(_ point: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint
+}
+public enum WebMercatorScreenProjection {
+  public static func toScreenOffset(_ position: any MapConductorCore.GeoPointProtocol, camera: MapConductorCore.MapCameraPosition, size: CoreFoundation.CGSize) -> CoreFoundation.CGPoint?
+  public static func fromScreenOffset(_ offset: CoreFoundation.CGPoint, camera: MapConductorCore.MapCameraPosition, size: CoreFoundation.CGSize) -> MapConductorCore.GeoPoint?
+}
+public let defaultCircleSegments: Swift.Int
+public func circleToRing(center: any MapConductorCore.GeoPointProtocol, radiusMeters: Swift.Double, geodesic: Swift.Bool, segments: Swift.Int = defaultCircleSegments) -> [any MapConductorCore.GeoPointProtocol]
+public func closeRing(_ ring: [any MapConductorCore.GeoPointProtocol]) -> [any MapConductorCore.GeoPointProtocol]
+public enum OverlayGeoJson {
+  public static func multiLineStringFeature(_ segments: [[any MapConductorCore.GeoPointProtocol]]) -> Swift.String?
+  public static func polygonFeature(_ rings: MapConductorCore.PolygonRings) -> Swift.String?
+  public static func ringsFeature(_ rings: [[any MapConductorCore.GeoPointProtocol]]) -> Swift.String?
+}
+public struct PolygonRings {
+  public let outerRings: [[any MapConductorCore.GeoPointProtocol]]
+  public let holeRings: [[any MapConductorCore.GeoPointProtocol]]
+  public init(outerRings: [[any MapConductorCore.GeoPointProtocol]], holeRings: [[any MapConductorCore.GeoPointProtocol]])
+}
+public func densifyAndNormalize(_ points: [any MapConductorCore.GeoPointProtocol], geodesic: Swift.Bool, maxSegmentLength: Swift.Double = 10_000.0) -> [any MapConductorCore.GeoPointProtocol]
+public func buildPolylineSegments(_ points: [any MapConductorCore.GeoPointProtocol], geodesic: Swift.Bool) -> [[any MapConductorCore.GeoPointProtocol]]
+public func buildPolygonRings(points: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]], geodesic: Swift.Bool) -> MapConductorCore.PolygonRings
+public func buildUnwrappedPolylinePath(_ points: [any MapConductorCore.GeoPointProtocol], geodesic: Swift.Bool, maxSegmentLength: Swift.Double = 10_000.0) -> [any MapConductorCore.GeoPointProtocol]
+public func buildUnwrappedPolygonRings(points: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]], geodesic: Swift.Bool, maxSegmentLength: Swift.Double = 10_000.0) -> MapConductorCore.PolygonRings
+public func splitRingByMeridian(_ ring: [any MapConductorCore.GeoPointProtocol], geodesic: Swift.Bool) -> [[any MapConductorCore.GeoPointProtocol]]
+open class GroundImageController<ActualGroundImage, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualGroundImage == Renderer.ActualGroundImage, Renderer : MapConductorCore.GroundImageOverlayRendererProtocol {
+  public typealias StateType = MapConductorCore.GroundImageState
+  public typealias EntityType = MapConductorCore.GroundImageEntity<ActualGroundImage>
+  public typealias EventType = MapConductorCore.GroundImageEvent
+  final public let groundImageManager: MapConductorCore.GroundImageManager<ActualGroundImage>
+  open var renderer: Renderer
+  final public let zIndex: Swift.Int
+  public var clickListener: ((MapConductorCore.GroundImageEvent) -> Swift.Void)?
+  public init(groundImageManager: MapConductorCore.GroundImageManager<ActualGroundImage>, renderer: Renderer, clickListener: ((MapConductorCore.GroundImageEvent) -> Swift.Void)? = nil)
+  public func dispatchClick(event: MapConductorCore.GroundImageEvent)
+  open func add(data: [MapConductorCore.GroundImageState]) async
+  open func update(state: MapConductorCore.GroundImageState) async
+  open func clear() async
+  open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.GroundImageEntity<ActualGroundImage>?
+  open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+  open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
+  @objc deinit
+}
+public protocol GroundImageEntityProtocol {
+  associatedtype ActualGroundImage
+  var groundImage: Self.ActualGroundImage? { get set }
+  var state: MapConductorCore.GroundImageState { get }
+  var fingerPrint: MapConductorCore.GroundImageFingerPrint { get }
+}
+final public class GroundImageEntity<ActualGroundImage> : MapConductorCore.GroundImageEntityProtocol {
+  final public var groundImage: ActualGroundImage?
+  final public let state: MapConductorCore.GroundImageState
+  final public let fingerPrint: MapConductorCore.GroundImageFingerPrint
+  public init(groundImage: ActualGroundImage?, state: MapConductorCore.GroundImageState)
+  @objc deinit
+}
+public protocol GroundImageManagerProtocol {
+  associatedtype ActualGroundImage
+  func registerEntity(_ entity: MapConductorCore.GroundImageEntity<Self.ActualGroundImage>)
+  func removeEntity(_ id: Swift.String) -> MapConductorCore.GroundImageEntity<Self.ActualGroundImage>?
+  func getEntity(_ id: Swift.String) -> MapConductorCore.GroundImageEntity<Self.ActualGroundImage>?
+  func hasEntity(_ id: Swift.String) -> Swift.Bool
+  func allEntities() -> [MapConductorCore.GroundImageEntity<Self.ActualGroundImage>]
+  func clear()
+  func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.GroundImageEntity<Self.ActualGroundImage>?
+}
+final public class GroundImageManager<ActualGroundImage> : MapConductorCore.GroundImageManagerProtocol {
+  public init()
+  final public func registerEntity(_ entity: MapConductorCore.GroundImageEntity<ActualGroundImage>)
+  final public func removeEntity(_ id: Swift.String) -> MapConductorCore.GroundImageEntity<ActualGroundImage>?
+  final public func getEntity(_ id: Swift.String) -> MapConductorCore.GroundImageEntity<ActualGroundImage>?
+  final public func hasEntity(_ id: Swift.String) -> Swift.Bool
+  final public func allEntities() -> [MapConductorCore.GroundImageEntity<ActualGroundImage>]
+  final public func clear()
+  final public func destroy()
+  final public var isDestroyed: Swift.Bool {
+    get
+  }
+  final public func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.GroundImageEntity<ActualGroundImage>?
+  @objc deinit
+}
+public protocol GroundImageOverlayRendererProtocol {
+  associatedtype ActualGroundImage
+  func onAdd(data: [MapConductorCore.GroundImageOverlayAddParams]) async -> [Self.ActualGroundImage?]
+  func onChange(data: [MapConductorCore.GroundImageOverlayChangeParams<Self.ActualGroundImage>]) async -> [Self.ActualGroundImage?]
+  func onRemove(data: [MapConductorCore.GroundImageEntity<Self.ActualGroundImage>]) async
+  func onPostProcess() async
+}
+open class AbstractGroundImageOverlayRenderer<ActualGroundImage> : MapConductorCore.GroundImageOverlayRendererProtocol {
+  public init()
+  open func onPostProcess() async
+  open func createGroundImage(state: MapConductorCore.GroundImageState) async -> ActualGroundImage?
+  open func updateGroundImageProperties(groundImage: ActualGroundImage, current: MapConductorCore.GroundImageEntity<ActualGroundImage>, prev: MapConductorCore.GroundImageEntity<ActualGroundImage>) async -> ActualGroundImage?
+  open func removeGroundImage(entity: MapConductorCore.GroundImageEntity<ActualGroundImage>) async
+  public func onAdd(data: [MapConductorCore.GroundImageOverlayAddParams]) async -> [ActualGroundImage?]
+  public func onChange(data: [MapConductorCore.GroundImageOverlayChangeParams<ActualGroundImage>]) async -> [ActualGroundImage?]
+  public func onRemove(data: [MapConductorCore.GroundImageEntity<ActualGroundImage>]) async
+  @objc deinit
+}
+public struct GroundImageOverlayAddParams {
+  public let state: MapConductorCore.GroundImageState
+  public init(state: MapConductorCore.GroundImageState)
+}
+public struct GroundImageOverlayChangeParams<ActualGroundImage> {
+  public let current: MapConductorCore.GroundImageEntity<ActualGroundImage>
+  public let prev: MapConductorCore.GroundImageEntity<ActualGroundImage>
+  public init(current: MapConductorCore.GroundImageEntity<ActualGroundImage>, prev: MapConductorCore.GroundImageEntity<ActualGroundImage>)
+}
+public struct GroundImageFingerPrint : Swift.Equatable, Swift.Hashable {
+  public let id: Swift.Int
+  public let bounds: Swift.Int
+  public let image: Swift.Int
+  public let opacity: Swift.Int
+  public let tileSize: Swift.Int
+  public let extra: Swift.Int
+  public static func == (a: MapConductorCore.GroundImageFingerPrint, b: MapConductorCore.GroundImageFingerPrint) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct GroundImageEvent {
+  public let state: MapConductorCore.GroundImageState
+  public let clicked: (any MapConductorCore.GeoPointProtocol)?
+  public init(state: MapConductorCore.GroundImageState, clicked: (any MapConductorCore.GeoPointProtocol)?)
+}
+public typealias OnGroundImageEventHandler = (MapConductorCore.GroundImageEvent) -> Swift.Void
+final public class GroundImageState : Combine.ObservableObject, Swift.Identifiable, Swift.Equatable, Swift.Hashable {
+  final public let id: Swift.String
+  @Combine.Published<MapConductorCore.GeoRectBounds> @_projectedValueProperty($bounds) final public var bounds: MapConductorCore.GeoRectBounds {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $bounds: Combine.Published<MapConductorCore.GeoRectBounds>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<UIKit.UIImage> @_projectedValueProperty($image) final public var image: UIKit.UIImage {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $image: Combine.Published<UIKit.UIImage>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Double> @_projectedValueProperty($opacity) final public var opacity: Swift.Double {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $opacity: Combine.Published<Swift.Double>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Int> @_projectedValueProperty($tileSize) final public var tileSize: Swift.Int {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $tileSize: Combine.Published<Swift.Int>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Any?> @_projectedValueProperty($extra) final public var extra: Any? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $extra: Combine.Published<Any?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.OnGroundImageEventHandler?> @_projectedValueProperty($onClick) final public var onClick: MapConductorCore.OnGroundImageEventHandler? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $onClick: Combine.Published<MapConductorCore.OnGroundImageEventHandler?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  public init(bounds: MapConductorCore.GeoRectBounds, image: UIKit.UIImage, opacity: Swift.Double = 1.0, tileSize: Swift.Int = 512, id: Swift.String? = nil, extra: Any? = nil, onClick: MapConductorCore.OnGroundImageEventHandler? = nil)
+  final public func copy(bounds: MapConductorCore.GeoRectBounds? = nil, image: UIKit.UIImage? = nil, opacity: Swift.Double? = nil, tileSize: Swift.Int? = nil, id: Swift.String? = nil, extra: Any? = nil, onClick: MapConductorCore.OnGroundImageEventHandler? = nil) -> MapConductorCore.GroundImageState
+  final public func fingerPrint() -> MapConductorCore.GroundImageFingerPrint
+  final public func asFlow() -> Combine.AnyPublisher<MapConductorCore.GroundImageFingerPrint, Swift.Never>
+  public static func == (lhs: MapConductorCore.GroundImageState, rhs: MapConductorCore.GroundImageState) -> Swift.Bool
+  final public func hash(into hasher: inout Swift.Hasher)
+  final public func hashCode() -> Swift.Int
+  public typealias ID = Swift.String
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+  final public var hashValue: Swift.Int {
+    get
+  }
+}
+final public class GroundImageTileProvider : MapConductorCore.TileProvider {
+  public static let defaultTileSize: Swift.Int
+  final public let tileSize: Swift.Int
+  public init(tileSize: Swift.Int = GroundImageTileProvider.defaultTileSize, cacheSizeKb: Swift.Int = 8 * 1024)
+  final public func update(state: MapConductorCore.GroundImageState, opacity: Swift.Double? = nil)
+  final public func renderTile(request: MapConductorCore.TileRequest) -> Foundation.Data?
+  @objc deinit
+}
+@_Concurrency.MainActor @preconcurrency public struct DefaultInfoBubbleView : SwiftUICore.View {
+  @_Concurrency.MainActor @preconcurrency public init(bubbleColor: SwiftUICore.Color = .white, borderColor: SwiftUICore.Color = .black, borderWidth: CoreFoundation.CGFloat = 2.0, contentPadding: CoreFoundation.CGFloat = 8.0, cornerRadius: CoreFoundation.CGFloat = 4.0, tailSize: CoreFoundation.CGFloat = 8.0, content: SwiftUICore.AnyView)
+  @_Concurrency.MainActor @preconcurrency public var body: some SwiftUICore.View {
+    get
+  }
+  public typealias Body = @_opaqueReturnTypeOf("$s16MapConductorCore21DefaultInfoBubbleViewV4bodyQrvp", 0) __
+}
+public struct MarkerIconMetrics {
+  public let size: CoreFoundation.CGSize
+  public let anchor: CoreFoundation.CGPoint
+  public let infoAnchor: CoreFoundation.CGPoint
+  public init(size: CoreFoundation.CGSize, anchor: CoreFoundation.CGPoint, infoAnchor: CoreFoundation.CGPoint)
+}
+@_Concurrency.MainActor final public class InfoBubbleOverlayCoordinator {
+  public typealias Projection = (any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?
+  public typealias MarkerStateResolver = (_ markerId: Swift.String, _ bubbleMarker: MapConductorCore.MarkerState) -> MapConductorCore.MarkerState
+  public typealias IconMetricsProvider = (_ markerState: MapConductorCore.MarkerState) -> MapConductorCore.MarkerIconMetrics
+  @_Concurrency.MainActor public init(container: UIKit.UIView, project: @escaping MapConductorCore.InfoBubbleOverlayCoordinator.Projection, projectionGate: @escaping () -> Swift.Bool = { true }, resolveMarkerStateForIcon: @escaping MapConductorCore.InfoBubbleOverlayCoordinator.MarkerStateResolver = { _, bubbleMarker in bubbleMarker }, iconMetrics: @escaping MapConductorCore.InfoBubbleOverlayCoordinator.IconMetricsProvider)
+  @_Concurrency.MainActor final public func syncInfoBubbles(_ bubbles: [MapConductorCore.InfoBubble])
+  @_Concurrency.MainActor final public func removeInfoBubbleView(for id: Swift.String)
+  @_Concurrency.MainActor final public func updateAllLayouts()
+  @_Concurrency.MainActor final public func updateInfoBubblePosition(for id: Swift.String)
+  @_Concurrency.MainActor final public func updateInfoBubblePosition(for id: Swift.String, screenPoint: CoreFoundation.CGPoint)
+  @_Concurrency.MainActor final public func unbind()
+  @objc deinit
+}
+@objc @_inheritsConvenienceInitializers @_Concurrency.MainActor @preconcurrency final public class PassthroughContainerView : UIKit.UIView {
+  @_Concurrency.MainActor @preconcurrency final public var onLayout: (() -> Swift.Void)?
+  @_Concurrency.MainActor @preconcurrency @objc override final public func layoutSubviews()
+  @_Concurrency.MainActor @preconcurrency @objc override final public func hitTest(_ point: CoreFoundation.CGPoint, with event: UIKit.UIEvent?) -> UIKit.UIView?
+  @_Concurrency.MainActor @preconcurrency @objc override dynamic public init(frame: CoreFoundation.CGRect)
+  @_Concurrency.MainActor @preconcurrency @objc required dynamic public init?(coder: Foundation.NSCoder)
+  @objc deinit
+}
+public struct AttributionRule : Swift.Hashable {
+  public let attribution: Swift.String
+  public let minZoom: Swift.Int?
+  public let maxZoom: Swift.Int?
+  public let bounds: MapConductorCore.GeoRectBounds?
+  public init(attribution: Swift.String, minZoom: Swift.Int? = nil, maxZoom: Swift.Int? = nil, bounds: MapConductorCore.GeoRectBounds? = nil)
+  public static func == (a: MapConductorCore.AttributionRule, b: MapConductorCore.AttributionRule) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public func resolveAttributionRules(_ rules: [MapConductorCore.AttributionRule], camera: any MapConductorCore.MapCameraPositionProtocol) -> [Swift.String]
+public func resolveMapAttributions(designRules: [MapConductorCore.AttributionRule], rasterLayers: [MapConductorCore.RasterLayer], camera: any MapConductorCore.MapCameraPositionProtocol) -> [Swift.String]
+public struct CameraRestriction : Swift.Equatable {
+  public let bounds: MapConductorCore.GeoRectBounds?
+  public let minZoom: Swift.Double?
+  public let maxZoom: Swift.Double?
+  public init(bounds: MapConductorCore.GeoRectBounds? = nil, minZoom: Swift.Double? = nil, maxZoom: Swift.Double? = nil)
+  public var isEmpty: Swift.Bool {
+    get
+  }
+  public static let None: MapConductorCore.CameraRestriction
+  public static func == (lhs: MapConductorCore.CameraRestriction, rhs: MapConductorCore.CameraRestriction) -> Swift.Bool
+}
+final public class CameraRestrictionClamp {
+  public static let zoomEps: Swift.Double
+  public static let coordEps: Swift.Double
+  public init()
+  final public func set(_ restriction: MapConductorCore.CameraRestriction?)
+  final public var current: MapConductorCore.CameraRestriction? {
+    get
+  }
+  final public var hasRestriction: Swift.Bool {
+    get
+  }
+  final public func correction(for current: MapConductorCore.MapCameraPosition) -> MapConductorCore.MapCameraPosition?
+  @objc deinit
+}
+@_Concurrency.MainActor @preconcurrency public struct MapAttributionOverlay : SwiftUICore.View {
+  @_Concurrency.MainActor @preconcurrency public init(designRules: [MapConductorCore.AttributionRule], rasterLayers: [MapConductorCore.RasterLayer], camera: any MapConductorCore.MapCameraPositionProtocol)
+  @_Concurrency.MainActor @preconcurrency public var body: some SwiftUICore.View {
+    get
+  }
+  public typealias Body = @_opaqueReturnTypeOf("$s16MapConductorCore0A18AttributionOverlayV4bodyQrvp", 0) __
+}
+public struct VisibleRegion : Swift.Equatable, Swift.Hashable {
+  public let bounds: MapConductorCore.GeoRectBounds
+  public let nearLeft: MapConductorCore.GeoPoint?
+  public let nearRight: MapConductorCore.GeoPoint?
+  public let farLeft: MapConductorCore.GeoPoint?
+  public let farRight: MapConductorCore.GeoPoint?
+  public init(bounds: MapConductorCore.GeoRectBounds, nearLeft: MapConductorCore.GeoPoint? = nil, nearRight: MapConductorCore.GeoPoint? = nil, farLeft: MapConductorCore.GeoPoint? = nil, farRight: MapConductorCore.GeoPoint? = nil)
+  public static func == (lhs: MapConductorCore.VisibleRegion, rhs: MapConductorCore.VisibleRegion) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public protocol MapCameraPositionProtocol {
+  var position: any MapConductorCore.GeoPointProtocol { get }
+  var zoom: Swift.Double { get }
+  var bearing: Swift.Double { get }
+  var tilt: Swift.Double { get }
+  var paddings: (any MapConductorCore.MapPaddingsProtocol)? { get }
+  var visibleRegion: MapConductorCore.VisibleRegion? { get }
+}
+final public class MapCameraPosition : MapConductorCore.MapCameraPositionProtocol {
+  final public var position: any MapConductorCore.GeoPointProtocol {
+    get
+  }
+  final public let zoom: Swift.Double
+  final public let bearing: Swift.Double
+  final public let tilt: Swift.Double
+  final public let paddings: (any MapConductorCore.MapPaddingsProtocol)?
+  final public let visibleRegion: MapConductorCore.VisibleRegion?
+  public init(position: any MapConductorCore.GeoPointProtocol, zoom: Swift.Double = 0.0, bearing: Swift.Double = 0.0, tilt: Swift.Double = 0.0, paddings: (any MapConductorCore.MapPaddingsProtocol)? = MapPaddings.Zeros, visibleRegion: MapConductorCore.VisibleRegion? = nil)
+  final public func equals(other: any MapConductorCore.MapCameraPositionProtocol) -> Swift.Bool
+  final public func copy(position: (any MapConductorCore.GeoPointProtocol)? = nil, zoom: Swift.Double? = nil, bearing: Swift.Double? = nil, tilt: Swift.Double? = nil, paddings: (any MapConductorCore.MapPaddingsProtocol)? = nil, visibleRegion: MapConductorCore.VisibleRegion? = nil) -> MapConductorCore.MapCameraPosition
+  final public func hashCode() -> Swift.Int
+  public static let Default: MapConductorCore.MapCameraPosition
+  @objc deinit
+}
+public enum MapCapability : Swift.String, Swift.CaseIterable, Swift.Sendable {
+  case marker
+  case polyline
+  case polygon
+  case circle
+  case groundImage
+  case rasterLayer
+  case polygonHoles
+  case clickPassthrough
+  case markerDrag
+  case cameraTilt
+  case cameraRotate
+  case cameraRestriction
+  case screenProjectionSync
+  case gestureScroll
+  case gestureZoom
+  case gestureRotate
+  case gestureTilt
+  public var id: Swift.String {
+    get
+  }
+  public static func fromId(_ id: Swift.String) -> MapConductorCore.MapCapability?
+  public init?(rawValue: Swift.String)
+  public typealias AllCases = [MapConductorCore.MapCapability]
+  public typealias RawValue = Swift.String
+  nonisolated public static var allCases: [MapConductorCore.MapCapability] {
+    get
+  }
+  public var rawValue: Swift.String {
+    get
+  }
+}
+extension MapConductorCore.MapGesture {
+  public var capability: MapConductorCore.MapCapability {
+    get
+  }
+}
+public enum MapCapabilityStatus : Swift.Equatable, Swift.Sendable {
+  case supported
+  case degraded(Swift.String)
+  case approximated(Swift.String)
+  case unsupported(Swift.String)
+  case unknown
+  public var reason: Swift.String? {
+    get
+  }
+  public var isFullySupported: Swift.Bool {
+    get
+  }
+  public var isUsable: Swift.Bool {
+    get
+  }
+  public var isKnownUnsupported: Swift.Bool {
+    get
+  }
+  public static func == (a: MapConductorCore.MapCapabilityStatus, b: MapConductorCore.MapCapabilityStatus) -> Swift.Bool
+}
+public protocol MapDesignTypeProtocol {
+  associatedtype Identifier
+  var id: Self.Identifier { get }
+  var attributionRules: [MapConductorCore.AttributionRule] { get }
+  func getValue() -> Self.Identifier
+}
+extension MapConductorCore.MapDesignTypeProtocol {
+  public var attributionRules: [MapConductorCore.AttributionRule] {
+    get
+  }
+}
+public enum MapDiagnostics {
+  public typealias Sink = @Sendable (Swift.String) -> Swift.Void
+  public static var sink: MapConductorCore.MapDiagnostics.Sink {
+    get
+    set
+  }
+  @discardableResult
+  public static func report(capability: MapConductorCore.MapCapability, level: MapConductorCore.MapDiagnosticLevel, provider: Swift.String, reason: Swift.String, subject: Swift.String? = nil) -> Swift.Bool
+  @discardableResult
+  public static func reportIfRequested(_ requested: Swift.Bool, capability: MapConductorCore.MapCapability, level: MapConductorCore.MapDiagnosticLevel, provider: Swift.String, reason: Swift.String, subject: Swift.String? = nil) -> Swift.Bool
+  public static func resetWarnings()
+}
+public enum MapDiagnosticLevel : Swift.String, Swift.Sendable {
+  case unsupported
+  case degraded
+  case approximated
+  case ignored
+  public init?(rawValue: Swift.String)
+  public typealias RawValue = Swift.String
+  public var rawValue: Swift.String {
+    get
+  }
+}
+public protocol MapPaddingsProtocol {
+  var top: Swift.Double { get }
+  var left: Swift.Double { get }
+  var bottom: Swift.Double { get }
+  var right: Swift.Double { get }
+}
+open class MapPaddings : MapConductorCore.MapPaddingsProtocol {
+  final public let top: Swift.Double
+  final public let left: Swift.Double
+  final public let bottom: Swift.Double
+  final public let right: Swift.Double
+  public init(top: Swift.Double = 0.0, left: Swift.Double = 0.0, bottom: Swift.Double = 0.0, right: Swift.Double = 0.0)
+  public static let Zeros: MapConductorCore.MapPaddings
+  public static func from(paddings: any MapConductorCore.MapPaddingsProtocol) -> MapConductorCore.MapPaddings
+  public func hashCode() -> Swift.Int
+  @objc deinit
+}
+public enum MapProjection : Swift.Hashable, Swift.Sendable {
+  case mercator
+  case globe
+  public static func == (a: MapConductorCore.MapProjection, b: MapConductorCore.MapProjection) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public protocol MapServiceKey {
+  associatedtype Value
+  static var capability: MapConductorCore.MapCapability? { get }
+}
+extension MapConductorCore.MapServiceKey {
+  public static var capability: MapConductorCore.MapCapability? {
+    get
+  }
+}
+public protocol MapServiceRegistry : AnyObject {
+  func get<Key>(_ key: Key.Type) -> Key.Value? where Key : MapConductorCore.MapServiceKey
+  func has<Key>(_ key: Key.Type) -> Swift.Bool where Key : MapConductorCore.MapServiceKey
+  func capabilityStatus(_ capability: MapConductorCore.MapCapability) -> MapConductorCore.MapCapabilityStatus
+}
+extension MapConductorCore.MapServiceRegistry {
+  public func has<Key>(_ key: Key.Type) -> Swift.Bool where Key : MapConductorCore.MapServiceKey
+  public func capabilityStatus(_: MapConductorCore.MapCapability) -> MapConductorCore.MapCapabilityStatus
+}
+@_hasMissingDesignatedInitializers final public class MapServiceRegistration {
+  final public func dispose()
+  @objc deinit
+}
+final public class MapServiceRegistrations {
+  public init()
+  @discardableResult
+  final public func add(_ registration: MapConductorCore.MapServiceRegistration) -> MapConductorCore.MapServiceRegistration
+  final public func disposeAll()
+  @objc deinit
+}
+final public class MutableMapServiceRegistry : MapConductorCore.MapServiceRegistry {
+  public init()
+  final public func put<Key>(_ key: Key.Type, _ value: Key.Value) where Key : MapConductorCore.MapServiceKey
+  @discardableResult
+  final public func register<Key>(_ key: Key.Type, _ value: Key.Value) -> MapConductorCore.MapServiceRegistration where Key : MapConductorCore.MapServiceKey
+  final public func remove<Key>(_ key: Key.Type) where Key : MapConductorCore.MapServiceKey
+  final public func clear()
+  @discardableResult
+  final public func declare(_ capability: MapConductorCore.MapCapability, _ status: MapConductorCore.MapCapabilityStatus) -> MapConductorCore.MapServiceRegistration
+  @discardableResult
+  final public func declareUnsupported(_ capability: MapConductorCore.MapCapability, _ reason: Swift.String) -> MapConductorCore.MapServiceRegistration
+  final public func declaredCapabilities() -> [MapConductorCore.MapCapability : MapConductorCore.MapCapabilityStatus]
+  final public func capabilityStatus(_ capability: MapConductorCore.MapCapability) -> MapConductorCore.MapCapabilityStatus
+  final public func get<Key>(_ key: Key.Type) -> Key.Value? where Key : MapConductorCore.MapServiceKey
+  @objc deinit
+}
+extension MapConductorCore.MutableMapServiceRegistry {
+  final public func removeProviderRegistrations()
+}
+@_hasMissingDesignatedInitializers final public class EmptyMapServiceRegistry : MapConductorCore.MapServiceRegistry {
+  public static let shared: MapConductorCore.EmptyMapServiceRegistry
+  final public func get<Key>(_: Key.Type) -> Key.Value? where Key : MapConductorCore.MapServiceKey
+  @objc deinit
+}
+@_Concurrency.MainActor public enum MapServiceRegistryScope {
+  @_Concurrency.MainActor public static var current: any MapConductorCore.MapServiceRegistry {
+    get
+  }
+  @_Concurrency.MainActor public static func with<Result>(_ registry: any MapConductorCore.MapServiceRegistry, _ body: () -> Result) -> Result
+}
+public protocol MapViewHolderProtocol {
+  associatedtype ActualMapView
+  associatedtype ActualMap
+  var mapView: Self.ActualMapView { get }
+  var map: Self.ActualMap { get }
+  func toScreenOffset(position: any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?
+  func fromScreenOffset(offset: CoreFoundation.CGPoint) async -> MapConductorCore.GeoPoint?
+  func fromScreenOffsetSync(offset: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
+  func viewportSizePx() -> CoreFoundation.CGSize?
+}
+extension MapConductorCore.MapViewHolderProtocol {
+  public func fromScreenOffset(offset: CoreFoundation.CGPoint) async -> MapConductorCore.GeoPoint?
+  public func fromScreenOffsetSync(offset _: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
+}
+public struct AnyMapViewHolder : MapConductorCore.MapViewHolderProtocol {
+  public typealias ActualMapView = Any
+  public typealias ActualMap = Any
+  public let mapView: Any
+  public let map: Any
+  public init<H>(_ holder: H) where H : MapConductorCore.MapViewHolderProtocol
+  public func toScreenOffset(position: any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?
+  public func fromScreenOffset(offset: CoreFoundation.CGPoint) async -> MapConductorCore.GeoPoint?
+  public func fromScreenOffsetSync(offset: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
+  public func viewportSizePx() -> CoreFoundation.CGSize?
+}
+public enum InitState {
+  case NotStarted
+  case Initializing
+  case SdkInitialized
+  case MapViewCreated
+  case MapCreating
+  case MapCreated
+  case MapLoaded
+  case Failed
+  public static func == (a: MapConductorCore.InitState, b: MapConductorCore.InitState) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public protocol MapViewStateProtocol : Combine.ObservableObject {
+  associatedtype ActualMapDesignType
+  var id: Swift.String { get }
+  var cameraPosition: MapConductorCore.MapCameraPosition { get }
+  var mapDesignType: Self.ActualMapDesignType { get set }
+  var uiSettings: MapConductorCore.MapUISettings { get set }
+  var serviceRegistry: MapConductorCore.MutableMapServiceRegistry { get }
+  func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition, durationMillis: MapConductorCore.Long?)
+  func moveCameraTo(position: MapConductorCore.GeoPoint, durationMillis: MapConductorCore.Long?)
+  func fitBounds(bounds: MapConductorCore.GeoRectBounds, padding: Swift.Int)
+  func getMapViewHolder() -> MapConductorCore.AnyMapViewHolder?
+}
+extension MapConductorCore.MapViewStateProtocol {
+  public func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition)
+  public func moveCameraTo(position: MapConductorCore.GeoPoint)
+}
+open class MapViewState<ActualMapDesignType> : Combine.ObservableObject, MapConductorCore.MapViewStateProtocol {
+  final public let serviceRegistry: MapConductorCore.MutableMapServiceRegistry
+  public var attachedMapController: (any MapConductorCore.MapViewControllerProtocol)? {
+    get
+  }
+  public init(id: Swift.String = UUID().uuidString, initialCameraPosition: MapConductorCore.MapCameraPosition = .Default, uiSettings: MapConductorCore.MapUISettings = MapUISettings(), optimisticCameraUpdate: Swift.Bool = false)
+  open var id: Swift.String {
+    get
+  }
+  open var cameraPosition: MapConductorCore.MapCameraPosition {
+    get
+  }
+  open var mapDesignType: ActualMapDesignType {
+    get
+    set
+  }
+  open var uiSettings: MapConductorCore.MapUISettings {
+    get
+    set
+  }
+  public func attachController(_ controller: (any MapConductorCore.MapViewControllerProtocol)?, moveToInitialCamera: Swift.Bool = true)
+  public func detachController()
+  public func setCameraPositionInternal(_ cameraPosition: MapConductorCore.MapCameraPosition)
+  open func moveCameraTo(cameraPosition: MapConductorCore.MapCameraPosition, durationMillis: MapConductorCore.Long? = 0)
+  open func moveCameraTo(position: MapConductorCore.GeoPoint, durationMillis: MapConductorCore.Long? = 0)
+  open func fitBounds(bounds: MapConductorCore.GeoRectBounds, padding: Swift.Int)
+  open func getMapViewHolder() -> MapConductorCore.AnyMapViewHolder?
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+}
+public protocol MapOverlayProtocol : AnyObject {
+  associatedtype DataType
+  var flow: Combine.CurrentValueSubject<[Swift.String : Self.DataType], Swift.Never> { get }
+  func render(data: [Swift.String : Self.DataType], controller: any MapConductorCore.MapViewControllerProtocol) async
+}
+final public class MapOverlayRegistry {
+  public init()
+  final public func register(overlay: any MapConductorCore.MapOverlayProtocol)
+  final public func getAll() -> [any MapConductorCore.MapOverlayProtocol]
+  @objc deinit
+}
+public enum ScreenProjectionRequirement {
+  @discardableResult
+  public static func check(registry: any MapConductorCore.MapServiceRegistry, provider: Swift.String, feature: Swift.String) -> Swift.Bool
+}
+extension MapConductorCore.MapViewHolderProtocol {
+  public func buildVisibleRegion(inset: CoreFoundation.CGFloat = 0, requireAllCorners: Swift.Bool = true) -> MapConductorCore.VisibleRegion?
+  public func buildVisibleRegion(size: CoreFoundation.CGSize, inset: CoreFoundation.CGFloat = 0, requireAllCorners: Swift.Bool = true) -> MapConductorCore.VisibleRegion?
+  public func viewportSizePx() -> CoreFoundation.CGSize?
+}
+open class AbstractMarkerController<ActualMarker, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol {
+  public typealias StateType = MapConductorCore.MarkerState
+  public typealias EntityType = MapConductorCore.MarkerEntity<ActualMarker>
+  public typealias EventType = MapConductorCore.MarkerState
+  final public let markerManager: MapConductorCore.MarkerManager<ActualMarker>
+  open var renderer: Renderer
+  final public let zIndex: Swift.Int
+  public var clickListener: ((MapConductorCore.MarkerState) -> Swift.Void)?
+  public var dragStartListener: MapConductorCore.OnMarkerEventHandler?
+  public var dragListener: MapConductorCore.OnMarkerEventHandler?
+  public var dragEndListener: MapConductorCore.OnMarkerEventHandler?
+  public var animateStartListener: MapConductorCore.OnMarkerEventHandler?
+  public var animateEndListener: MapConductorCore.OnMarkerEventHandler?
+  public init(markerManager: MapConductorCore.MarkerManager<ActualMarker>, renderer: Renderer, clickListener: ((MapConductorCore.MarkerState) -> Swift.Void)? = nil)
+  public func dispatchClick(state: MapConductorCore.MarkerState)
+  public func dispatchDragStart(state: MapConductorCore.MarkerState)
+  public func dispatchDrag(state: MapConductorCore.MarkerState)
+  public func dispatchDragEnd(state: MapConductorCore.MarkerState)
+  public func dispatchAnimateStart(state: MapConductorCore.MarkerState)
+  public func dispatchAnimateEnd(state: MapConductorCore.MarkerState)
+  open func setDraggingState(markerState: MapConductorCore.MarkerState, dragging: Swift.Bool)
+  public func isDragging(_ markerState: MapConductorCore.MarkerState) -> Swift.Bool
+  open func add(data: [MapConductorCore.MarkerState]) async
+  open func update(state: MapConductorCore.MarkerState) async
+  open func clear() async
+  open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+  open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.MarkerEntity<ActualMarker>?
+  open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position _: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
+  @objc deinit
+}
+open class AbstractViewportStrategy<ActualMarker> : MapConductorCore.AbstractMarkerRenderingStrategy<ActualMarker> {
+  public init(semaphore: MapConductorCore.AsyncSemaphore = AsyncSemaphore(1), geocell: any MapConductorCore.HexGeocellProtocol = HexGeocell.defaultGeocell())
+  override open func onAdd<Renderer>(data: [MapConductorCore.MarkerState], viewport: MapConductorCore.GeoRectBounds, renderer: Renderer) async -> Swift.Bool where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol
+  override open func onUpdate<Renderer>(state: MapConductorCore.MarkerState, viewport: MapConductorCore.GeoRectBounds, renderer: Renderer) async -> Swift.Bool where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol
+  override open func clear()
+  @objc deinit
+}
+final public class AsyncSemaphore {
+  public init(_ permits: Swift.Int)
+  final public func withPermit<T>(_ operation: () async throws -> T) async rethrows -> T
+  @objc deinit
+}
+final public class ColorDefaultIcon : MapConductorCore.MarkerIconProtocol {
+  public static let defaultIconSize: CoreFoundation.CGFloat
+  public static let defaultStrokeWidth: CoreFoundation.CGFloat
+  public static let defaultFillColor: UIKit.UIColor
+  public static let defaultStrokeColor: UIKit.UIColor
+  public static let defaultLabelTextSize: CoreFoundation.CGFloat
+  public static let defaultLabelTextColor: UIKit.UIColor
+  public static let defaultLabelStrokeColor: UIKit.UIColor
+  public static let defaultLabelTypeFace: UIKit.UIFont
+  public static let defaultInfoAnchor: CoreFoundation.CGPoint
+  final public let scale: CoreFoundation.CGFloat
+  final public let anchor: CoreFoundation.CGPoint
+  final public let iconSize: CoreFoundation.CGFloat
+  final public let infoAnchor: CoreFoundation.CGPoint
+  final public let debug: Swift.Bool
+  public init(fillColor: UIKit.UIColor = defaultFillColor, strokeColor: UIKit.UIColor = defaultStrokeColor, strokeWidth: CoreFoundation.CGFloat = defaultStrokeWidth, scale: CoreFoundation.CGFloat = 1.0, label: Swift.String? = nil, labelTextColor: UIKit.UIColor? = defaultLabelTextColor, labelTextSize: CoreFoundation.CGFloat = defaultLabelTextSize, labelTypeFace: UIKit.UIFont = defaultLabelTypeFace, labelStrokeColor: UIKit.UIColor = defaultLabelStrokeColor, infoAnchor: CoreFoundation.CGPoint = defaultInfoAnchor, iconSize: CoreFoundation.CGFloat = defaultIconSize, debug: Swift.Bool = false)
+  final public func toBitmapIcon() -> MapConductorCore.BitmapIcon
+  final public func hashCode() -> Swift.Int
+  final public func copy(fillColor: UIKit.UIColor? = nil, strokeColor: UIKit.UIColor? = nil, strokeWidth: CoreFoundation.CGFloat? = nil, scale: CoreFoundation.CGFloat? = nil, label: Swift.String? = nil, labelTextColor: UIKit.UIColor? = nil, labelTextSize: CoreFoundation.CGFloat? = nil, labelTypeFace: UIKit.UIFont? = nil, labelStrokeColor: UIKit.UIColor? = nil, iconSize: CoreFoundation.CGFloat? = nil, debug: Swift.Bool? = nil) -> MapConductorCore.ColorDefaultIcon
+  @objc deinit
+}
+public typealias DefaultMarkerIcon = MapConductorCore.ColorDefaultIcon
+public protocol MarkerDragSurface : AnyObject {
+  var isScrollEnabled: Swift.Bool { get set }
+  func geoPoint(atScreenPoint point: CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?
+}
+public protocol MarkerEventHostProtocol : AnyObject {
+  func markerId(atScreenPoint point: CoreFoundation.CGPoint) -> Swift.String?
+  func markerState(for id: Swift.String) -> MapConductorCore.MarkerState?
+  func handleTiledMarkerTap(atScreenPoint point: CoreFoundation.CGPoint) -> Swift.Bool
+  func dispatchClick(state: MapConductorCore.MarkerState)
+  func dispatchDragStart(state: MapConductorCore.MarkerState)
+  func dispatchDrag(state: MapConductorCore.MarkerState)
+  func dispatchDragEnd(state: MapConductorCore.MarkerState)
+  func onUpdateInfoBubble(_ markerId: Swift.String)
+}
+@_Concurrency.MainActor open class DefaultMarkerEventController {
+  @_Concurrency.MainActor public init(surface: (any MapConductorCore.MarkerDragSurface)?, host: any MapConductorCore.MarkerEventHostProtocol)
+  @_Concurrency.MainActor open func handleTap(at point: CoreFoundation.CGPoint) -> Swift.Bool
+  @_Concurrency.MainActor open func handleLongPress(state recognizerState: MapConductorCore.MarkerDragGestureState, at point: CoreFoundation.CGPoint) -> Swift.Bool
+  @_Concurrency.MainActor open func unbind()
+  @objc deinit
+}
+public enum MarkerDragGestureState {
+  case began
+  case changed
+  case ended
+  case cancelled
+  case other
+  public static func == (a: MapConductorCore.MarkerDragGestureState, b: MapConductorCore.MarkerDragGestureState) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+final public class ImageDefaultIcon : MapConductorCore.MarkerIconProtocol {
+  public static let defaultIconSize: CoreFoundation.CGFloat
+  public static let defaultStrokeWidth: CoreFoundation.CGFloat
+  public static let defaultStrokeColor: UIKit.UIColor
+  public static let defaultLabelTextSize: CoreFoundation.CGFloat
+  public static let defaultLabelTextColor: UIKit.UIColor
+  public static let defaultLabelStrokeColor: UIKit.UIColor
+  public static let defaultLabelTypeFace: UIKit.UIFont
+  public static let defaultInfoAnchor: CoreFoundation.CGPoint
+  public static let defaultAnchor: CoreFoundation.CGPoint
+  final public let scale: CoreFoundation.CGFloat
+  final public let anchor: CoreFoundation.CGPoint
+  final public let iconSize: CoreFoundation.CGFloat
+  final public let infoAnchor: CoreFoundation.CGPoint
+  final public let debug: Swift.Bool
+  final public let strokeColor: UIKit.UIColor
+  final public let strokeWidth: CoreFoundation.CGFloat
+  final public let label: Swift.String?
+  final public let labelTextColor: UIKit.UIColor?
+  final public let labelTextSize: CoreFoundation.CGFloat
+  final public let labelTypeFace: UIKit.UIFont
+  final public let labelStrokeColor: UIKit.UIColor
+  public init(backgroundImage: UIKit.UIImage, strokeColor: UIKit.UIColor = defaultStrokeColor, strokeWidth: CoreFoundation.CGFloat = defaultStrokeWidth, scale: CoreFoundation.CGFloat = 1.0, label: Swift.String? = nil, labelTextColor: UIKit.UIColor? = defaultLabelTextColor, labelTextSize: CoreFoundation.CGFloat = defaultLabelTextSize, labelTypeFace: UIKit.UIFont = defaultLabelTypeFace, labelStrokeColor: UIKit.UIColor = defaultLabelStrokeColor, infoAnchor: CoreFoundation.CGPoint = defaultInfoAnchor, iconSize: CoreFoundation.CGFloat = defaultIconSize, debug: Swift.Bool = false)
+  final public func toBitmapIcon() -> MapConductorCore.BitmapIcon
+  final public func hashCode() -> Swift.Int
+  final public func copy(backgroundImage: UIKit.UIImage? = nil, strokeColor: UIKit.UIColor? = nil, strokeWidth: CoreFoundation.CGFloat? = nil, scale: CoreFoundation.CGFloat? = nil, label: Swift.String? = nil, labelTextColor: UIKit.UIColor? = nil, labelTextSize: CoreFoundation.CGFloat? = nil, labelTypeFace: UIKit.UIFont? = nil, labelStrokeColor: UIKit.UIColor? = nil, iconSize: CoreFoundation.CGFloat? = nil, debug: Swift.Bool? = nil) -> MapConductorCore.ImageDefaultIcon
+  @objc deinit
+}
+final public class ImageIcon : MapConductorCore.MarkerIconProtocol {
+  public static let defaultIconSize: CoreFoundation.CGFloat
+  public static let defaultAnchor: CoreFoundation.CGPoint
+  public static let defaultInfoAnchor: CoreFoundation.CGPoint
+  final public let iconSize: CoreFoundation.CGFloat
+  final public let scale: CoreFoundation.CGFloat
+  final public let anchor: CoreFoundation.CGPoint
+  final public let infoAnchor: CoreFoundation.CGPoint
+  final public let debug: Swift.Bool
+  public init(image: UIKit.UIImage, iconSize: CoreFoundation.CGFloat = defaultIconSize, scale: CoreFoundation.CGFloat = 1.0, anchor: CoreFoundation.CGPoint = defaultAnchor, infoAnchor: CoreFoundation.CGPoint = defaultInfoAnchor, debug: Swift.Bool = false)
+  final public func toBitmapIcon() -> MapConductorCore.BitmapIcon
+  final public func hashCode() -> Swift.Int
+  final public func copy(image: UIKit.UIImage? = nil, iconSize: CoreFoundation.CGFloat? = nil, scale: CoreFoundation.CGFloat? = nil, anchor: CoreFoundation.CGPoint? = nil, infoAnchor: CoreFoundation.CGPoint? = nil, debug: Swift.Bool? = nil) -> MapConductorCore.ImageIcon
+  @objc deinit
+}
+public struct MarkerAnimationOverlayEntry {
+  public let id: Swift.String
+  public let state: MapConductorCore.MarkerState
+  public let icon: MapConductorCore.BitmapIcon
+  public let animation: MapConductorCore.MarkerAnimation
+  public let duration: CoreFoundation.CFTimeInterval
+  public let onFinished: () -> Swift.Void
+  public init(id: Swift.String, state: MapConductorCore.MarkerState, icon: MapConductorCore.BitmapIcon, animation: MapConductorCore.MarkerAnimation, duration: CoreFoundation.CFTimeInterval, onFinished: @escaping () -> Swift.Void)
+}
+@_Concurrency.MainActor public protocol MarkerAnimationOverlayHost : AnyObject {
+  @_Concurrency.MainActor func start(_ entry: MapConductorCore.MarkerAnimationOverlayEntry)
+}
+@_Concurrency.MainActor final public class MarkerAnimationOverlayCoordinator : MapConductorCore.MarkerAnimationOverlayHost {
+  public typealias Projection = (any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?
+  @_Concurrency.MainActor public init(container: UIKit.UIView, project: @escaping MapConductorCore.MarkerAnimationOverlayCoordinator.Projection, projectionGate: @escaping () -> Swift.Bool = { true })
+  @_Concurrency.MainActor final public func start(_ entry: MapConductorCore.MarkerAnimationOverlayEntry)
+  @_Concurrency.MainActor final public func unbind()
+  @objc deinit
+}
+final public class MarkerAnimationRunner {
+  public init(duration: CoreFoundation.CFTimeInterval, pointAtProgress: @escaping (CoreFoundation.CGFloat) -> MapConductorCore.GeoPoint, onUpdate: @escaping (MapConductorCore.GeoPoint) -> Swift.Void, onCompletion: @escaping () -> Swift.Void)
+  convenience public init(duration: CoreFoundation.CFTimeInterval, pathPoints: [MapConductorCore.GeoPoint], onUpdate: @escaping (MapConductorCore.GeoPoint) -> Swift.Void, onCompletion: @escaping () -> Swift.Void)
+  final public func start()
+  final public func stop()
+  public static func makeLinearPath(start: MapConductorCore.GeoPoint, target: MapConductorCore.GeoPoint) -> [MapConductorCore.GeoPoint]
+  public static func makeEaseOutBounceSamples(start: MapConductorCore.GeoPoint, target: MapConductorCore.GeoPoint, samples: Swift.Int = 30) -> [MapConductorCore.GeoPoint]
+  @objc deinit
+}
+public protocol MarkerEntityProtocol {
+  associatedtype ActualMarker
+  var marker: Self.ActualMarker? { get set }
+  var state: MapConductorCore.MarkerState { get }
+  var fingerPrint: MapConductorCore.MarkerFingerPrint { get }
+  var visible: Swift.Bool { get set }
+  var isRendered: Swift.Bool { get set }
+  var tiling: Swift.Bool { get set }
+}
+final public class MarkerEntity<ActualMarker> : MapConductorCore.MarkerEntityProtocol {
+  final public var marker: ActualMarker?
+  final public let state: MapConductorCore.MarkerState
+  final public let fingerPrint: MapConductorCore.MarkerFingerPrint
+  final public var visible: Swift.Bool
+  final public var isRendered: Swift.Bool
+  final public var tiling: Swift.Bool
+  public init(marker: ActualMarker?, state: MapConductorCore.MarkerState, visible: Swift.Bool = true, isRendered: Swift.Bool = false, tiling: Swift.Bool = false)
+  @objc deinit
+}
+public enum MarkerHitTest {
+  public static func hitsIcon(touchScreen: CoreFoundation.CGPoint, markerScreen: CoreFoundation.CGPoint, state: MapConductorCore.MarkerState, defaultIcon: any MapConductorCore.MarkerIconProtocol = DefaultMarkerIcon()) -> Swift.Bool
+}
+public protocol MarkerIconProtocol {
+  var scale: CoreFoundation.CGFloat { get }
+  var anchor: CoreFoundation.CGPoint { get }
+  var iconSize: CoreFoundation.CGFloat { get }
+  var infoAnchor: CoreFoundation.CGPoint { get }
+  var debug: Swift.Bool { get }
+  func toBitmapIcon() -> MapConductorCore.BitmapIcon
+  func hashCode() -> Swift.Int
+}
+public struct BitmapIcon : MapConductorCore.MarkerIconProtocol, Swift.Equatable, Swift.Hashable {
+  public let bitmap: UIKit.UIImage
+  public let anchor: CoreFoundation.CGPoint
+  public let size: CoreFoundation.CGSize
+  public let scale: CoreFoundation.CGFloat
+  public let iconSize: CoreFoundation.CGFloat
+  public let infoAnchor: CoreFoundation.CGPoint
+  public let debug: Swift.Bool
+  public init(bitmap: UIKit.UIImage, anchor: CoreFoundation.CGPoint = CGPoint(x: 0.5, y: 1.0), size: CoreFoundation.CGSize? = nil, scale: CoreFoundation.CGFloat = 1.0, iconSize: CoreFoundation.CGFloat? = nil, infoAnchor: CoreFoundation.CGPoint = CGPoint(x: 0.5, y: 0.0), debug: Swift.Bool = false)
+  public func toBitmapIcon() -> MapConductorCore.BitmapIcon
+  public func hashCode() -> Swift.Int
+  public func toByteArray() -> [Swift.UInt8]
+  public static func == (a: MapConductorCore.BitmapIcon, b: MapConductorCore.BitmapIcon) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public enum MarkerIngestionEngine {
+  public struct Result {
+    public let tiledDataChanged: Swift.Bool
+    public let hasTiledMarkers: Swift.Bool
+  }
+  @_Concurrency.MainActor public static func ingest<ActualMarker, Renderer>(data: [MapConductorCore.MarkerState], markerManager: MapConductorCore.MarkerManager<ActualMarker>, renderer: Renderer, defaultMarkerIcon: MapConductorCore.BitmapIcon, tilingEnabled: Swift.Bool, tiledMarkerIds: inout Swift.Set<Swift.String>, shouldTile: (MapConductorCore.MarkerState) -> Swift.Bool) async -> MapConductorCore.MarkerIngestionEngine.Result where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol
+}
+public struct MarkerManagerStats : Swift.Sendable, Swift.Hashable {
+  public let entityCount: Swift.Int
+  public let hasSpatialIndex: Swift.Bool
+  public let spatialIndexInitialized: Swift.Bool
+  public let estimatedMemoryKB: Swift.Int
+  public static func == (a: MapConductorCore.MarkerManagerStats, b: MapConductorCore.MarkerManagerStats) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+final public class MarkerManager<ActualMarker> {
+  final public let minMarkerCount: Swift.Int
+  public init(geocell: any MapConductorCore.HexGeocellProtocol = HexGeocell.defaultGeocell(), minMarkerCount: Swift.Int = 2000)
+  final public func getEntity(_ id: Swift.String) -> MapConductorCore.MarkerEntity<ActualMarker>?
+  final public func hasEntity(_ id: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func removeEntity(_ id: Swift.String) -> MapConductorCore.MarkerEntity<ActualMarker>?
+  final public func registerEntity(_ entity: MapConductorCore.MarkerEntity<ActualMarker>)
+  final public func updateEntity(_ entity: MapConductorCore.MarkerEntity<ActualMarker>)
+  final public func metersPerPixel(position: any MapConductorCore.GeoPointProtocol, zoom: Swift.Double, pixels: Swift.Double, tileSize: Swift.Int = 256) -> Swift.Double
+  final public func findNearest(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.MarkerEntity<ActualMarker>?
+  final public func findByIdPrefix(_ prefix: Swift.String) -> [MapConductorCore.HexCell]
+  final public func allEntities() -> [MapConductorCore.MarkerEntity<ActualMarker>]
+  final public func findMarkersInBounds(_ bounds: MapConductorCore.GeoRectBounds) -> [MapConductorCore.MarkerEntity<ActualMarker>]
+  final public func getMemoryStats() -> MapConductorCore.MarkerManagerStats
+  final public func clear()
+  final public func destroy()
+  final public var isDestroyed: Swift.Bool {
+    get
+  }
+  public static func defaultManager() -> MapConductorCore.MarkerManager<ActualMarker>
+  public static func defaultManager(geocell: any MapConductorCore.HexGeocellProtocol) -> MapConductorCore.MarkerManager<ActualMarker>
+  public static func defaultManager(geocell: (any MapConductorCore.HexGeocellProtocol)? = nil, minMarkerCount: Swift.Int = 2000) -> MapConductorCore.MarkerManager<ActualMarker>
+  @objc deinit
+}
+@_Concurrency.MainActor public protocol MarkerOverlayRendererProtocol {
+  associatedtype ActualMarker
+  @_Concurrency.MainActor var animateStartListener: MapConductorCore.OnMarkerEventHandler? { get set }
+  @_Concurrency.MainActor var animateEndListener: MapConductorCore.OnMarkerEventHandler? { get set }
+  @_Concurrency.MainActor func onAdd(data: [MapConductorCore.MarkerOverlayAddParams]) async -> [Self.ActualMarker?]
+  @_Concurrency.MainActor func onChange(data: [MapConductorCore.MarkerOverlayChangeParams<Self.ActualMarker>]) async -> [Self.ActualMarker?]
+  @_Concurrency.MainActor func onRemove(data: [MapConductorCore.MarkerEntity<Self.ActualMarker>]) async
+  @_Concurrency.MainActor func onAnimate(entity: MapConductorCore.MarkerEntity<Self.ActualMarker>) async
+  @_Concurrency.MainActor func onPostProcess() async
+  @_Concurrency.MainActor func unbind()
+}
+extension MapConductorCore.MarkerOverlayRendererProtocol {
+  @_Concurrency.MainActor public func unbind()
+}
+public struct MarkerOverlayAddParams {
+  public let state: MapConductorCore.MarkerState
+  public let bitmapIcon: MapConductorCore.BitmapIcon
+  public init(state: MapConductorCore.MarkerState, bitmapIcon: MapConductorCore.BitmapIcon)
+}
+public struct MarkerOverlayChangeParams<ActualMarker> {
+  public let current: MapConductorCore.MarkerEntity<ActualMarker>
+  public let bitmapIcon: MapConductorCore.BitmapIcon
+  public let prev: MapConductorCore.MarkerEntity<ActualMarker>
+  public init(current: MapConductorCore.MarkerEntity<ActualMarker>, bitmapIcon: MapConductorCore.BitmapIcon, prev: MapConductorCore.MarkerEntity<ActualMarker>)
+}
+public protocol MarkerRenderingStrategyProtocol {
+  associatedtype ActualMarker
+  var markerManager: MapConductorCore.MarkerManager<Self.ActualMarker> { get }
+  func clear()
+  func onAdd<Renderer>(data: [MapConductorCore.MarkerState], viewport: MapConductorCore.GeoRectBounds, renderer: Renderer) async -> Swift.Bool where Renderer : MapConductorCore.MarkerOverlayRendererProtocol, Self.ActualMarker == Renderer.ActualMarker
+  func onUpdate<Renderer>(state: MapConductorCore.MarkerState, viewport: MapConductorCore.GeoRectBounds, renderer: Renderer) async -> Swift.Bool where Renderer : MapConductorCore.MarkerOverlayRendererProtocol, Self.ActualMarker == Renderer.ActualMarker
+  func onCameraChanged<Renderer>(mapCameraPosition: MapConductorCore.MapCameraPosition, renderer: Renderer) async where Renderer : MapConductorCore.MarkerOverlayRendererProtocol, Self.ActualMarker == Renderer.ActualMarker
+}
+public struct AnyMarkerRenderingStrategy<ActualMarker> : MapConductorCore.MarkerRenderingStrategyProtocol {
+  public let markerManager: MapConductorCore.MarkerManager<ActualMarker>
+  public init<Strategy>(_ strategy: Strategy) where ActualMarker == Strategy.ActualMarker, Strategy : MapConductorCore.MarkerRenderingStrategyProtocol
+  public func clear()
+  public func onAdd<Renderer>(data: [MapConductorCore.MarkerState], viewport: MapConductorCore.GeoRectBounds, renderer: Renderer) async -> Swift.Bool where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol
+  public func onUpdate<Renderer>(state: MapConductorCore.MarkerState, viewport: MapConductorCore.GeoRectBounds, renderer: Renderer) async -> Swift.Bool where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol
+  public func onCameraChanged<Renderer>(mapCameraPosition: MapConductorCore.MapCameraPosition, renderer: Renderer) async where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol
+}
+@_Concurrency.MainActor public struct AnyMarkerOverlayRenderer<ActualMarker> : MapConductorCore.MarkerOverlayRendererProtocol {
+  @_Concurrency.MainActor public var animateStartListener: MapConductorCore.OnMarkerEventHandler? {
+    get
+    set
+  }
+  @_Concurrency.MainActor public var animateEndListener: MapConductorCore.OnMarkerEventHandler? {
+    get
+    set
+  }
+  @_Concurrency.MainActor public init<Renderer>(_ renderer: Renderer) where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol
+  @_Concurrency.MainActor public func onAdd(data: [MapConductorCore.MarkerOverlayAddParams]) async -> [ActualMarker?]
+  @_Concurrency.MainActor public func onChange(data: [MapConductorCore.MarkerOverlayChangeParams<ActualMarker>]) async -> [ActualMarker?]
+  @_Concurrency.MainActor public func onRemove(data: [MapConductorCore.MarkerEntity<ActualMarker>]) async
+  @_Concurrency.MainActor public func onAnimate(entity: MapConductorCore.MarkerEntity<ActualMarker>) async
+  @_Concurrency.MainActor public func onPostProcess() async
+}
+open class AbstractMarkerRenderingStrategy<ActualMarker> : MapConductorCore.MarkerRenderingStrategyProtocol {
+  final public let markerManager: MapConductorCore.MarkerManager<ActualMarker>
+  final public let semaphore: MapConductorCore.AsyncSemaphore
+  final public let defaultMarkerIcon: MapConductorCore.BitmapIcon
+  public init(markerManager: MapConductorCore.MarkerManager<ActualMarker> = MarkerManager<ActualMarker>(), semaphore: MapConductorCore.AsyncSemaphore = AsyncSemaphore(1))
+  open func clear()
+  open func onAdd<Renderer>(data: [MapConductorCore.MarkerState], viewport: MapConductorCore.GeoRectBounds, renderer: Renderer) async -> Swift.Bool where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol
+  open func onUpdate<Renderer>(state: MapConductorCore.MarkerState, viewport: MapConductorCore.GeoRectBounds, renderer: Renderer) async -> Swift.Bool where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol
+  open func onCameraChanged<Renderer>(mapCameraPosition: MapConductorCore.MapCameraPosition, renderer: Renderer) async where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol
+  @objc deinit
+}
+@_Concurrency.MainActor public protocol MarkerRenderingSupport : AnyObject {
+  @discardableResult
+  @_Concurrency.MainActor func connect(strategy: Any, markers: [MapConductorCore.MarkerState]) -> Swift.Bool
+  @_Concurrency.MainActor func syncMarkers(_ markers: [MapConductorCore.MarkerState])
+  @_Concurrency.MainActor func disconnect()
+  @_Concurrency.MainActor func beginContentPass()
+  @_Concurrency.MainActor func endContentPass()
+}
+public enum MarkerRenderingSupportKey : MapConductorCore.MapServiceKey {
+  public typealias Value = any MapConductorCore.MarkerRenderingSupport
+}
+public enum MarkerAnimation {
+  case Drop
+  case Bounce
+  public static func == (a: MapConductorCore.MarkerAnimation, b: MapConductorCore.MarkerAnimation) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct MarkerFingerPrint : Swift.Equatable, Swift.Hashable {
+  public let id: Swift.Int
+  public let icon: Swift.Int?
+  public let clickable: Swift.Int
+  public let draggable: Swift.Int
+  public let latitude: Swift.Int
+  public let longitude: Swift.Int
+  public let zIndex: Swift.Int?
+  public let animation: Swift.Int?
+  public static func == (a: MapConductorCore.MarkerFingerPrint, b: MapConductorCore.MarkerFingerPrint) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public typealias OnMarkerEventHandler = (MapConductorCore.MarkerState) -> Swift.Void
+final public class MarkerState : Combine.ObservableObject, Swift.Identifiable, Swift.Equatable, Swift.Hashable {
+  final public let id: Swift.String
+  final public var extra: Any?
+  @Combine.Published<(any MapConductorCore.MarkerIconProtocol)?> @_projectedValueProperty($icon) final public var icon: (any MapConductorCore.MarkerIconProtocol)? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $icon: Combine.Published<(any MapConductorCore.MarkerIconProtocol)?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Bool> @_projectedValueProperty($clickable) final public var clickable: Swift.Bool {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $clickable: Combine.Published<Swift.Bool>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Bool> @_projectedValueProperty($draggable) final public var draggable: Swift.Bool {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $draggable: Combine.Published<Swift.Bool>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Int?> @_projectedValueProperty($zIndex) final public var zIndex: Swift.Int? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $zIndex: Combine.Published<Swift.Int?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.OnMarkerEventHandler?> @_projectedValueProperty($onClick) final public var onClick: MapConductorCore.OnMarkerEventHandler? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $onClick: Combine.Published<MapConductorCore.OnMarkerEventHandler?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.OnMarkerEventHandler?> @_projectedValueProperty($onDragStart) final public var onDragStart: MapConductorCore.OnMarkerEventHandler? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $onDragStart: Combine.Published<MapConductorCore.OnMarkerEventHandler?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.OnMarkerEventHandler?> @_projectedValueProperty($onDrag) final public var onDrag: MapConductorCore.OnMarkerEventHandler? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $onDrag: Combine.Published<MapConductorCore.OnMarkerEventHandler?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.OnMarkerEventHandler?> @_projectedValueProperty($onDragEnd) final public var onDragEnd: MapConductorCore.OnMarkerEventHandler? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $onDragEnd: Combine.Published<MapConductorCore.OnMarkerEventHandler?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.OnMarkerEventHandler?> @_projectedValueProperty($onAnimateStart) final public var onAnimateStart: MapConductorCore.OnMarkerEventHandler? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $onAnimateStart: Combine.Published<MapConductorCore.OnMarkerEventHandler?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.OnMarkerEventHandler?> @_projectedValueProperty($onAnimateEnd) final public var onAnimateEnd: MapConductorCore.OnMarkerEventHandler? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $onAnimateEnd: Combine.Published<MapConductorCore.OnMarkerEventHandler?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.GeoPoint> @_projectedValueProperty($position) final public var position: MapConductorCore.GeoPoint {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $position: Combine.Published<MapConductorCore.GeoPoint>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  public init(position: MapConductorCore.GeoPoint, id: Swift.String? = nil, extra: Any? = nil, icon: (any MapConductorCore.MarkerIconProtocol)? = nil, animation: MapConductorCore.MarkerAnimation? = nil, clickable: Swift.Bool = true, draggable: Swift.Bool = false, zIndex: Swift.Int? = nil, onClick: MapConductorCore.OnMarkerEventHandler? = nil, onDragStart: MapConductorCore.OnMarkerEventHandler? = nil, onDrag: MapConductorCore.OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore.OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore.OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore.OnMarkerEventHandler? = nil)
+  convenience public init(position: MapConductorCore.GeoPoint, id: Swift.String? = nil, extra: Any? = nil, icon: MapConductorCore.DefaultMarkerIcon, animation: MapConductorCore.MarkerAnimation? = nil, clickable: Swift.Bool = true, draggable: Swift.Bool = false, zIndex: Swift.Int? = nil, onClick: MapConductorCore.OnMarkerEventHandler? = nil, onDragStart: MapConductorCore.OnMarkerEventHandler? = nil, onDrag: MapConductorCore.OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore.OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore.OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore.OnMarkerEventHandler? = nil)
+  final public func animate(_ animation: MapConductorCore.MarkerAnimation?)
+  final public func getAnimation() -> MapConductorCore.MarkerAnimation?
+  final public func copy(id: Swift.String? = nil, position: MapConductorCore.GeoPoint? = nil, extra: Any? = nil, icon: (any MapConductorCore.MarkerIconProtocol)? = nil, animation: MapConductorCore.MarkerAnimation?? = nil, clickable: Swift.Bool? = nil, draggable: Swift.Bool? = nil, zIndex: Swift.Int?? = nil, onClick: MapConductorCore.OnMarkerEventHandler? = nil, onDragStart: MapConductorCore.OnMarkerEventHandler? = nil, onDrag: MapConductorCore.OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore.OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore.OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore.OnMarkerEventHandler? = nil) -> MapConductorCore.MarkerState
+  public static func == (lhs: MapConductorCore.MarkerState, rhs: MapConductorCore.MarkerState) -> Swift.Bool
+  final public func hash(into hasher: inout Swift.Hasher)
+  final public func hashCode() -> Swift.Int
+  final public func fingerPrint() -> MapConductorCore.MarkerFingerPrint
+  final public func asFlow() -> Combine.AnyPublisher<MapConductorCore.MarkerFingerPrint, Swift.Never>
+  public typealias ID = Swift.String
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+  final public var hashValue: Swift.Int {
+    get
+  }
+}
+final public class MarkerTileRenderer<ActualMarker> : MapConductorCore.TileProvider {
+  final public let tileSize: Swift.Int
+  final public let extraIconScale: Swift.Double
+  public init(markerManager: MapConductorCore.MarkerManager<ActualMarker>, tileSize: Swift.Int = 256, extraIconScale: Swift.Double = 1.0, cacheSizeBytes: Swift.Int = 8 * 1024 * 1024, debugTileOverlay: Swift.Bool = false, iconScaleCallback: ((MapConductorCore.MarkerState, Swift.Int) -> Swift.Double)? = nil)
+  final public func invalidate()
+  final public func clear()
+  final public func hitTest(screenPoint: CoreFoundation.CGPoint, markerIds: Swift.Set<Swift.String>, zoom: Swift.Int, tolerance: CoreFoundation.CGFloat = 14, renderScaleToScreenScale: CoreFoundation.CGFloat = UIScreen.main.scale, unproject: (CoreFoundation.CGPoint) -> MapConductorCore.GeoPoint?, project: (MapConductorCore.GeoPoint) -> CoreFoundation.CGPoint?) -> MapConductorCore.MarkerState?
+  final public func renderTile(request: MapConductorCore.TileRequest) -> Foundation.Data?
+  @objc deinit
+}
+public struct MarkerTilingOptions {
+  public let enabled: Swift.Bool
+  public let debugTileOverlay: Swift.Bool
+  public let minMarkerCount: Swift.Int
+  public let cacheSize: Swift.Int
+  public let iconScaleCallback: ((MapConductorCore.MarkerState, Swift.Int) -> Swift.Double)?
+  public static let Disabled: MapConductorCore.MarkerTilingOptions
+  public static let Default: MapConductorCore.MarkerTilingOptions
+  public init(enabled: Swift.Bool = true, debugTileOverlay: Swift.Bool = false, minMarkerCount: Swift.Int = 2000, cacheSize: Swift.Int = 8 * 1024 * 1024, iconScaleCallback: ((MapConductorCore.MarkerState, Swift.Int) -> Swift.Double)? = nil)
+  public func shouldUseTiles(markerCount: Swift.Int) -> Swift.Bool
+}
+final public class StrategyMarkerController<ActualMarker, Strategy, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualMarker == Strategy.ActualMarker, Strategy : MapConductorCore.MarkerRenderingStrategyProtocol, Renderer : MapConductorCore.MarkerOverlayRendererProtocol, Strategy.ActualMarker == Renderer.ActualMarker {
+  public typealias StateType = MapConductorCore.MarkerState
+  public typealias EntityType = MapConductorCore.MarkerEntity<ActualMarker>
+  public typealias EventType = MapConductorCore.MarkerState
+  final public let markerManager: MapConductorCore.MarkerManager<ActualMarker>
+  final public let strategy: Strategy
+  final public var renderer: Renderer
+  final public var clickListener: ((MapConductorCore.MarkerState) -> Swift.Void)?
+  final public var markerProjector: ((any MapConductorCore.GeoPointProtocol) -> CoreFoundation.CGPoint?)?
+  final public var dragStartListener: MapConductorCore.OnMarkerEventHandler?
+  final public var dragListener: MapConductorCore.OnMarkerEventHandler?
+  final public var dragEndListener: MapConductorCore.OnMarkerEventHandler?
+  final public var animateStartListener: MapConductorCore.OnMarkerEventHandler?
+  final public var animateEndListener: MapConductorCore.OnMarkerEventHandler?
+  final public let zIndex: Swift.Int
+  public init(strategy: Strategy, renderer: Renderer, clickListener: ((MapConductorCore.MarkerState) -> Swift.Void)? = nil)
+  final public func dispatchClick(_ state: MapConductorCore.MarkerState)
+  final public func dispatchDragStart(_ state: MapConductorCore.MarkerState)
+  final public func dispatchDrag(_ state: MapConductorCore.MarkerState)
+  final public func dispatchDragEnd(_ state: MapConductorCore.MarkerState)
+  final public func dispatchAnimateStart(_ state: MapConductorCore.MarkerState)
+  final public func dispatchAnimateEnd(_ state: MapConductorCore.MarkerState)
+  final public func add(data: [MapConductorCore.MarkerState]) async
+  final public func update(state: MapConductorCore.MarkerState) async
+  final public func clear() async
+  final public func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.MarkerEntity<ActualMarker>?
+  final public func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+  final public func destroy()
+  final public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  final public func hasId(_ id: Swift.String) -> Swift.Bool
+  final public func resolveTap(position _: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
+  @objc deinit
+}
+@_Concurrency.MainActor final public class StrategyMarkerManager<ActualMarker, Renderer> : MapConductorCore.MarkerRenderingSupport where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore.MarkerOverlayRendererProtocol {
+  public typealias RendererFactory = (MapConductorCore.AnyMarkerRenderingStrategy<ActualMarker>) -> Renderer
+  @_Concurrency.MainActor final public var controller: MapConductorCore.StrategyMarkerController<ActualMarker, MapConductorCore.AnyMarkerRenderingStrategy<ActualMarker>, Renderer>? {
+    get
+  }
+  @_Concurrency.MainActor final public var renderer: Renderer? {
+    get
+  }
+  @_Concurrency.MainActor final public var latestMarkers: [MapConductorCore.MarkerState] {
+    get
+  }
+  @_Concurrency.MainActor final public var onMarkersChanged: (([MapConductorCore.MarkerState]) -> Swift.Void)?
+  @_Concurrency.MainActor final public var onRendererCreated: ((Renderer) -> Swift.Void)?
+  @_Concurrency.MainActor public init(makeRenderer: @escaping MapConductorCore.StrategyMarkerManager<ActualMarker, Renderer>.RendererFactory, shouldAddMarkers: @escaping () -> Swift.Bool = { true }, currentCamera: @escaping () -> MapConductorCore.MapCameraPosition? = { nil })
+  @discardableResult
+  @_Concurrency.MainActor final public func connect(strategy: Any, markers: [MapConductorCore.MarkerState]) -> Swift.Bool
+  @_Concurrency.MainActor final public func disconnect()
+  @_Concurrency.MainActor final public func beginContentPass()
+  @_Concurrency.MainActor final public func endContentPass()
+  @_Concurrency.MainActor final public func onCameraChanged(_ position: MapConductorCore.MapCameraPosition) async
+  @_Concurrency.MainActor final public func flush()
+  @_Concurrency.MainActor final public func clear()
+  @_Concurrency.MainActor final public func syncMarkers(_ markers: [MapConductorCore.MarkerState])
+  @objc deinit
+}
+@_Concurrency.MainActor final public class DeferredUntilReady<Input> {
+  @_Concurrency.MainActor final public var isReady: Swift.Bool {
+    get
+  }
+  @_Concurrency.MainActor final public var latest: Input? {
+    get
+  }
+  @_Concurrency.MainActor public init(apply: @escaping (Input) -> Swift.Void)
+  @_Concurrency.MainActor final public func submit(_ input: Input)
+  @_Concurrency.MainActor final public func markReady()
+  @_Concurrency.MainActor final public func reset()
+  @objc deinit
+}
+@_Concurrency.MainActor final public class MapOverlayScope {
+  @_Concurrency.MainActor final public let markerCollector: MapConductorCore.OverlayCollector<MapConductorCore.MarkerState>
+  @_Concurrency.MainActor final public let circleCollector: MapConductorCore.OverlayCollector<MapConductorCore.CircleState>
+  @_Concurrency.MainActor final public let polylineCollector: MapConductorCore.OverlayCollector<MapConductorCore.PolylineState>
+  @_Concurrency.MainActor final public let polygonCollector: MapConductorCore.OverlayCollector<MapConductorCore.PolygonState>
+  @_Concurrency.MainActor final public let groundImageCollector: MapConductorCore.OverlayCollector<MapConductorCore.GroundImageState>
+  @_Concurrency.MainActor final public let rasterLayerCollector: MapConductorCore.OverlayCollector<MapConductorCore.RasterLayerState>
+  @_Concurrency.MainActor public init()
+  @_Concurrency.MainActor final public func clear()
+  @objc deinit
+}
+public protocol OverlayCollectableState : AnyObject {
+  var id: Swift.String { get }
+  func overlayChangePublisher() -> Combine.AnyPublisher<Swift.Void, Swift.Never>
+}
+extension MapConductorCore.MarkerState : MapConductorCore.OverlayCollectableState {
+  final public func overlayChangePublisher() -> Combine.AnyPublisher<Swift.Void, Swift.Never>
+}
+extension MapConductorCore.CircleState : MapConductorCore.OverlayCollectableState {
+  final public func overlayChangePublisher() -> Combine.AnyPublisher<Swift.Void, Swift.Never>
+}
+extension MapConductorCore.PolylineState : MapConductorCore.OverlayCollectableState {
+  final public func overlayChangePublisher() -> Combine.AnyPublisher<Swift.Void, Swift.Never>
+}
+extension MapConductorCore.PolygonState : MapConductorCore.OverlayCollectableState {
+  final public func overlayChangePublisher() -> Combine.AnyPublisher<Swift.Void, Swift.Never>
+}
+extension MapConductorCore.GroundImageState : MapConductorCore.OverlayCollectableState {
+  final public func overlayChangePublisher() -> Combine.AnyPublisher<Swift.Void, Swift.Never>
+}
+extension MapConductorCore.RasterLayerState : MapConductorCore.OverlayCollectableState {
+  final public func overlayChangePublisher() -> Combine.AnyPublisher<Swift.Void, Swift.Never>
+}
+@_Concurrency.MainActor final public class OverlayCollector<S> where S : MapConductorCore.OverlayCollectableState {
+  @_Concurrency.MainActor public init(shouldApply: @escaping () -> Swift.Bool = { true })
+  @_Concurrency.MainActor final public func setShouldApply(_ gate: @escaping () -> Swift.Bool)
+  @_Concurrency.MainActor final public func onMembershipChange(_ handler: @escaping ([S]) -> Swift.Void)
+  @_Concurrency.MainActor final public func onStateChange(_ handler: @escaping (S) -> Swift.Void)
+  @_Concurrency.MainActor final public func sync(_ states: [S])
+  @_Concurrency.MainActor final public func flush()
+  @_Concurrency.MainActor final public func values() -> [S]
+  @_Concurrency.MainActor final public func get(_ id: Swift.String) -> S?
+  @_Concurrency.MainActor final public func clear()
+  @objc deinit
+}
+@_Concurrency.MainActor public func bindOverlayCollector<S, C>(_ collector: MapConductorCore.OverlayCollector<S>, to controller: C) where S : MapConductorCore.OverlayCollectableState, S == C.StateType, C : MapConductorCore.OverlayControllerProtocol
+public func bridgeHolesIntoSingleRing(outer: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]], separation: Swift.Double = 0.0) -> [any MapConductorCore.GeoPointProtocol]
+public func bridgeHolesIntoSingleRingWrapAware(outer: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]], separation: Swift.Double = 0.0) -> [any MapConductorCore.GeoPointProtocol]
+open class PolygonController<ActualPolygon, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualPolygon == Renderer.ActualPolygon, Renderer : MapConductorCore.PolygonOverlayRendererProtocol {
+  public typealias StateType = MapConductorCore.PolygonState
+  public typealias EntityType = MapConductorCore.PolygonEntity<ActualPolygon>
+  public typealias EventType = MapConductorCore.PolygonEvent
+  final public let polygonManager: MapConductorCore.PolygonManager<ActualPolygon>
+  open var renderer: Renderer
+  final public let zIndex: Swift.Int
+  public var clickListener: ((MapConductorCore.PolygonEvent) -> Swift.Void)?
+  public init(polygonManager: MapConductorCore.PolygonManager<ActualPolygon>, renderer: Renderer, clickListener: ((MapConductorCore.PolygonEvent) -> Swift.Void)? = nil)
+  public func dispatchClick(event: MapConductorCore.PolygonEvent)
+  open func add(data: [MapConductorCore.PolygonState]) async
+  open func update(state: MapConductorCore.PolygonState) async
+  open func clear() async
+  open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.PolygonEntity<ActualPolygon>?
+  open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+  open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
+  @objc deinit
+}
+public protocol PolygonEntityProtocol {
+  associatedtype ActualPolygon
+  var polygon: Self.ActualPolygon? { get set }
+  var state: MapConductorCore.PolygonState { get }
+  var fingerPrint: MapConductorCore.PolygonFingerPrint { get }
+}
+final public class PolygonEntity<ActualPolygon> : MapConductorCore.PolygonEntityProtocol {
+  final public var polygon: ActualPolygon?
+  final public let state: MapConductorCore.PolygonState
+  final public let fingerPrint: MapConductorCore.PolygonFingerPrint
+  public init(polygon: ActualPolygon?, state: MapConductorCore.PolygonState)
+  @objc deinit
+}
+public func partitionPolygonByHoles(outer: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]]) -> [(outer: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]])]
+public func splitPolygonWithHolesIntoSimpleRings(outer: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]]) -> [[any MapConductorCore.GeoPointProtocol]]
+public protocol PolygonManagerProtocol {
+  associatedtype ActualPolygon
+  func registerEntity(_ entity: MapConductorCore.PolygonEntity<Self.ActualPolygon>)
+  func removeEntity(_ id: Swift.String) -> MapConductorCore.PolygonEntity<Self.ActualPolygon>?
+  func getEntity(_ id: Swift.String) -> MapConductorCore.PolygonEntity<Self.ActualPolygon>?
+  func hasEntity(_ id: Swift.String) -> Swift.Bool
+  func allEntities() -> [MapConductorCore.PolygonEntity<Self.ActualPolygon>]
+  func clear()
+  func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.PolygonEntity<Self.ActualPolygon>?
+}
+final public class PolygonManager<ActualPolygon> : MapConductorCore.PolygonManagerProtocol {
+  public init()
+  final public func registerEntity(_ entity: MapConductorCore.PolygonEntity<ActualPolygon>)
+  final public func removeEntity(_ id: Swift.String) -> MapConductorCore.PolygonEntity<ActualPolygon>?
+  final public func getEntity(_ id: Swift.String) -> MapConductorCore.PolygonEntity<ActualPolygon>?
+  final public func hasEntity(_ id: Swift.String) -> Swift.Bool
+  final public func allEntities() -> [MapConductorCore.PolygonEntity<ActualPolygon>]
+  final public func clear()
+  final public func destroy()
+  final public var isDestroyed: Swift.Bool {
+    get
+  }
+  final public func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.PolygonEntity<ActualPolygon>?
+  @objc deinit
+}
+public protocol PolygonOverlayRendererProtocol {
+  associatedtype ActualPolygon
+  func onAdd(data: [MapConductorCore.PolygonOverlayAddParams]) async -> [Self.ActualPolygon?]
+  func onChange(data: [MapConductorCore.PolygonOverlayChangeParams<Self.ActualPolygon>]) async -> [Self.ActualPolygon?]
+  func onRemove(data: [MapConductorCore.PolygonEntity<Self.ActualPolygon>]) async
+  func onPostProcess() async
+}
+open class AbstractPolygonOverlayRenderer<ActualPolygon> : MapConductorCore.PolygonOverlayRendererProtocol {
+  public init()
+  open func onPostProcess() async
+  open func createPolygon(state: MapConductorCore.PolygonState) async -> ActualPolygon?
+  open func updatePolygonProperties(polygon: ActualPolygon, current: MapConductorCore.PolygonEntity<ActualPolygon>, prev: MapConductorCore.PolygonEntity<ActualPolygon>) async -> ActualPolygon?
+  open func removePolygon(entity: MapConductorCore.PolygonEntity<ActualPolygon>) async
+  public func onAdd(data: [MapConductorCore.PolygonOverlayAddParams]) async -> [ActualPolygon?]
+  public func onChange(data: [MapConductorCore.PolygonOverlayChangeParams<ActualPolygon>]) async -> [ActualPolygon?]
+  public func onRemove(data: [MapConductorCore.PolygonEntity<ActualPolygon>]) async
+  @objc deinit
+}
+public struct PolygonOverlayAddParams {
+  public let state: MapConductorCore.PolygonState
+  public init(state: MapConductorCore.PolygonState)
+}
+public struct PolygonOverlayChangeParams<ActualPolygon> {
+  public let current: MapConductorCore.PolygonEntity<ActualPolygon>
+  public let prev: MapConductorCore.PolygonEntity<ActualPolygon>
+  public init(current: MapConductorCore.PolygonEntity<ActualPolygon>, prev: MapConductorCore.PolygonEntity<ActualPolygon>)
+}
+public struct PolygonFingerPrint : Swift.Equatable, Swift.Hashable {
+  public let id: Swift.Int
+  public let strokeColor: Swift.Int
+  public let strokeWidth: Swift.Int
+  public let fillColor: Swift.Int
+  public let geodesic: Swift.Int
+  public let zIndex: Swift.Int
+  public let points: Swift.Int
+  public let holes: Swift.Int
+  public let extra: Swift.Int
+  public static func == (a: MapConductorCore.PolygonFingerPrint, b: MapConductorCore.PolygonFingerPrint) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct PolygonEvent {
+  public let state: MapConductorCore.PolygonState
+  public let clicked: any MapConductorCore.GeoPointProtocol
+  public init(state: MapConductorCore.PolygonState, clicked: any MapConductorCore.GeoPointProtocol)
+}
+public typealias OnPolygonEventHandler = (MapConductorCore.PolygonEvent) -> Swift.Void
+final public class PolygonState : Combine.ObservableObject, Swift.Identifiable, Swift.Equatable, Swift.Hashable {
+  final public let id: Swift.String
+  @Combine.Published<UIKit.UIColor> @_projectedValueProperty($strokeColor) final public var strokeColor: UIKit.UIColor {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $strokeColor: Combine.Published<UIKit.UIColor>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Double> @_projectedValueProperty($strokeWidth) final public var strokeWidth: Swift.Double {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $strokeWidth: Combine.Published<Swift.Double>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<UIKit.UIColor> @_projectedValueProperty($fillColor) final public var fillColor: UIKit.UIColor {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $fillColor: Combine.Published<UIKit.UIColor>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Bool> @_projectedValueProperty($geodesic) final public var geodesic: Swift.Bool {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $geodesic: Combine.Published<Swift.Bool>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Int> @_projectedValueProperty($zIndex) final public var zIndex: Swift.Int {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $zIndex: Combine.Published<Swift.Int>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<[any MapConductorCore.GeoPointProtocol]> @_projectedValueProperty($points) final public var points: [any MapConductorCore.GeoPointProtocol] {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $points: Combine.Published<[any MapConductorCore.GeoPointProtocol]>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<[[any MapConductorCore.GeoPointProtocol]]> @_projectedValueProperty($holes) final public var holes: [[any MapConductorCore.GeoPointProtocol]] {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $holes: Combine.Published<[[any MapConductorCore.GeoPointProtocol]]>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Any?> @_projectedValueProperty($extra) final public var extra: Any? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $extra: Combine.Published<Any?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.OnPolygonEventHandler?> @_projectedValueProperty($onClick) final public var onClick: MapConductorCore.OnPolygonEventHandler? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $onClick: Combine.Published<MapConductorCore.OnPolygonEventHandler?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  public init(points: [any MapConductorCore.GeoPointProtocol], holes: [[any MapConductorCore.GeoPointProtocol]] = [], id: Swift.String? = nil, strokeColor: UIKit.UIColor = .black, strokeWidth: Swift.Double = 2.0, fillColor: UIKit.UIColor = .clear, geodesic: Swift.Bool = false, zIndex: Swift.Int = 0, extra: Any? = nil, onClick: MapConductorCore.OnPolygonEventHandler? = nil)
+  final public func copy(points: [any MapConductorCore.GeoPointProtocol]? = nil, holes: [[any MapConductorCore.GeoPointProtocol]]? = nil, id: Swift.String? = nil, strokeColor: UIKit.UIColor? = nil, strokeWidth: Swift.Double? = nil, fillColor: UIKit.UIColor? = nil, geodesic: Swift.Bool? = nil, zIndex: Swift.Int? = nil, extra: Any? = nil, onClick: MapConductorCore.OnPolygonEventHandler? = nil) -> MapConductorCore.PolygonState
+  final public func fingerPrint() -> MapConductorCore.PolygonFingerPrint
+  final public func asFlow() -> Combine.AnyPublisher<MapConductorCore.PolygonFingerPrint, Swift.Never>
+  public static func == (lhs: MapConductorCore.PolygonState, rhs: MapConductorCore.PolygonState) -> Swift.Bool
+  final public func hash(into hasher: inout Swift.Hasher)
+  final public func hashCode() -> Swift.Int
+  public typealias ID = Swift.String
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+  final public var hashValue: Swift.Int {
+    get
+  }
+}
+public protocol PolygonSyncHandler : AnyObject {
+  func bindPolygonSync(_ polygonSync: @escaping @_Concurrency.MainActor ([MapConductorCore.PolygonState]) async -> Swift.Void)
+}
+extension MapConductorCore.PolygonState {
+  final public func unionHoles() -> MapConductorCore.PolygonState
+  final public func unionHolesInBackground() async -> MapConductorCore.PolygonState
+  @discardableResult
+  final public func unionHolesInPlace() -> MapConductorCore.PolygonState
+}
+public func polygonSignedArea(_ ring: [any MapConductorCore.GeoPointProtocol]) -> Swift.Double
+public func ensureCounterClockwise(_ ring: [any MapConductorCore.GeoPointProtocol]) -> [any MapConductorCore.GeoPointProtocol]
+public func ensureClockwiseRing(_ ring: [any MapConductorCore.GeoPointProtocol]) -> [any MapConductorCore.GeoPointProtocol]
+open class PolylineController<ActualPolyline, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualPolyline == Renderer.ActualPolyline, Renderer : MapConductorCore.PolylineOverlayRendererProtocol {
+  public typealias StateType = MapConductorCore.PolylineState
+  public typealias EntityType = MapConductorCore.PolylineEntity<ActualPolyline>
+  public typealias EventType = MapConductorCore.PolylineEvent
+  final public let polylineManager: MapConductorCore.PolylineManager<ActualPolyline>
+  open var renderer: Renderer
+  final public let zIndex: Swift.Int
+  public var clickListener: ((MapConductorCore.PolylineEvent) -> Swift.Void)?
+  public init(polylineManager: MapConductorCore.PolylineManager<ActualPolyline>, renderer: Renderer, clickListener: ((MapConductorCore.PolylineEvent) -> Swift.Void)? = nil)
+  public func dispatchClick(event: MapConductorCore.PolylineEvent)
+  open func add(data: [MapConductorCore.PolylineState]) async
+  open func update(state: MapConductorCore.PolylineState) async
+  open func clear() async
+  open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.PolylineEntity<ActualPolyline>?
+  public func findWithClosestPoint(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.PolylineHitResult<ActualPolyline>?
+  public func setCurrentCameraPosition(_ cameraPosition: MapConductorCore.MapCameraPosition?)
+  open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+  open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
+  @objc deinit
+}
+public protocol PolylineEntityProtocol {
+  associatedtype ActualPolyline
+  var polyline: Self.ActualPolyline? { get set }
+  var state: MapConductorCore.PolylineState { get }
+  var fingerPrint: MapConductorCore.PolylineFingerPrint { get }
+}
+final public class PolylineEntity<ActualPolyline> : MapConductorCore.PolylineEntityProtocol {
+  final public var polyline: ActualPolyline?
+  final public let state: MapConductorCore.PolylineState
+  final public let fingerPrint: MapConductorCore.PolylineFingerPrint
+  public init(polyline: ActualPolyline?, state: MapConductorCore.PolylineState)
+  @objc deinit
+}
+public struct PolylineHitResult<ActualPolyline> {
+  public let entity: MapConductorCore.PolylineEntity<ActualPolyline>
+  public let closestPoint: any MapConductorCore.GeoPointProtocol
+}
+public protocol PolylineManagerProtocol {
+  associatedtype ActualPolyline
+  func registerEntity(_ entity: MapConductorCore.PolylineEntity<Self.ActualPolyline>)
+  func removeEntity(_ id: Swift.String) -> MapConductorCore.PolylineEntity<Self.ActualPolyline>?
+  func getEntity(_ id: Swift.String) -> MapConductorCore.PolylineEntity<Self.ActualPolyline>?
+  func hasEntity(_ id: Swift.String) -> Swift.Bool
+  func allEntities() -> [MapConductorCore.PolylineEntity<Self.ActualPolyline>]
+  func clear()
+  func find(position: any MapConductorCore.GeoPointProtocol, cameraPosition: MapConductorCore.MapCameraPosition?) -> MapConductorCore.PolylineHitResult<Self.ActualPolyline>?
+}
+final public class PolylineManager<ActualPolyline> : MapConductorCore.PolylineManagerProtocol {
+  public init()
+  final public func registerEntity(_ entity: MapConductorCore.PolylineEntity<ActualPolyline>)
+  final public func removeEntity(_ id: Swift.String) -> MapConductorCore.PolylineEntity<ActualPolyline>?
+  final public func getEntity(_ id: Swift.String) -> MapConductorCore.PolylineEntity<ActualPolyline>?
+  final public func hasEntity(_ id: Swift.String) -> Swift.Bool
+  final public func allEntities() -> [MapConductorCore.PolylineEntity<ActualPolyline>]
+  final public func clear()
+  final public func destroy()
+  final public var isDestroyed: Swift.Bool {
+    get
+  }
+  final public func find(position: any MapConductorCore.GeoPointProtocol, cameraPosition: MapConductorCore.MapCameraPosition?) -> MapConductorCore.PolylineHitResult<ActualPolyline>?
+  @objc deinit
+}
+public protocol PolylineOverlayRendererProtocol {
+  associatedtype ActualPolyline
+  func onAdd(data: [MapConductorCore.PolylineOverlayAddParams]) async -> [Self.ActualPolyline?]
+  func onChange(data: [MapConductorCore.PolylineOverlayChangeParams<Self.ActualPolyline>]) async -> [Self.ActualPolyline?]
+  func onRemove(data: [MapConductorCore.PolylineEntity<Self.ActualPolyline>]) async
+  func onPostProcess() async
+}
+open class AbstractPolylineOverlayRenderer<ActualPolyline> : MapConductorCore.PolylineOverlayRendererProtocol {
+  public init()
+  open func onPostProcess() async
+  open func createPolyline(state: MapConductorCore.PolylineState) async -> ActualPolyline?
+  open func updatePolylineProperties(polyline: ActualPolyline, current: MapConductorCore.PolylineEntity<ActualPolyline>, prev: MapConductorCore.PolylineEntity<ActualPolyline>) async -> ActualPolyline?
+  open func removePolyline(entity: MapConductorCore.PolylineEntity<ActualPolyline>) async
+  public func onAdd(data: [MapConductorCore.PolylineOverlayAddParams]) async -> [ActualPolyline?]
+  public func onChange(data: [MapConductorCore.PolylineOverlayChangeParams<ActualPolyline>]) async -> [ActualPolyline?]
+  public func onRemove(data: [MapConductorCore.PolylineEntity<ActualPolyline>]) async
+  @objc deinit
+}
+public struct PolylineOverlayAddParams {
+  public let state: MapConductorCore.PolylineState
+  public init(state: MapConductorCore.PolylineState)
+}
+public struct PolylineOverlayChangeParams<ActualPolyline> {
+  public let current: MapConductorCore.PolylineEntity<ActualPolyline>
+  public let prev: MapConductorCore.PolylineEntity<ActualPolyline>
+  public init(current: MapConductorCore.PolylineEntity<ActualPolyline>, prev: MapConductorCore.PolylineEntity<ActualPolyline>)
+}
+public struct PolylineFingerPrint : Swift.Equatable, Swift.Hashable {
+  public let id: Swift.Int
+  public let strokeColor: Swift.Int
+  public let strokeWidth: Swift.Int
+  public let geodesic: Swift.Int
+  public let points: Swift.Int
+  public let zIndex: Swift.Int
+  public let extra: Swift.Int
+  public static func == (a: MapConductorCore.PolylineFingerPrint, b: MapConductorCore.PolylineFingerPrint) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct PolylineEvent {
+  public let state: MapConductorCore.PolylineState
+  public let clicked: any MapConductorCore.GeoPointProtocol
+  public init(state: MapConductorCore.PolylineState, clicked: any MapConductorCore.GeoPointProtocol)
+}
+public typealias OnPolylineEventHandler = (MapConductorCore.PolylineEvent) -> Swift.Void
+final public class PolylineState : Combine.ObservableObject, Swift.Identifiable, Swift.Equatable, Swift.Hashable {
+  final public let id: Swift.String
+  @Combine.Published<UIKit.UIColor> @_projectedValueProperty($strokeColor) final public var strokeColor: UIKit.UIColor {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $strokeColor: Combine.Published<UIKit.UIColor>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Double> @_projectedValueProperty($strokeWidth) final public var strokeWidth: Swift.Double {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $strokeWidth: Combine.Published<Swift.Double>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Bool> @_projectedValueProperty($geodesic) final public var geodesic: Swift.Bool {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $geodesic: Combine.Published<Swift.Bool>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<[any MapConductorCore.GeoPointProtocol]> @_projectedValueProperty($points) final public var points: [any MapConductorCore.GeoPointProtocol] {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $points: Combine.Published<[any MapConductorCore.GeoPointProtocol]>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Int> @_projectedValueProperty($zIndex) final public var zIndex: Swift.Int {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $zIndex: Combine.Published<Swift.Int>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Any?> @_projectedValueProperty($extra) final public var extra: Any? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $extra: Combine.Published<Any?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<MapConductorCore.OnPolylineEventHandler?> @_projectedValueProperty($onClick) final public var onClick: MapConductorCore.OnPolylineEventHandler? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $onClick: Combine.Published<MapConductorCore.OnPolylineEventHandler?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  public init(points: [any MapConductorCore.GeoPointProtocol], id: Swift.String? = nil, strokeColor: UIKit.UIColor = .black, strokeWidth: Swift.Double = 1.0, geodesic: Swift.Bool = false, zIndex: Swift.Int = 0, extra: Any? = nil, onClick: MapConductorCore.OnPolylineEventHandler? = nil)
+  final public func copy(points: [any MapConductorCore.GeoPointProtocol]? = nil, id: Swift.String? = nil, strokeColor: UIKit.UIColor? = nil, strokeWidth: Swift.Double? = nil, geodesic: Swift.Bool? = nil, zIndex: Swift.Int? = nil, extra: Any? = nil, onClick: MapConductorCore.OnPolylineEventHandler? = nil) -> MapConductorCore.PolylineState
+  final public func fingerPrint() -> MapConductorCore.PolylineFingerPrint
+  final public func asFlow() -> Combine.AnyPublisher<MapConductorCore.PolylineFingerPrint, Swift.Never>
+  public static func == (lhs: MapConductorCore.PolylineState, rhs: MapConductorCore.PolylineState) -> Swift.Bool
+  final public func hash(into hasher: inout Swift.Hasher)
+  final public func hashCode() -> Swift.Int
+  public typealias ID = Swift.String
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+  final public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct RasterHeaderRule : Swift.Equatable {
+  public let host: Swift.String
+  public let port: Swift.Int?
+  public let userAgent: Swift.String?
+  public let extraHeaders: [Swift.String : Swift.String]
+  public init(host: Swift.String, port: Swift.Int?, userAgent: Swift.String?, extraHeaders: [Swift.String : Swift.String])
+  public static func == (a: MapConductorCore.RasterHeaderRule, b: MapConductorCore.RasterHeaderRule) -> Swift.Bool
+}
+final public class RasterHeaderRuleSet : @unchecked Swift.Sendable {
+  public static let shared: MapConductorCore.RasterHeaderRuleSet
+  public init()
+  final public var isEmpty: Swift.Bool {
+    get
+  }
+  final public func setRules(_ rules: [MapConductorCore.RasterHeaderRule], owner: Swift.AnyObject)
+  final public func removeRules(owner: Swift.AnyObject)
+  final public func headers(for url: Foundation.URL) -> (userAgent: Swift.String?, extraHeaders: [Swift.String : Swift.String])?
+  public static func makeRules(from states: [MapConductorCore.RasterLayerState]) -> [MapConductorCore.RasterHeaderRule]
+  public static func warnUnsupported(provider: Swift.String, state: MapConductorCore.RasterLayerState, supportsUserAgent: Swift.Bool = false)
+  @objc deinit
+}
+open class RasterLayerController<ActualLayer, Renderer> : MapConductorCore.OverlayControllerProtocol, MapConductorCore.SlottedOverlayController where ActualLayer == Renderer.ActualLayer, Renderer : MapConductorCore.RasterLayerOverlayRendererProtocol {
+  public typealias StateType = MapConductorCore.RasterLayerState
+  public typealias EntityType = MapConductorCore.RasterLayerEntity<ActualLayer>
+  public typealias EventType = MapConductorCore.RasterLayerEvent
+  final public let rasterLayerManager: MapConductorCore.RasterLayerManager<ActualLayer>
+  open var renderer: Renderer
+  final public let zIndex: Swift.Int
+  public var clickListener: ((MapConductorCore.RasterLayerEvent) -> Swift.Void)?
+  public init(rasterLayerManager: MapConductorCore.RasterLayerManager<ActualLayer>, renderer: Renderer, clickListener: ((MapConductorCore.RasterLayerEvent) -> Swift.Void)? = nil)
+  public func dispatchClick(event: MapConductorCore.RasterLayerEvent)
+  open func add(data: [MapConductorCore.RasterLayerState]) async
+  open func update(state: MapConductorCore.RasterLayerState) async
+  open func upsert(state: MapConductorCore.RasterLayerState) async
+  open func removeById(_ id: Swift.String) async
+  open func clear() async
+  open func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.RasterLayerEntity<ActualLayer>?
+  open func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+  open func destroy()
+  public var kind: MapConductorCore.OverlayKind {
+    get
+  }
+  public func hasId(_ id: Swift.String) -> Swift.Bool
+  public func resolveTap(position _: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.OverlayHit?
+  @objc deinit
+}
+public protocol RasterLayerEntityProtocol {
+  associatedtype ActualLayer
+  var layer: Self.ActualLayer? { get set }
+  var state: MapConductorCore.RasterLayerState { get }
+  var fingerPrint: MapConductorCore.RasterLayerFingerPrint { get }
+}
+final public class RasterLayerEntity<ActualLayer> : MapConductorCore.RasterLayerEntityProtocol {
+  final public var layer: ActualLayer?
+  final public let state: MapConductorCore.RasterLayerState
+  final public let fingerPrint: MapConductorCore.RasterLayerFingerPrint
+  public init(layer: ActualLayer?, state: MapConductorCore.RasterLayerState)
+  @objc deinit
+}
+public protocol RasterLayerManagerProtocol {
+  associatedtype ActualLayer
+  func registerEntity(_ entity: MapConductorCore.RasterLayerEntity<Self.ActualLayer>)
+  func removeEntity(_ id: Swift.String) -> MapConductorCore.RasterLayerEntity<Self.ActualLayer>?
+  func getEntity(_ id: Swift.String) -> MapConductorCore.RasterLayerEntity<Self.ActualLayer>?
+  func hasEntity(_ id: Swift.String) -> Swift.Bool
+  func allEntities() -> [MapConductorCore.RasterLayerEntity<Self.ActualLayer>]
+  func clear()
+  func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.RasterLayerEntity<Self.ActualLayer>?
+}
+final public class RasterLayerManager<ActualLayer> : MapConductorCore.RasterLayerManagerProtocol {
+  public init()
+  final public func registerEntity(_ entity: MapConductorCore.RasterLayerEntity<ActualLayer>)
+  final public func removeEntity(_ id: Swift.String) -> MapConductorCore.RasterLayerEntity<ActualLayer>?
+  final public func getEntity(_ id: Swift.String) -> MapConductorCore.RasterLayerEntity<ActualLayer>?
+  final public func hasEntity(_ id: Swift.String) -> Swift.Bool
+  final public func allEntities() -> [MapConductorCore.RasterLayerEntity<ActualLayer>]
+  final public func clear()
+  final public func destroy()
+  final public var isDestroyed: Swift.Bool {
+    get
+  }
+  final public func find(position: any MapConductorCore.GeoPointProtocol) -> MapConductorCore.RasterLayerEntity<ActualLayer>?
+  @objc deinit
+}
+public protocol RasterLayerOverlayRendererProtocol {
+  associatedtype ActualLayer
+  func onAdd(data: [MapConductorCore.RasterLayerOverlayAddParams]) async -> [Self.ActualLayer?]
+  func onChange(data: [MapConductorCore.RasterLayerOverlayChangeParams<Self.ActualLayer>]) async -> [Self.ActualLayer?]
+  func onRemove(data: [MapConductorCore.RasterLayerEntity<Self.ActualLayer>]) async
+  func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+  func onPostProcess() async
+}
+extension MapConductorCore.RasterLayerOverlayRendererProtocol {
+  public func onCameraChanged(mapCameraPosition: MapConductorCore.MapCameraPosition) async
+}
+open class AbstractRasterLayerOverlayRenderer<ActualLayer> : MapConductorCore.RasterLayerOverlayRendererProtocol {
+  public init()
+  open func onPostProcess() async
+  open func createLayer(state: MapConductorCore.RasterLayerState) async -> ActualLayer?
+  open func updateLayerProperties(layer: ActualLayer, current: MapConductorCore.RasterLayerEntity<ActualLayer>, prev: MapConductorCore.RasterLayerEntity<ActualLayer>) async -> ActualLayer?
+  open func removeLayer(entity: MapConductorCore.RasterLayerEntity<ActualLayer>) async
+  public func onAdd(data: [MapConductorCore.RasterLayerOverlayAddParams]) async -> [ActualLayer?]
+  public func onChange(data: [MapConductorCore.RasterLayerOverlayChangeParams<ActualLayer>]) async -> [ActualLayer?]
+  public func onRemove(data: [MapConductorCore.RasterLayerEntity<ActualLayer>]) async
+  @objc deinit
+}
+public struct RasterLayerOverlayAddParams {
+  public let state: MapConductorCore.RasterLayerState
+  public init(state: MapConductorCore.RasterLayerState)
+}
+public struct RasterLayerOverlayChangeParams<ActualLayer> {
+  public let current: MapConductorCore.RasterLayerEntity<ActualLayer>
+  public let prev: MapConductorCore.RasterLayerEntity<ActualLayer>
+  public init(current: MapConductorCore.RasterLayerEntity<ActualLayer>, prev: MapConductorCore.RasterLayerEntity<ActualLayer>)
+}
+public enum TileScheme : Swift.String, Swift.Hashable {
+  case XYZ
+  case TMS
+  public init?(rawValue: Swift.String)
+  public typealias RawValue = Swift.String
+  public var rawValue: Swift.String {
+    get
+  }
+}
+public enum RasterLayerSource : Swift.Hashable {
+  case urlTemplate(template: Swift.String, tileSize: Swift.Int = RasterLayerSource.defaultTileSize, minZoom: Swift.Int? = nil, maxZoom: Swift.Int? = nil, attributionRules: [MapConductorCore.AttributionRule] = [], scheme: MapConductorCore.TileScheme = .XYZ)
+  case tileJson(url: Swift.String)
+  case arcGisService(serviceUrl: Swift.String)
+  public static let defaultTileSize: Swift.Int
+  public static func == (a: MapConductorCore.RasterLayerSource, b: MapConductorCore.RasterLayerSource) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct RasterLayerFingerPrint : Swift.Equatable, Swift.Hashable {
+  public let id: Swift.Int
+  public let source: Swift.Int
+  public let opacity: Swift.Int
+  public let visible: Swift.Int
+  public let zIndex: Swift.Int
+  public let debug: Swift.Int
+  public let userAgent: Swift.Int
+  public let extraHeaders: Swift.Int
+  public static func == (a: MapConductorCore.RasterLayerFingerPrint, b: MapConductorCore.RasterLayerFingerPrint) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct RasterLayerEvent {
+  public let state: MapConductorCore.RasterLayerState
+  public init(state: MapConductorCore.RasterLayerState)
+}
+public typealias OnRasterLayerEventHandler = (MapConductorCore.RasterLayerEvent) -> Swift.Void
+final public class RasterLayerState : Combine.ObservableObject, Swift.Identifiable, Swift.Equatable, Swift.Hashable {
+  public static let defaultUserAgent: Swift.String
+  final public let id: Swift.String
+  @Combine.Published<MapConductorCore.RasterLayerSource> @_projectedValueProperty($source) final public var source: MapConductorCore.RasterLayerSource {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $source: Combine.Published<MapConductorCore.RasterLayerSource>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Double> @_projectedValueProperty($opacity) final public var opacity: Swift.Double {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $opacity: Combine.Published<Swift.Double>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Bool> @_projectedValueProperty($visible) final public var visible: Swift.Bool {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $visible: Combine.Published<Swift.Bool>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Int> @_projectedValueProperty($zIndex) final public var zIndex: Swift.Int {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $zIndex: Combine.Published<Swift.Int>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.Bool> @_projectedValueProperty($debug) final public var debug: Swift.Bool {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $debug: Combine.Published<Swift.Bool>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<Swift.String?> @_projectedValueProperty($userAgent) final public var userAgent: Swift.String? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $userAgent: Combine.Published<Swift.String?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  @Combine.Published<[Swift.String : Swift.String]?> @_projectedValueProperty($extraHeaders) final public var extraHeaders: [Swift.String : Swift.String]? {
+    get
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    set
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    _modify
+  }
+  final public var $extraHeaders: Combine.Published<[Swift.String : Swift.String]?>.Publisher {
+    get
+    @available(iOS 14.0, tvOS 14.0, watchOS 7.0, macOS 11.0, *)
+    set
+  }
+  public init(source: MapConductorCore.RasterLayerSource, opacity: Swift.Double = 1.0, visible: Swift.Bool = true, zIndex: Swift.Int = 0, debug: Swift.Bool = false, userAgent: Swift.String = RasterLayerState.defaultUserAgent, extraHeaders: [Swift.String : Swift.String]? = nil, id: Swift.String? = nil)
+  final public func copy(source: MapConductorCore.RasterLayerSource? = nil, opacity: Swift.Double? = nil, visible: Swift.Bool? = nil, zIndex: Swift.Int? = nil, debug: Swift.Bool? = nil, userAgent: Swift.String? = nil, extraHeaders: [Swift.String : Swift.String]? = nil, id: Swift.String? = nil) -> MapConductorCore.RasterLayerState
+  final public func fingerPrint() -> MapConductorCore.RasterLayerFingerPrint
+  final public func asFlow() -> Combine.AnyPublisher<MapConductorCore.RasterLayerFingerPrint, Swift.Never>
+  public static func == (lhs: MapConductorCore.RasterLayerState, rhs: MapConductorCore.RasterLayerState) -> Swift.Bool
+  final public func hash(into hasher: inout Swift.Hasher)
+  final public func hashCode() -> Swift.Int
+  public typealias ID = Swift.String
+  public typealias ObjectWillChangePublisher = Combine.ObservableObjectPublisher
+  @objc deinit
+  final public var hashValue: Swift.Int {
+    get
+  }
+}
+public enum MarkerIconSize {
+  public static let Small: CoreFoundation.CGFloat
+  public static let Regular: CoreFoundation.CGFloat
+  public static let Large: CoreFoundation.CGFloat
+}
+public struct Settings {
+  public let tapTolerance: CoreFoundation.CGFloat
+  public let markerDropAnimateDuration: Swift.Int
+  public let markerBounceAnimateDuration: Swift.Int
+  public let iconSize: CoreFoundation.CGFloat
+  public let iconStroke: CoreFoundation.CGFloat
+  public let composeEventDebounce: Swift.Int
+  public init(tapTolerance: CoreFoundation.CGFloat, markerDropAnimateDuration: Swift.Int, markerBounceAnimateDuration: Swift.Int, iconSize: CoreFoundation.CGFloat, iconStroke: CoreFoundation.CGFloat, composeEventDebounce: Swift.Int)
+  public static let Default: MapConductorCore.Settings
+}
+extension MapConductorCore.Settings {
+  public var markerDropAnimateInterval: Foundation.TimeInterval {
+    get
+  }
+  public var markerBounceAnimateInterval: Foundation.TimeInterval {
+    get
+  }
+}
+public func calculateMetersPerPixel(latitude: Swift.Double, zoom: Swift.Double, tileSize: Swift.Double = 256.0) -> Swift.Double
+public func closestPointOnSegment(startPoint: CoreFoundation.CGPoint, endPoint: CoreFoundation.CGPoint, testPoint: CoreFoundation.CGPoint) -> CoreFoundation.CGPoint
+public func expandBounds(bounds: MapConductorCore.GeoRectBounds, margin: Swift.Double) -> MapConductorCore.GeoRectBounds
+public enum Planar {
+  public static func interpolate(from: any MapConductorCore.GeoPointProtocol, to: any MapConductorCore.GeoPointProtocol, fraction: Swift.Double) -> MapConductorCore.GeoPoint
+  public static func createInterpolatePoints(_ points: [any MapConductorCore.GeoPointProtocol], maxSegmentLength: Swift.Double = 10_000.0) -> [any MapConductorCore.GeoPointProtocol]
+  public static func pointOnLineOrNull(from: any MapConductorCore.GeoPointProtocol, to: any MapConductorCore.GeoPointProtocol, position: any MapConductorCore.GeoPointProtocol, thresholdMeters: Swift.Double) -> (any MapConductorCore.GeoPointProtocol, Swift.Double)?
+}
+public enum Spherical {
+  public static func computeDistanceBetween(from: any MapConductorCore.GeoPointProtocol, to: any MapConductorCore.GeoPointProtocol) -> Swift.Double
+  public static func computeHeading(from: any MapConductorCore.GeoPointProtocol, to: any MapConductorCore.GeoPointProtocol) -> Swift.Double
+  public static func computeOffset(origin: any MapConductorCore.GeoPointProtocol, distance: Swift.Double, heading: Swift.Double) -> MapConductorCore.GeoPoint
+  public static func computeOffsetOrigin(to: any MapConductorCore.GeoPointProtocol, distance: Swift.Double, heading: Swift.Double) -> MapConductorCore.GeoPoint?
+  public static func computeLength(_ path: [any MapConductorCore.GeoPointProtocol]) -> Swift.Double
+  public static func computeArea(_ path: [any MapConductorCore.GeoPointProtocol]) -> Swift.Double
+  public static func computeSignedArea(_ path: [any MapConductorCore.GeoPointProtocol]) -> Swift.Double
+  public static func interpolate(from: any MapConductorCore.GeoPointProtocol, to: any MapConductorCore.GeoPointProtocol, fraction: Swift.Double) -> MapConductorCore.GeoPoint
+}
+public func splitByMeridian(_ points: [any MapConductorCore.GeoPointProtocol], geodesic: Swift.Bool) -> [[any MapConductorCore.GeoPointProtocol]]
+public enum WGS84Geodesic {
+  public static func computeDistanceBetween(from: any MapConductorCore.GeoPointProtocol, to: any MapConductorCore.GeoPointProtocol) -> Swift.Double
+  public static func computeHeading(from: any MapConductorCore.GeoPointProtocol, to: any MapConductorCore.GeoPointProtocol) -> Swift.Double
+  public static func computeOffset(origin: any MapConductorCore.GeoPointProtocol, distance: Swift.Double, heading: Swift.Double) -> MapConductorCore.GeoPoint
+  public static func computeOffsetOrigin(to: any MapConductorCore.GeoPointProtocol, distance: Swift.Double, heading: Swift.Double) -> MapConductorCore.GeoPoint?
+  public static func computeLength(_ path: [any MapConductorCore.GeoPointProtocol]) -> Swift.Double
+  public static func createInterpolatePoints(_ points: [any MapConductorCore.GeoPointProtocol], maxSegmentLength: Swift.Double = 10_000.0) -> [any MapConductorCore.GeoPointProtocol]
+  public static func pointOnLineOrNull(from: any MapConductorCore.GeoPointProtocol, to: any MapConductorCore.GeoPointProtocol, position: any MapConductorCore.GeoPointProtocol, thresholdMeters: Swift.Double) -> (any MapConductorCore.GeoPointProtocol, Swift.Double)?
+  public static func computeSignedArea(_ path: [any MapConductorCore.GeoPointProtocol]) -> Swift.Double
+  public static func computeArea(_ path: [any MapConductorCore.GeoPointProtocol]) -> Swift.Double
+  public static func interpolate(from: any MapConductorCore.GeoPointProtocol, to: any MapConductorCore.GeoPointProtocol, fraction: Swift.Double) -> MapConductorCore.GeoPoint
+}
+public enum AbstractZoomAltitudeConverter {
+  public static let defaultZoom0Altitude: Swift.Double
+  public static let zoomFactor: Swift.Double
+  public static let minZoomLevel: Swift.Double
+  public static let maxZoomLevel: Swift.Double
+  public static let minAltitude: Swift.Double
+  public static let maxAltitude: Swift.Double
+  public static let minCosLat: Swift.Double
+  public static let minCosTilt: Swift.Double
+  public static let webMercatorInitialMpp256: Swift.Double
+}
+open class WebMercatorZoomAltitudeConverter : MapConductorCore.ZoomAltitudeConverterProtocol {
+  final public let zoom0Altitude: Swift.Double
+  public init(zoom0Altitude: Swift.Double = AbstractZoomAltitudeConverter.defaultZoom0Altitude, zoomOffset: Swift.Double = 0.0)
+  open func zoomOffset(at _: Swift.Double) -> Swift.Double
+  public func toUnifiedZoom(_ nativeZoom: Swift.Double, latitude: Swift.Double = 0.0) -> Swift.Double
+  public func toNativeZoom(_ unifiedZoom: Swift.Double, latitude: Swift.Double = 0.0) -> Swift.Double
+  public func cosLatitudeFactor(_ latitudeDeg: Swift.Double) -> Swift.Double
+  public func cosTiltFactor(_ tiltDeg: Swift.Double) -> Swift.Double
+  public func zoomLevelToAltitude(zoomLevel: Swift.Double, latitude: Swift.Double, tilt: Swift.Double) -> Swift.Double
+  public func altitudeToZoomLevel(altitude: Swift.Double, latitude: Swift.Double, tilt: Swift.Double) -> Swift.Double
+  @objc deinit
+}
+open class GroundScaleZoomAltitudeConverter : MapConductorCore.WebMercatorZoomAltitudeConverter {
+  public init(zoom0Altitude: Swift.Double = AbstractZoomAltitudeConverter.defaultZoom0Altitude, baseZoomOffset: Swift.Double)
+  override public func zoomOffset(at latitude: Swift.Double) -> Swift.Double
+  @objc deinit
+}
+public protocol ZoomAltitudeConverterProtocol {
+  var zoom0Altitude: Swift.Double { get }
+  func zoomLevelToAltitude(zoomLevel: Swift.Double, latitude: Swift.Double, tilt: Swift.Double) -> Swift.Double
+  func altitudeToZoomLevel(altitude: Swift.Double, latitude: Swift.Double, tilt: Swift.Double) -> Swift.Double
+}
+extension MapConductorCore.ZoomAltitudeConverterProtocol {
+  public static var defaultZoom0Altitude: Swift.Double {
+    get
+  }
+  public static var zoomFactor: Swift.Double {
+    get
+  }
+  public static var minZoomLevel: Swift.Double {
+    get
+  }
+  public static var maxZoomLevel: Swift.Double {
+    get
+  }
+  public static var minAltitude: Swift.Double {
+    get
+  }
+  public static var maxAltitude: Swift.Double {
+    get
+  }
+  public static var minCosLat: Swift.Double {
+    get
+  }
+  public static var minCosTilt: Swift.Double {
+    get
+  }
+  public static var webMercatorInitialMpp256: Swift.Double {
+    get
+  }
+}
+extension MapConductorCore.MapGesture : Swift.Equatable {}
+extension MapConductorCore.MapGesture : Swift.Hashable {}
+extension MapConductorCore.MapGesture : Swift.RawRepresentable {}
+extension MapConductorCore.MapViewBase : Swift.Sendable {}
+extension MapConductorCore.MapViewCoordinatorBase : Swift.Sendable {}
+extension MapConductorCore.OverlayKind : Swift.Equatable {}
+extension MapConductorCore.OverlayKind : Swift.Hashable {}
+extension MapConductorCore.OverlayKind : Swift.RawRepresentable {}
+extension MapConductorCore.Direction6 : Swift.Equatable {}
+extension MapConductorCore.Direction6 : Swift.Hashable {}
+extension MapConductorCore.DefaultInfoBubbleView : Swift.Sendable {}
+extension MapConductorCore.InfoBubbleOverlayCoordinator : Swift.Sendable {}
+extension MapConductorCore.MapAttributionOverlay : Swift.Sendable {}
+extension MapConductorCore.MapCapability : Swift.Equatable {}
+extension MapConductorCore.MapCapability : Swift.Hashable {}
+extension MapConductorCore.MapCapability : Swift.RawRepresentable {}
+extension MapConductorCore.MapDiagnosticLevel : Swift.Equatable {}
+extension MapConductorCore.MapDiagnosticLevel : Swift.Hashable {}
+extension MapConductorCore.MapDiagnosticLevel : Swift.RawRepresentable {}
+extension MapConductorCore.MapServiceRegistryScope : Swift.Sendable {}
+extension MapConductorCore.InitState : Swift.Equatable {}
+extension MapConductorCore.InitState : Swift.Hashable {}
+extension MapConductorCore.DefaultMarkerEventController : Swift.Sendable {}
+extension MapConductorCore.MarkerDragGestureState : Swift.Equatable {}
+extension MapConductorCore.MarkerDragGestureState : Swift.Hashable {}
+extension MapConductorCore.MarkerAnimationOverlayCoordinator : Swift.Sendable {}
+extension MapConductorCore.AnyMarkerOverlayRenderer : Swift.Sendable {}
+extension MapConductorCore.MarkerAnimation : Swift.Equatable {}
+extension MapConductorCore.MarkerAnimation : Swift.Hashable {}
+extension MapConductorCore.StrategyMarkerManager : Swift.Sendable {}
+extension MapConductorCore.DeferredUntilReady : Swift.Sendable {}
+extension MapConductorCore.MapOverlayScope : Swift.Sendable {}
+extension MapConductorCore.OverlayCollector : Swift.Sendable {}
+extension MapConductorCore.TileScheme : Swift.RawRepresentable {}

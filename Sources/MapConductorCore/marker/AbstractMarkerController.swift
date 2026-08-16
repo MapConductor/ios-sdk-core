@@ -3,7 +3,7 @@ import Foundation
 open class AbstractMarkerController<
     ActualMarker,
     Renderer: MarkerOverlayRendererProtocol
->: OverlayControllerProtocol where Renderer.ActualMarker == ActualMarker {
+>: OverlayControllerProtocol, SlottedOverlayController where Renderer.ActualMarker == ActualMarker {
     public typealias StateType = MarkerState
     public typealias EntityType = MarkerEntity<ActualMarker>
     public typealias EventType = MarkerState
@@ -354,6 +354,20 @@ open class AbstractMarkerController<
         draggingMarkerIds.removeAll()
         markerManager.destroy()
     }
+
+    // ── SlottedOverlayController ────────────────────────────────────────
+    //
+    // kind は**必須メンバ**。既定値を持たせると、宣言忘れがコンパイルを通ってしまい
+    // カスケードとスロットから黙って漏れる（android-sdk で実際に踏んだ）。
+
+    public var kind: OverlayKind { .marker }
+
+    public func hasId(_ id: String) -> Bool {
+        markerManager.hasEntity(id)
+    }
+
+    /// マーカーは判定に画面投影が要るのでカスケードの別経路で扱う。ここでは当たらない。
+    public func resolveTap(position _: GeoPointProtocol) -> OverlayHit? { nil }
 }
 
 /// android-sdk の `MARKER_RENDER_BATCH_SIZE` と同値。

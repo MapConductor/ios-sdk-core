@@ -1,6 +1,6 @@
 import Foundation
 
-open class GroundImageController<ActualGroundImage, Renderer: GroundImageOverlayRendererProtocol>: OverlayControllerProtocol
+open class GroundImageController<ActualGroundImage, Renderer: GroundImageOverlayRendererProtocol>: OverlayControllerProtocol, SlottedOverlayController
 where Renderer.ActualGroundImage == ActualGroundImage {
     public typealias StateType = GroundImageState
     public typealias EntityType = GroundImageEntity<ActualGroundImage>
@@ -135,5 +135,23 @@ where Renderer.ActualGroundImage == ActualGroundImage {
     open func destroy() {
         groundImageManager.destroy()
     }
+    // ── SlottedOverlayController ────────────────────────────────────────
+    //
+    // kind は**必須メンバ**。既定値を持たせると、宣言忘れがコンパイルを通ってしまい
+    // カスケードとスロットから黙って漏れる（android-sdk で実際に踏んだ）。
+
+    public var kind: OverlayKind { .groundImage }
+
+    public func hasId(_ id: String) -> Bool {
+        groundImageManager.hasEntity(id)
+    }
+
+    public func resolveTap(position: GeoPointProtocol) -> OverlayHit? {
+        guard let entity = find(position: position) else { return nil }
+        return OverlayHit(kind: .groundImage, clicked: position) { [weak self] in
+            self?.dispatchClick(event: GroundImageEvent(state: entity.state, clicked: position))
+        }
+    }
+
 }
 

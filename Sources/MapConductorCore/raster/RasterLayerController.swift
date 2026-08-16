@@ -1,4 +1,4 @@
-open class RasterLayerController<ActualLayer, Renderer: RasterLayerOverlayRendererProtocol>: OverlayControllerProtocol
+open class RasterLayerController<ActualLayer, Renderer: RasterLayerOverlayRendererProtocol>: OverlayControllerProtocol, SlottedOverlayController
 where Renderer.ActualLayer == ActualLayer {
     public typealias StateType = RasterLayerState
     public typealias EntityType = RasterLayerEntity<ActualLayer>
@@ -178,4 +178,18 @@ where Renderer.ActualLayer == ActualLayer {
     open func destroy() {
         rasterLayerManager.destroy()
     }
+    // ── SlottedOverlayController ────────────────────────────────────────
+    //
+    // kind は**必須メンバ**。既定値を持たせると、宣言忘れがコンパイルを通ってしまい
+    // カスケードとスロットから黙って漏れる（android-sdk で実際に踏んだ）。
+
+    public var kind: OverlayKind { .rasterLayer }
+
+    public func hasId(_ id: String) -> Bool {
+        rasterLayerManager.hasEntity(id)
+    }
+
+    /// ラスターレイヤはクリックを持たない。**明示的に nil を返す**（実装忘れと区別するため）。
+    public func resolveTap(position _: GeoPointProtocol) -> OverlayHit? { nil }
+
 }

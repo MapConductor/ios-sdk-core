@@ -31,4 +31,14 @@ public struct MarkerTilingOptions {
         self.cacheSize = cacheSize
         self.iconScaleCallback = iconScaleCallback
     }
+
+    /// タイル方式で描くか。**この判定を各所で書き直さないこと。**
+    ///
+    /// 以前は `enabled` を見ずに件数だけで判定している箇所があり、
+    /// `Disabled` を渡したページでもタイル扱いになって、マーカー追従が
+    /// 理由も出ずに止まっていた（React Native のブリッジ層で実際に起きた）。
+    /// android-sdk-core の `MarkerTilingOptions.shouldUseTiles` と同じ規則。
+    public func shouldUseTiles(markerCount: Int) -> Bool {
+        enabled && markerCount >= minMarkerCount
+    }
 }

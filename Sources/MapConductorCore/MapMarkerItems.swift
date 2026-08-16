@@ -110,6 +110,7 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
         marker: MarkerState,
         bubbleColor: Color = .white,
         borderColor: Color = .black,
+        borderWidth: CGFloat = 2.0,
         contentPadding: CGFloat = 8.0,
         cornerRadius: CGFloat = 4.0,
         tailSize: CGFloat = 8.0,
@@ -122,6 +123,7 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
         self._content = AnyView(DefaultInfoBubbleView(
             bubbleColor: bubbleColor,
             borderColor: borderColor,
+            borderWidth: borderWidth,
             contentPadding: contentPadding,
             cornerRadius: cornerRadius,
             tailSize: tailSize,
@@ -145,6 +147,7 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
         id: String? = nil,
         bubbleColor: Color = .white,
         borderColor: Color = .black,
+        borderWidth: CGFloat = 2.0,
         contentPadding: CGFloat = 8.0,
         cornerRadius: CGFloat = 4.0,
         tailSize: CGFloat = 8.0,
@@ -158,6 +161,7 @@ public struct InfoBubble: MapOverlayItemProtocol, Identifiable {
         self._content = AnyView(DefaultInfoBubbleView(
             bubbleColor: bubbleColor,
             borderColor: borderColor,
+            borderWidth: borderWidth,
             contentPadding: contentPadding,
             cornerRadius: cornerRadius,
             tailSize: tailSize,

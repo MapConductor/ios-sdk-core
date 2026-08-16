@@ -8,6 +8,7 @@ import SwiftUI
 public struct DefaultInfoBubbleView: View {
     private let bubbleColor: Color
     private let borderColor: Color
+    private let borderWidth: CGFloat
     private let contentPadding: CGFloat
     private let cornerRadius: CGFloat
     private let tailSize: CGFloat
@@ -16,6 +17,7 @@ public struct DefaultInfoBubbleView: View {
     public init(
         bubbleColor: Color = .white,
         borderColor: Color = .black,
+        borderWidth: CGFloat = 2.0,
         contentPadding: CGFloat = 8.0,
         cornerRadius: CGFloat = 4.0,
         tailSize: CGFloat = 8.0,
@@ -23,6 +25,7 @@ public struct DefaultInfoBubbleView: View {
     ) {
         self.bubbleColor = bubbleColor
         self.borderColor = borderColor
+        self.borderWidth = borderWidth
         self.contentPadding = contentPadding
         self.cornerRadius = cornerRadius
         self.tailSize = tailSize
@@ -35,7 +38,7 @@ public struct DefaultInfoBubbleView: View {
                 .fill(bubbleColor)
                 .overlay(
                     InfoBubbleShape(cornerRadius: cornerRadius, tailSize: tailSize)
-                        .stroke(borderColor, lineWidth: 2.0)
+                        .stroke(borderColor, lineWidth: borderWidth)
                 )
 
             content

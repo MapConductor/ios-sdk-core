@@ -1,6 +1,6 @@
 import Foundation
 
-open class PolygonController<ActualPolygon, Renderer: PolygonOverlayRendererProtocol>: OverlayControllerProtocol
+open class PolygonController<ActualPolygon, Renderer: PolygonOverlayRendererProtocol>: OverlayControllerProtocol, SlottedOverlayController
 where Renderer.ActualPolygon == ActualPolygon {
     public typealias StateType = PolygonState
     public typealias EntityType = PolygonEntity<ActualPolygon>
@@ -135,4 +135,22 @@ where Renderer.ActualPolygon == ActualPolygon {
     open func destroy() {
         polygonManager.destroy()
     }
+    // ── SlottedOverlayController ────────────────────────────────────────
+    //
+    // kind は**必須メンバ**。既定値を持たせると、宣言忘れがコンパイルを通ってしまい
+    // カスケードとスロットから黙って漏れる（android-sdk で実際に踏んだ）。
+
+    public var kind: OverlayKind { .polygon }
+
+    public func hasId(_ id: String) -> Bool {
+        polygonManager.hasEntity(id)
+    }
+
+    public func resolveTap(position: GeoPointProtocol) -> OverlayHit? {
+        guard let entity = find(position: position) else { return nil }
+        return OverlayHit(kind: .polygon, clicked: position) { [weak self] in
+            self?.dispatchClick(event: PolygonEvent(state: entity.state, clicked: position))
+        }
+    }
+
 }

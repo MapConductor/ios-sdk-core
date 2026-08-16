@@ -120,6 +120,22 @@ open class MapViewCoordinatorBase<State: MapViewStateProtocol>: NSObject {
         super.init()
     }
 
+    /// スクリーン空間の機能（InfoBubble・マーカーアニメーション）の入口に渡す関門。
+    ///
+    /// 同期投影を持たないプロバイダで「黙って無反応」にならないようにする。
+    /// 詳細は ``ScreenProjectionRequirement`` を参照。
+    ///
+    /// android-sdk では同じ判定を `MapViewBase` の Compose 側（投影を呼ぶ直前）で
+    /// 行っている。iOS は投影が各コーディネータの中にあるので、こちらから渡す。
+    ///
+    /// - Parameter feature: ログに出す機能名。capability の id ではなく、
+    ///   何が動かないのかが読み手に伝わる名前を渡すこと。
+    public func screenProjectionGate(feature: String) -> () -> Bool {
+        let registry = state.serviceRegistry
+        let provider = String(describing: type(of: state))
+        return { ScreenProjectionRequirement.check(registry: registry, provider: provider, feature: feature) }
+    }
+
     // Convenience accessors so provider code reads the same as before.
     public var onMapLoaded: OnMapLoadedHandler<State>? { handlers.onMapLoaded }
     public var onMapClick: OnMapEventHandler? { handlers.onMapClick }

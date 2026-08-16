@@ -1,6 +1,6 @@
 import Foundation
 
-open class CircleController<ActualCircle, Renderer: CircleOverlayRendererProtocol>: OverlayControllerProtocol
+open class CircleController<ActualCircle, Renderer: CircleOverlayRendererProtocol>: OverlayControllerProtocol, SlottedOverlayController
 where Renderer.ActualCircle == ActualCircle {
     public typealias StateType = CircleState
     public typealias EntityType = CircleEntity<ActualCircle>
@@ -134,4 +134,22 @@ where Renderer.ActualCircle == ActualCircle {
     open func destroy() {
         circleManager.destroy()
     }
+    // ── SlottedOverlayController ────────────────────────────────────────
+    //
+    // kind は**必須メンバ**。既定値を持たせると、宣言忘れがコンパイルを通ってしまい
+    // カスケードとスロットから黙って漏れる（android-sdk で実際に踏んだ）。
+
+    public var kind: OverlayKind { .circle }
+
+    public func hasId(_ id: String) -> Bool {
+        circleManager.hasEntity(id)
+    }
+
+    public func resolveTap(position: GeoPointProtocol) -> OverlayHit? {
+        guard let entity = find(position: position) else { return nil }
+        return OverlayHit(kind: .circle, clicked: position) { [weak self] in
+            self?.dispatchClick(event: CircleEvent(state: entity.state, clicked: position))
+        }
+    }
+
 }
