@@ -18,6 +18,13 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
     private let cache: NSCache<NSNumber, NSData>
     private var cacheVersion: Int = 0
 
+    /// Largest icon half-extent any tile has needed so far, in points.
+    ///
+    /// Seeds the padding used to widen a tile's marker query. `renderTile` can
+    /// run concurrently and this is only a hint: a lost update costs one extra
+    /// pass on one tile, which is the very thing it exists to avoid.
+    private var observedHalfExtentPx: Double = 32.0
+
     private let defaultIcon: BitmapIcon
 
     public init(
@@ -123,8 +130,11 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
             northEast: GeoPoint(latitude: nw.latitude, longitude: se.longitude)
         )
 
-        // First pass: conservative 32pt padding to catch nearby icons
-        let assumedHalfExtentPx: Double = 32.0
+        // Starts at 32pt but widens to whatever a tile has actually needed.
+        // Left fixed, the "conservative first pass" never pays off — real icons
+        // are larger than the guess — and the query and prepare passes simply
+        // run twice for every tile.
+        let assumedHalfExtentPx: Double = observedHalfExtentPx
         var entities = queryByHalfExtentPx(assumedHalfExtentPx, bounds: bounds, tilePx: tilePx)
 
         if entities.isEmpty && !debugTileOverlay {
@@ -135,6 +145,7 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
 
         // Second pass: re-query if actual icons are larger than assumed
         if prepared.maxHalfExtentPx > assumedHalfExtentPx + 1.0 {
+            observedHalfExtentPx = prepared.maxHalfExtentPx
             entities = queryByHalfExtentPx(prepared.maxHalfExtentPx, bounds: bounds, tilePx: tilePx)
             prepared = prepareMarkers(entities, tileX: tileXDouble, tileY: tileYDouble, zoom: z, tilePx: tilePx)
         }
@@ -171,11 +182,17 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
                 let drawH = Double(m.drawH)
                 let anchorX = Double(m.anchor.x)
                 let anchorY = Double(m.anchor.y)
+                // Whole pixels, deliberately. The destination comes out of a
+                // projection, so it lands on a fraction of a pixel almost every
+                // time, and drawing to a non-integer rectangle makes the
+                // context resample every marker. The same change measured 20x
+                // on Android and 7x in Chromium; rounding moves a pin by at
+                // most half a pixel, which is not visible at icon scale.
                 let destRect = CGRect(
-                    x: centerX - drawW * anchorX,
-                    y: centerY - drawH * anchorY,
-                    width: drawW,
-                    height: drawH
+                    x: (centerX - drawW * anchorX).rounded(),
+                    y: (centerY - drawH * anchorY).rounded(),
+                    width: max(1, drawW.rounded()),
+                    height: max(1, drawH.rounded())
                 )
                 m.bitmap.draw(in: destRect)
             }
