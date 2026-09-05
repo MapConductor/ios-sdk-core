@@ -140,6 +140,14 @@ public final class HexCellRegistry<ActualMarker> {
         return kdTree?.withinRadiusWithDistance(query: geocell.projection.project(point), radius: radius) ?? []
     }
 
+    /// Cells within `radius`, unordered — see `KDTree.withinRadius`.
+    public func findWithinRadius(point: GeoPointProtocol, radius: Double) -> [HexCell] {
+        lock.lock()
+        defer { lock.unlock() }
+        rebuildIfNeeded()
+        return kdTree?.withinRadius(query: geocell.projection.project(point), radius: radius) ?? []
+    }
+
     public func all() -> [HexCell] {
         lock.lock()
         defer { lock.unlock() }
