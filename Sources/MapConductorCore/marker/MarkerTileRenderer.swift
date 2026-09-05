@@ -13,6 +13,8 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
     public let extraIconScale: Double
     private let debugTileOverlay: Bool
     private let iconScaleCallback: ((MarkerState, Int) -> Double)?
+    /// Keep one marker per cell of this many pixels, or 0 to keep them all.
+    private let declutterPx: Int
 
     private let cacheLock = NSLock()
     private let cache: NSCache<NSNumber, NSData>
@@ -37,13 +39,15 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         extraIconScale: Double = 1.0,
         cacheSizeBytes: Int = 8 * 1024 * 1024,
         debugTileOverlay: Bool = false,
-        iconScaleCallback: ((MarkerState, Int) -> Double)? = nil
+        iconScaleCallback: ((MarkerState, Int) -> Double)? = nil,
+        declutterPx: Int = 0
     ) {
         self.markerManager = markerManager
         self.tileSize = tileSize
         self.extraIconScale = extraIconScale
         self.debugTileOverlay = debugTileOverlay
         self.iconScaleCallback = iconScaleCallback
+        self.declutterPx = declutterPx
         let icon = DefaultMarkerIcon().toBitmapIcon()
         self.defaultIcon = icon
         let anchorX = Double(icon.anchor.x)
@@ -253,15 +257,19 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         // icons stacked do differ from one where the icon's own edges are
         // partly transparent, by a fraction of a level; that difference is
         // overdraw rather than intent.
+        // With decluttering on the group is a cell rather than a rectangle, and
+        // the icon is not part of it: the caller has said markers that close
+        // together are interchangeable, so one of them stands for the rest
+        // whatever they draw.
         var lastAt: [MarkerPlacement: Int] = [:]
         lastAt.reserveCapacity(placements.count)
         for (index, placement) in placements.enumerated() {
-            if let placement { lastAt[placement] = index }
+            if let placement { lastAt[group(of: placement)] = index }
         }
 
         for (index, placement) in placements.enumerated() {
             guard let placement, let bitmap = images[index] else { continue }
-            guard lastAt[placement] == index else { continue }
+            guard lastAt[group(of: placement)] == index else { continue }
 
             // Drawn upside down and flipped back, because the context's own
             // flip above would otherwise turn every icon over.
@@ -441,10 +449,31 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
 ///
 /// Markers that agree on all of it sit exactly on top of one another, so all
 /// but the last are invisible.
+extension MarkerTileRenderer {
+    /// What counts as "the same place" for the pass that drops hidden markers.
+    fileprivate func group(of placement: MarkerPlacement) -> MarkerPlacement {
+        guard declutterPx > 0 else { return placement }
+        let cell = declutterPx
+        return MarkerPlacement(
+            left: Int(floor(Double(placement.left) / Double(cell))),
+            top: Int(floor(Double(placement.top) / Double(cell))),
+            width: 0,
+            height: 0,
+            icon: MarkerPlacement.anyIcon
+        )
+    }
+}
+
 private struct MarkerPlacement: Hashable {
     let left: Int
     let top: Int
     let width: Int
     let height: Int
     let icon: ObjectIdentifier
+
+    /// Stands in for "any icon" when the group is a cell rather than a
+    /// rectangle. A cell holds whatever it holds.
+    static let anyIcon = ObjectIdentifier(AnyIconMarker.self)
+
+    private final class AnyIconMarker {}
 }

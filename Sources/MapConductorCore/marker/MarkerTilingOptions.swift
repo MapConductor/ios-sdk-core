@@ -14,6 +14,19 @@ public struct MarkerTilingOptions {
     public let cacheSize: Int
     /// Extra scale multiplier applied per marker per zoom level during tile rendering.
     public let iconScaleCallback: ((MarkerState, Int) -> Double)?
+    /// Keep one marker per cell of this many pixels, or 0 to keep them all.
+    ///
+    /// Markers a few pixels apart overlap almost completely, so thinning them is
+    /// a judgement about the map rather than a free optimisation — hence opt-in.
+    /// Tokyo's street trees are planted metres apart along a road: below street
+    /// level most of them sit on top of one another, and one per icon width
+    /// halves the tile bytes while showing the same map.
+    ///
+    /// Zero still drops markers that agree exactly — same rectangle, same icon —
+    /// which cannot change the tile.
+    ///
+    /// android-sdk's and the web SDK's MarkerTilingOptions carry the same field.
+    public let declutterPx: Int
 
     public static let Disabled = MarkerTilingOptions(enabled: false)
     public static let Default = MarkerTilingOptions()
@@ -23,13 +36,15 @@ public struct MarkerTilingOptions {
         debugTileOverlay: Bool = false,
         minMarkerCount: Int = 2000,
         cacheSize: Int = 8 * 1024 * 1024,
-        iconScaleCallback: ((MarkerState, Int) -> Double)? = nil
+        iconScaleCallback: ((MarkerState, Int) -> Double)? = nil,
+        declutterPx: Int = 0
     ) {
         self.enabled = enabled
         self.debugTileOverlay = debugTileOverlay
         self.minMarkerCount = minMarkerCount
         self.cacheSize = cacheSize
         self.iconScaleCallback = iconScaleCallback
+        self.declutterPx = declutterPx
     }
 
     /// タイル方式で描くか。**この判定を各所で書き直さないこと。**
