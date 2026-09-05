@@ -151,67 +151,91 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         }
 
         let paddingPx = max(Int(ceil(prepared.maxHalfExtentPx + 2.0)), 2)
-        let offscreenSize = tileSize + paddingPx * 2
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1.0
-        format.opaque = false
 
-        // Draw all markers into an offscreen canvas (tile + padding)
-        let offscreenRenderer = UIGraphicsImageRenderer(
-            size: CGSize(width: offscreenSize, height: offscreenSize),
-            format: format
-        )
-        let offscreenImage = offscreenRenderer.image { ctx in
-            if debugTileOverlay {
-                let o = CGFloat(paddingPx)
-                let cgCtx = ctx.cgContext
-                cgCtx.setStrokeColor(UIColor.red.cgColor)
-                cgCtx.setLineWidth(1.0)
-                cgCtx.move(to: CGPoint(x: o, y: o))
-                cgCtx.addLine(to: CGPoint(x: o + CGFloat(tileSize), y: o))
-                cgCtx.strokePath()
-                cgCtx.move(to: CGPoint(x: o, y: o))
-                cgCtx.addLine(to: CGPoint(x: o, y: o + CGFloat(tileSize)))
-                cgCtx.strokePath()
-            }
+        // A bitmap context we own, not UIGraphicsImageRenderer.
+        //
+        // The renderer records the drawing and replays it when the image is
+        // materialised, so its cost scales with the number of draw calls rather
+        // than the size of the canvas: 20k blits into a 612px buffer measured
+        // 534 ms through it against 58 ms into a plain bitmap context on an
+        // iPad Pro. The renderer's own profile showed the same shape — the draw
+        // loop reported 81 ms while the block containing it took 1739 ms.
+        //
+        // Owning the buffer also removes the crop pass and the copy the encoder
+        // used to need: markers are drawn straight into a tile-sized canvas
+        // that is translated by the padding, so anything overhanging the edge is
+        // clipped where it used to be composited and then cut away.
+        let bytesPerRow = tileSize * 4
+        let pixels = NSMutableData(length: bytesPerRow * tileSize)!
+        guard let context = CGContext(
+            data: pixels.mutableBytes,
+            width: tileSize,
+            height: tileSize,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
 
-            for m in prepared.markers {
-                let centerX = m.centerNormX * tilePx + Double(paddingPx)
-                let centerY = m.centerNormY * tilePx + Double(paddingPx)
-                let drawW = Double(m.drawW)
-                let drawH = Double(m.drawH)
-                let anchorX = Double(m.anchor.x)
-                let anchorY = Double(m.anchor.y)
-                // Whole pixels, deliberately. The destination comes out of a
-                // projection, so it lands on a fraction of a pixel almost every
-                // time, and drawing to a non-integer rectangle makes the
-                // context resample every marker. The same change measured 20x
-                // on Android and 7x in Chromium; rounding moves a pin by at
-                // most half a pixel, which is not visible at icon scale.
-                let destRect = CGRect(
-                    x: (centerX - drawW * anchorX).rounded(),
-                    y: (centerY - drawH * anchorY).rounded(),
-                    width: max(1, drawW.rounded()),
-                    height: max(1, drawH.rounded())
-                )
-                m.bitmap.draw(in: destRect)
-            }
+        // Core Graphics puts the origin at the bottom left and draws images
+        // bottom-up; tile coordinates run top-down. Flipping here keeps every
+        // destination rectangle below in tile coordinates.
+        context.translateBy(x: 0, y: CGFloat(tileSize))
+        context.scaleBy(x: 1, y: -1)
+        context.translateBy(x: CGFloat(-paddingPx), y: CGFloat(-paddingPx))
+        context.interpolationQuality = .none
+
+        if debugTileOverlay {
+            let o = CGFloat(paddingPx)
+            context.setStrokeColor(UIColor.red.cgColor)
+            context.setLineWidth(1.0)
+            context.move(to: CGPoint(x: o, y: o))
+            context.addLine(to: CGPoint(x: o + CGFloat(tileSize), y: o))
+            context.strokePath()
+            context.move(to: CGPoint(x: o, y: o))
+            context.addLine(to: CGPoint(x: o, y: o + CGFloat(tileSize)))
+            context.strokePath()
         }
 
-        // Crop to tile bounds
-        let finalRenderer = UIGraphicsImageRenderer(
-            size: CGSize(width: tileSize, height: tileSize),
-            format: format
-        )
-        let finalImage = finalRenderer.image { _ in
-            offscreenImage.draw(at: CGPoint(x: -paddingPx, y: -paddingPx))
+        for m in prepared.markers {
+            guard let bitmap = m.bitmap.cgImage else { continue }
+            let centerX = m.centerNormX * tilePx + Double(paddingPx)
+            let centerY = m.centerNormY * tilePx + Double(paddingPx)
+            let drawW = Double(m.drawW)
+            let drawH = Double(m.drawH)
+            let anchorX = Double(m.anchor.x)
+            let anchorY = Double(m.anchor.y)
+            // Whole pixels, deliberately. The destination comes out of a
+            // projection, so it lands on a fraction of a pixel almost every
+            // time, and drawing to a non-integer rectangle makes the context
+            // resample every marker. The same change measured 20x on Android
+            // and 7x in Chromium; rounding moves a pin by at most half a pixel,
+            // which is not visible at icon scale.
+            let left = (centerX - drawW * anchorX).rounded()
+            let top = (centerY - drawH * anchorY).rounded()
+            let width = max(1, drawW.rounded())
+            let height = max(1, drawH.rounded())
+
+            // Drawn upside down and flipped back, because the context's own
+            // flip above would otherwise turn every icon over.
+            context.saveGState()
+            context.translateBy(x: left, y: top + height)
+            context.scaleBy(x: 1, y: -1)
+            context.draw(bitmap, in: CGRect(x: 0, y: 0, width: width, height: height))
+            context.restoreGState()
         }
 
-        // Rust first: it is several times faster than pngData() on the tiles
-        // this renderer produces, and encoding is what dominates a tile once
-        // the drawing is aligned. Nil means the native path declined, and the
-        // platform encoder takes over.
-        guard let pngData = TilePngEncoder.encode(finalImage) ?? finalImage.pngData() else {
+        // The buffer is already what the encoder wants, so there is no image to
+        // wrap it in and unwrap again.
+        let pngData: Data
+        if let encoded = TilePngEncoder.encode(
+            rgba: pixels.mutableBytes, width: tileSize, height: tileSize, premultiplied: true
+        ) {
+            pngData = encoded
+        } else if let image = context.makeImage().map({ UIImage(cgImage: $0) }),
+                  let fallback = image.pngData() {
+            pngData = fallback
+        } else {
             return nil
         }
 
