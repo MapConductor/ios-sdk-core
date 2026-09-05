@@ -211,7 +211,7 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         // this renderer produces, and encoding is what dominates a tile once
         // the drawing is aligned. Nil means the native path declined, and the
         // platform encoder takes over.
-        guard let pngData = NativePngEncoder.encode(finalImage) ?? finalImage.pngData() else {
+        guard let pngData = TilePngEncoder.encode(finalImage) ?? finalImage.pngData() else {
             return nil
         }
 
