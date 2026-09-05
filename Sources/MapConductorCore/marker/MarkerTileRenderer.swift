@@ -197,31 +197,68 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
             context.strokePath()
         }
 
-        for m in prepared.markers {
+        var placements = [MarkerPlacement?](repeating: nil, count: prepared.markers.count)
+        var images = [CGImage?](repeating: nil, count: prepared.markers.count)
+        for (index, m) in prepared.markers.enumerated() {
             guard let bitmap = m.bitmap.cgImage else { continue }
             let centerX = m.centerNormX * tilePx + Double(paddingPx)
             let centerY = m.centerNormY * tilePx + Double(paddingPx)
             let drawW = Double(m.drawW)
             let drawH = Double(m.drawH)
-            let anchorX = Double(m.anchor.x)
-            let anchorY = Double(m.anchor.y)
             // Whole pixels, deliberately. The destination comes out of a
             // projection, so it lands on a fraction of a pixel almost every
             // time, and drawing to a non-integer rectangle makes the context
             // resample every marker. The same change measured 20x on Android
             // and 7x in Chromium; rounding moves a pin by at most half a pixel,
             // which is not visible at icon scale.
-            let left = (centerX - drawW * anchorX).rounded()
-            let top = (centerY - drawH * anchorY).rounded()
-            let width = max(1, drawW.rounded())
-            let height = max(1, drawH.rounded())
+            images[index] = bitmap
+            let anchorX: Double = Double(m.anchor.x)
+            let anchorY: Double = Double(m.anchor.y)
+            let left: Double = (centerX - drawW * anchorX).rounded()
+            let top: Double = (centerY - drawH * anchorY).rounded()
+            let width: Double = max(1.0, drawW.rounded())
+            let height: Double = max(1.0, drawH.rounded())
+            placements[index] = MarkerPlacement(
+                left: Int(left),
+                top: Int(top),
+                width: Int(width),
+                height: Int(height),
+                icon: ObjectIdentifier(m.bitmap)
+            )
+        }
+
+        // Drop markers that are completely hidden by a later one.
+        //
+        // Zoom out far enough and a whole city collapses onto a few hundred
+        // pixels: at z6 a dataset of 20k markers resolves to roughly 2k
+        // distinct positions, and the other 18k are drawn underneath copies of
+        // themselves. Keeping the last of each group is what would have been
+        // visible anyway, since drawing is in painter's order.
+        //
+        // Only exact agreement counts — same rectangle, same icon — so nothing
+        // that could peek out from behind another is dropped. Two identical
+        // icons stacked do differ from one where the icon's own edges are
+        // partly transparent, by a fraction of a level; that difference is
+        // overdraw rather than intent.
+        var lastAt: [MarkerPlacement: Int] = [:]
+        lastAt.reserveCapacity(placements.count)
+        for (index, placement) in placements.enumerated() {
+            if let placement { lastAt[placement] = index }
+        }
+
+        for (index, placement) in placements.enumerated() {
+            guard let placement, let bitmap = images[index] else { continue }
+            guard lastAt[placement] == index else { continue }
 
             // Drawn upside down and flipped back, because the context's own
             // flip above would otherwise turn every icon over.
             context.saveGState()
-            context.translateBy(x: left, y: top + height)
+            context.translateBy(x: CGFloat(placement.left),
+                                y: CGFloat(placement.top + placement.height))
             context.scaleBy(x: 1, y: -1)
-            context.draw(bitmap, in: CGRect(x: 0, y: 0, width: width, height: height))
+            context.draw(bitmap, in: CGRect(x: 0, y: 0,
+                                            width: CGFloat(placement.width),
+                                            height: CGFloat(placement.height)))
             context.restoreGState()
         }
 
@@ -385,4 +422,16 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
     }
 
     private let maxMercatorLat: Double = 85.05112878
+}
+
+/// Where a marker is drawn, and which icon it draws.
+///
+/// Markers that agree on all of it sit exactly on top of one another, so all
+/// but the last are invisible.
+private struct MarkerPlacement: Hashable {
+    let left: Int
+    let top: Int
+    let width: Int
+    let height: Int
+    let icon: ObjectIdentifier
 }
