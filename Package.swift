@@ -28,8 +28,18 @@ let package = Package(
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
+        // The Rust PNG encoder. Built and packaged by the
+        // mapconductor-vectortile repo (scripts/build-ios-core-png.sh) and
+        // copied here by its scripts/sync-sdk.sh.
+        // The Rust PNG encoder. The archive and its header travel separately:
+        // Xcode merges every linked XCFramework's Headers into one include
+        // directory, so two of them shipping a module.modulemap collide, which
+        // anything depending on both this and MvtRender would hit.
+        .binaryTarget(name: "TilePng", path: "TilePng.xcframework"),
+        .target(name: "CTilePng"),
         .target(
-            name: "MapConductorCore"
+            name: "MapConductorCore",
+            dependencies: ["CTilePng", "TilePng"]
         ),
         .testTarget(
             name: "MapConductorCoreTests",

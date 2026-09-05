@@ -207,7 +207,13 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
             offscreenImage.draw(at: CGPoint(x: -paddingPx, y: -paddingPx))
         }
 
-        guard let pngData = finalImage.pngData() else { return nil }
+        // Rust first: it is several times faster than pngData() on the tiles
+        // this renderer produces, and encoding is what dominates a tile once
+        // the drawing is aligned. Nil means the native path declined, and the
+        // platform encoder takes over.
+        guard let pngData = NativePngEncoder.encode(finalImage) ?? finalImage.pngData() else {
+            return nil
+        }
 
         cacheLock.lock()
         if versionSnapshot == cacheVersion {
