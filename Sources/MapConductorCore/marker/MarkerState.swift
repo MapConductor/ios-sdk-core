@@ -23,19 +23,23 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
     public let id: String
     public var extra: Any?
 
-    @Published public var icon: (any MarkerIconProtocol)?
-    @Published public var clickable: Bool
-    @Published public var draggable: Bool
-    @Published public var zIndex: Int?
-    @Published public var onClick: OnMarkerEventHandler?
-    @Published public var onDragStart: OnMarkerEventHandler?
-    @Published public var onDrag: OnMarkerEventHandler?
-    @Published public var onDragEnd: OnMarkerEventHandler?
-    @Published public var onAnimateStart: OnMarkerEventHandler?
-    @Published public var onAnimateEnd: OnMarkerEventHandler?
-    @Published public var position: GeoPoint
+    /// Writes to the fields below are announced here rather than discovered by
+    /// subscribing to each state. See ``StateMutationSignal``.
+    public let mutations = StateMutationSignal()
 
-    @Published private var internalAnimation: MarkerAnimation?
+    @Published public var icon: (any MarkerIconProtocol)? { didSet { mutations.notifyMutated() } }
+    @Published public var clickable: Bool { didSet { mutations.notifyMutated() } }
+    @Published public var draggable: Bool { didSet { mutations.notifyMutated() } }
+    @Published public var zIndex: Int? { didSet { mutations.notifyMutated() } }
+    @Published public var onClick: OnMarkerEventHandler? { didSet { mutations.notifyMutated() } }
+    @Published public var onDragStart: OnMarkerEventHandler? { didSet { mutations.notifyMutated() } }
+    @Published public var onDrag: OnMarkerEventHandler? { didSet { mutations.notifyMutated() } }
+    @Published public var onDragEnd: OnMarkerEventHandler? { didSet { mutations.notifyMutated() } }
+    @Published public var onAnimateStart: OnMarkerEventHandler? { didSet { mutations.notifyMutated() } }
+    @Published public var onAnimateEnd: OnMarkerEventHandler? { didSet { mutations.notifyMutated() } }
+    @Published public var position: GeoPoint { didSet { mutations.notifyMutated() } }
+
+    @Published private var internalAnimation: MarkerAnimation? { didSet { mutations.notifyMutated() } }
 
     public init(
         position: GeoPoint,

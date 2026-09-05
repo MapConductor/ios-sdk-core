@@ -27,12 +27,16 @@ public typealias OnGroundImageEventHandler = (GroundImageEvent) -> Void
 public final class GroundImageState: ObservableObject, Identifiable, Equatable, Hashable {
     public let id: String
 
-    @Published public var bounds: GeoRectBounds
-    @Published public var image: UIImage
-    @Published public var opacity: Double
-    @Published public var tileSize: Int
-    @Published public var extra: Any?
-    @Published public var onClick: OnGroundImageEventHandler?
+    /// Writes to the fields below are announced here rather than discovered by
+    /// subscribing to each state. See ``StateMutationSignal``.
+    public let mutations = StateMutationSignal()
+
+    @Published public var bounds: GeoRectBounds { didSet { mutations.notifyMutated() } }
+    @Published public var image: UIImage { didSet { mutations.notifyMutated() } }
+    @Published public var opacity: Double { didSet { mutations.notifyMutated() } }
+    @Published public var tileSize: Int { didSet { mutations.notifyMutated() } }
+    @Published public var extra: Any? { didSet { mutations.notifyMutated() } }
+    @Published public var onClick: OnGroundImageEventHandler? { didSet { mutations.notifyMutated() } }
 
     public init(
         bounds: GeoRectBounds,

@@ -8,49 +8,26 @@ import Combine
 /// type (`AnyObject`) so the collector can hold it by identity, diff instances
 /// with `!==`, and subscribe to it weakly.
 ///
-/// `overlayChangePublisher()` emits whenever a rendered property changes. It is
-/// backed by each state's `asFlow()` — the exact publisher the per-provider
-/// controllers used before the collector existed — so routing an overlay through
-/// the collector reproduces the old in-place-update behavior (e.g. dragging a
-/// polygon vertex re-renders the polygon). The collector forwards each emission
-/// to the bound controller's `update(state:)`, which dedupes by `fingerPrint()`.
+/// ``StateMutationSignal`` is where a state reports a write to a rendered
+/// property, and the collector forwards it to the bound controller's
+/// `update(state:)`, which dedupes by `fingerPrint()`. The collector used to
+/// learn the same thing by subscribing to each state's `asFlow()`; that cost
+/// two seconds to sync 50,000 markers on the main actor, so the states report
+/// instead. `asFlow()` itself stays — several provider controllers subscribe to
+/// it directly, outside the collector.
 public protocol OverlayCollectableState: AnyObject {
     var id: String { get }
-    func overlayChangePublisher() -> AnyPublisher<Void, Never>
+    var mutations: StateMutationSignal { get }
 }
 
-extension MarkerState: OverlayCollectableState {
-    public func overlayChangePublisher() -> AnyPublisher<Void, Never> {
-        asFlow().map { _ in () }.eraseToAnyPublisher()
-    }
-}
+extension MarkerState: OverlayCollectableState {}
 
-extension CircleState: OverlayCollectableState {
-    public func overlayChangePublisher() -> AnyPublisher<Void, Never> {
-        asFlow().map { _ in () }.eraseToAnyPublisher()
-    }
-}
+extension CircleState: OverlayCollectableState {}
 
-extension PolylineState: OverlayCollectableState {
-    public func overlayChangePublisher() -> AnyPublisher<Void, Never> {
-        asFlow().map { _ in () }.eraseToAnyPublisher()
-    }
-}
+extension PolylineState: OverlayCollectableState {}
 
-extension PolygonState: OverlayCollectableState {
-    public func overlayChangePublisher() -> AnyPublisher<Void, Never> {
-        asFlow().map { _ in () }.eraseToAnyPublisher()
-    }
-}
+extension PolygonState: OverlayCollectableState {}
 
-extension GroundImageState: OverlayCollectableState {
-    public func overlayChangePublisher() -> AnyPublisher<Void, Never> {
-        asFlow().map { _ in () }.eraseToAnyPublisher()
-    }
-}
+extension GroundImageState: OverlayCollectableState {}
 
-extension RasterLayerState: OverlayCollectableState {
-    public func overlayChangePublisher() -> AnyPublisher<Void, Never> {
-        asFlow().map { _ in () }.eraseToAnyPublisher()
-    }
-}
+extension RasterLayerState: OverlayCollectableState {}

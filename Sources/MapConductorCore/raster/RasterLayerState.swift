@@ -32,13 +32,17 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
 
     public let id: String
 
-    @Published public var source: RasterLayerSource
-    @Published public var opacity: Double
-    @Published public var visible: Bool
-    @Published public var zIndex: Int
-    @Published public var debug: Bool
-    @Published public var userAgent: String?
-    @Published public var extraHeaders: [String: String]?
+    /// Writes to the fields below are announced here rather than discovered by
+    /// subscribing to each state. See ``StateMutationSignal``.
+    public let mutations = StateMutationSignal()
+
+    @Published public var source: RasterLayerSource { didSet { mutations.notifyMutated() } }
+    @Published public var opacity: Double { didSet { mutations.notifyMutated() } }
+    @Published public var visible: Bool { didSet { mutations.notifyMutated() } }
+    @Published public var zIndex: Int { didSet { mutations.notifyMutated() } }
+    @Published public var debug: Bool { didSet { mutations.notifyMutated() } }
+    @Published public var userAgent: String? { didSet { mutations.notifyMutated() } }
+    @Published public var extraHeaders: [String: String]? { didSet { mutations.notifyMutated() } }
 
     public init(
         source: RasterLayerSource,

@@ -30,13 +30,17 @@ public typealias OnPolylineEventHandler = (PolylineEvent) -> Void
 public final class PolylineState: ObservableObject, Identifiable, Equatable, Hashable {
     public let id: String
 
-    @Published public var strokeColor: UIColor
-    @Published public var strokeWidth: Double
-    @Published public var geodesic: Bool
-    @Published public var points: [GeoPointProtocol]
-    @Published public var zIndex: Int
-    @Published public var extra: Any?
-    @Published public var onClick: OnPolylineEventHandler?
+    /// Writes to the fields below are announced here rather than discovered by
+    /// subscribing to each state. See ``StateMutationSignal``.
+    public let mutations = StateMutationSignal()
+
+    @Published public var strokeColor: UIColor { didSet { mutations.notifyMutated() } }
+    @Published public var strokeWidth: Double { didSet { mutations.notifyMutated() } }
+    @Published public var geodesic: Bool { didSet { mutations.notifyMutated() } }
+    @Published public var points: [GeoPointProtocol] { didSet { mutations.notifyMutated() } }
+    @Published public var zIndex: Int { didSet { mutations.notifyMutated() } }
+    @Published public var extra: Any? { didSet { mutations.notifyMutated() } }
+    @Published public var onClick: OnPolylineEventHandler? { didSet { mutations.notifyMutated() } }
 
     public init(
         points: [GeoPointProtocol],
