@@ -385,7 +385,23 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         //
         // longdo のようにタイル専用の manager を別に持つプロバイダでは全 entity が
         // tiling = true なので、この絞り込みは何もしない。
-        return markerManager.findMarkersInBounds(expanded).filter { $0.tiling }
+        // declutter が効いているときは index の段階で間引く。
+        //
+        // 呼び出し側が「これより近いマーカーは入れ替え可能」と言っているので、
+        // index は自分のセルから答えてよい。zoom 9 なら東京の街路樹 144,183 本
+        // ではなく、それを含む 5,000 セルほどを読むだけで済む。
+        //
+        // ここを飛ばして後段の辞書で間引いていたときは、捨てるぶんの配置と
+        // 画像まで先に作っていたので、declutter を入れるほど遅くなっていた
+        // （20,000 マーカーで 82.8ms -> 178.5ms）。index が粗すぎて分離を
+        // 保証できない場合は全件クエリに落ちるので、後段の間引きは残してある。
+        let separationDegrees = declutterPx > 0
+            ? max(span.latitude, span.longitude) * Double(declutterPx) / tilePx
+            : 0.0
+        let found = separationDegrees > 0.0
+            ? markerManager.findMarkersInBounds(expanded, minSeparationDegrees: separationDegrees)
+            : markerManager.findMarkersInBounds(expanded)
+        return found.filter { $0.tiling }
     }
 
     private func tileToGeoPoint(x: Double, y: Double, z: Double) -> GeoPoint {

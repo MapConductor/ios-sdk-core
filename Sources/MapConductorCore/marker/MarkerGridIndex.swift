@@ -51,6 +51,11 @@ final class MarkerGridIndex<ActualMarker> {
     }
 
     /// 24 bits of position, enough for 16.7M markers, under the cell key.
+    /// 間引きクエリが index を使う上限のセル数。これを超える箱は、セルを
+    /// 歩くより全件を走査したほうが安い。android の
+    /// `MAX_CELLS_PER_THINNED_QUERY` と同じ値。
+    private static var maxCellsPerThinnedQuery: Int64 { 1 << 18 }
+
     private static var indexBits: Int64 { 24 }
     private static var indexMask: Int64 { (1 << 24) - 1 }
 
@@ -101,6 +106,74 @@ final class MarkerGridIndex<ActualMarker> {
                 forEach(inCell: Self.cellKey(latCell, Self.wrapLon(lonCell))) { entity in
                     if bounds.contains(point: entity.state.position) { found.append(entity) }
                 }
+            }
+        }
+        return found
+    }
+
+    /// The markers in `bounds`, at most one per cell.
+    ///
+    /// The caller has said that markers closer together than
+    /// `minSeparationDegrees` are interchangeable, so the index is free to hand
+    /// back whichever of a cell's markers it likes. That is what lets it answer
+    /// from its cells instead of reading every marker: at zoom 9 that is the
+    /// roughly 5,000 cells holding Tokyo's street trees rather than all 144,183
+    /// of them, and merely reading a position off an entity costs about
+    /// 0.72 microseconds — looking at the full set is 100 ms before anything is
+    /// done with it.
+    ///
+    /// A cell wholly inside the box needs no containment test, and the last
+    /// entry of its run can be taken without looking at the rest.
+    ///
+    /// Returns nil when the index cannot help: cells coarser than the caller's
+    /// separation would thin more than it asked for, and a box spanning more
+    /// cells than `maxCellsPerThinnedQuery` is cheaper to scan.
+    ///
+    /// Mirrors `MarkerGridIndex.inBoundsThinned` in android-sdk.
+    func inBoundsThinned(
+        _ bounds: GeoRectBounds,
+        minSeparationDegrees: Double
+    ) -> [MarkerEntity<ActualMarker>]? {
+        if minSeparationDegrees < Self.cellDegrees { return nil }
+        guard let southWest = bounds.southWest, let northEast = bounds.northEast else { return nil }
+
+        let latFrom = Self.cell(southWest.latitude)
+        let latTo = Self.cell(northEast.latitude)
+        let lonFrom = Self.cell(southWest.longitude)
+        let lonTo = Self.cell(northEast.longitude)
+        // As in `inBounds`: a box crossing the antimeridian has its east corner
+        // west of its west one, so walk to the unwrapped end and fold back.
+        let lonEnd = northEast.longitude < southWest.longitude ? lonTo + Self.lonCells : lonTo
+
+        if (latTo - latFrom + 1) * (lonEnd - lonFrom + 1) > Self.maxCellsPerThinnedQuery { return nil }
+
+        rebuildIfNeeded()
+        var found: [MarkerEntity<ActualMarker>] = []
+        for latCell in latFrom...latTo {
+            let latInside = latCell > latFrom && latCell < latTo
+            for lonCell in lonFrom...lonEnd {
+                let key = Self.cellKey(latCell, Self.wrapLon(lonCell))
+                let at = lowerBound(key << Self.indexBits)
+                if at >= packed.count { continue }
+                let limit = (key + 1) << Self.indexBits
+                if packed[at] >= limit { continue }
+
+                if latInside && lonCell > lonFrom && lonCell < lonEnd {
+                    var last = at
+                    while last + 1 < packed.count && packed[last + 1] < limit { last += 1 }
+                    found.append(snapshot[Int(packed[last] & Self.indexMask)])
+                    continue
+                }
+                // On the border the cell straddles the box, so the last entry
+                // inside it is not necessarily the last entry of the run.
+                var winner: MarkerEntity<ActualMarker>?
+                var cursor = at
+                while cursor < packed.count && packed[cursor] < limit {
+                    let entity = snapshot[Int(packed[cursor] & Self.indexMask)]
+                    if bounds.contains(point: entity.state.position) { winner = entity }
+                    cursor += 1
+                }
+                if let winner { found.append(winner) }
             }
         }
         return found

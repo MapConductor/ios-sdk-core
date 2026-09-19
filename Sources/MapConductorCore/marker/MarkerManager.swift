@@ -175,6 +175,34 @@ public final class MarkerManager<ActualMarker> {
         }
     }
 
+    /// The markers in `bounds`, thinned to at most one per
+    /// `minSeparationDegrees`.
+    ///
+    /// The caller is saying that markers closer than that are
+    /// interchangeable, which lets the index answer from its cells instead of
+    /// reading every marker. It declines — and this falls back to the full
+    /// query — when its cells are too coarse to honour the separation, so the
+    /// caller still has to apply the real rule to what comes back.
+    ///
+    /// Mirrors `findMarkersInBounds(bounds, minSeparationDegrees)` in
+    /// android-sdk.
+    public func findMarkersInBounds(
+        _ bounds: GeoRectBounds,
+        minSeparationDegrees: Double
+    ) -> [MarkerEntity<ActualMarker>] {
+        if bounds.isEmpty { return [] }
+
+        lock.lock()
+        if usableLocked("findMarkersInBounds"), entities.count > minMarkerCount,
+           let thinned = gridIndex.inBoundsThinned(bounds, minSeparationDegrees: minSeparationDegrees) {
+            lock.unlock()
+            return thinned
+        }
+        lock.unlock()
+
+        return findMarkersInBounds(bounds)
+    }
+
     public func getMemoryStats() -> MarkerManagerStats {
         lock.lock()
         defer { lock.unlock() }

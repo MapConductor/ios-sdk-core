@@ -148,4 +148,66 @@ final class MarkerGridIndexTests: XCTestCase {
         let deltaLon = entity.state.position.longitude - point.longitude
         return deltaLat * deltaLat + deltaLon * deltaLon
     }
+
+    /// 間引きクエリは、覆ったセルすべてから 1 本ずつ返す。
+    ///
+    /// 呼び出し側は自分でも 1 セル 1 本に落とすつもりでこれを呼ぶ。返ってきては
+    /// 困るのは**穴**で、箱の中にマーカーを持つセルが何も返さないと、地図上では
+    /// 街路樹の無い一角になり、どこにもエラーは出ない。
+    ///
+    /// android-sdk の `thinnedQueryKeepsOneMarkerFromEveryCellItCovers` と同じ。
+    func testThinnedQueryKeepsOneMarkerFromEveryCellItCovers() {
+        let markers = scatter(count: 20_000, latitude: 35.68, longitude: 139.76, spread: 0.4)
+        let index = MarkerGridIndex<Int> { markers }
+        let box = bounds(35.60, 139.68, 35.76, 139.84)
+
+        guard let kept = index.inBoundsThinned(box, minSeparationDegrees: 0.01) else {
+            return XCTFail("0.01 度はセルより粗いので、必ず答えられるはず")
+        }
+
+        let inside = markers.filter { box.contains(point: $0.state.position) }
+        XCTAssertGreaterThan(inside.count, 1_000, "比較できるだけの中身が要る")
+
+        // index と同じ前提: セルは一辺 0.005 度。
+        func cellOf(_ entity: MarkerEntity<Int>) -> String {
+            let lat = (entity.state.position.latitude / 0.005).rounded(.down)
+            let lon = (entity.state.position.longitude / 0.005).rounded(.down)
+            return "\(lat),\(lon)"
+        }
+
+        for entity in kept {
+            XCTAssertTrue(box.contains(point: entity.state.position), "箱の外のマーカーを返した")
+        }
+        XCTAssertEqual(
+            Set(inside.map(cellOf)), Set(kept.map(cellOf)),
+            "埋まっているセルにつき 1 本、多くも少なくもなく"
+        )
+        XCTAssertEqual(Set(kept.map(cellOf)).count, kept.count, "同じセルから 2 本返っている")
+        // 箱は一辺 0.16 度で約 1,024 セル、その中にこのマーカーが 3,200 本ほど
+        // 入る -- 1 セルあたり 3 本。これが無いと、間引く必要のないほど疎な
+        // データでも上の assert が通ってしまい、何も証明しない。
+        XCTAssertLessThan(kept.count * 2, inside.count, "間引きを働かせるには疎すぎる")
+    }
+
+    /// セルが呼び出し側の分離距離より粗いと、頼まれた以上に間引いてしまう。
+    func testThinnedQueryDeclinesWhenItsCellsAreTooCoarse() {
+        let index = MarkerGridIndex<Int> {
+            self.scatter(count: 2_000, latitude: 35.68, longitude: 139.76, spread: 0.4)
+        }
+        XCTAssertNil(index.inBoundsThinned(bounds(35.6, 139.7, 35.7, 139.8), minSeparationDegrees: 0.004))
+    }
+
+    /// 通常クエリが覚えた日付変更線の折り返しは、ここでも成り立つ必要がある。
+    func testThinnedQueryCrossesTheAntimeridian() {
+        let markers = [
+            entity(0, -18.0, 179.99),
+            entity(1, -18.0, -179.99),
+            entity(2, -18.0, 178.0),
+        ]
+        let index = MarkerGridIndex<Int> { markers }
+        guard let kept = index.inBoundsThinned(bounds(-18.5, 179.5, -17.5, -179.5), minSeparationDegrees: 0.01) else {
+            return XCTFail("答えられるはず")
+        }
+        XCTAssertEqual(ids(kept), ["0", "1"])
+    }
 }
