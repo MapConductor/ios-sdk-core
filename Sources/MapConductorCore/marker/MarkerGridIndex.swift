@@ -1,6 +1,6 @@
 import Foundation
 
-/// A uniform lat/lng grid over the markers, held as one sorted array of Int64.
+/// A hierarchical lat/lng grid over the markers, held as one sorted array of Int64.
 ///
 /// Replaces the hex-cell registry on the paths that run per tile. That index was
 /// built at a fixed zoom of 20, which puts a cell at about 12 cm — street trees
@@ -11,57 +11,42 @@ import Foundation
 ///
 /// Each marker is one Int64: its cell key above its position in a snapshot, so
 /// building the index is arithmetic and a sort of a contiguous buffer — no
-/// objects, no hashing, no strings. A bounds query walks the cells the box
-/// covers and binary-searches each one's run.
+/// objects, no hashing, no strings.
+///
+/// The key itself is a Morton code over a hierarchy of cells, described in
+/// `MarkerGrid`. What it buys the index is that a cell at *any* level is one
+/// contiguous run, so a query walks the level that suits its box rather than
+/// the finest one — the first version had a single fixed cell size of 0.005
+/// degrees, and a continent-wide box paid for it.
 ///
 /// Not synchronised. `MarkerManager` holds its lock across every call, and
 /// taking a second one here would only add cost to a path that is already
 /// serialised.
 ///
-/// The Android and web SDKs index the same way, with the same cell size.
+/// The Android and web SDKs index the same way, to the same depth.
 final class MarkerGridIndex<ActualMarker> {
-    /// About 450 m at Tokyo's latitude.
-    ///
-    /// Chosen by measurement rather than by round number: on 144k markers a
-    /// tile-sized query took 0.06 ms here, 0.03 ms at 0.001 degrees and 2.31 ms
-    /// at 0.02 degrees — the last no better than scanning, because a cell that
-    /// size returns five times the markers a tile needs. Finer wins on dense
-    /// data and loses on sparse, where a tile spans more empty cells than it
-    /// saves.
-    private static var cellDegrees: Double { 0.005 }
-
-    /// Past this many cells, scan every marker instead.
-    ///
-    /// A query covering most of the world touches more empty cells than there
-    /// are markers. Measured on the same 144k: a box over all of Tokyo costs
-    /// 2.27 ms through the grid and 1.98 ms scanning, so the index stops paying
-    /// for itself well before the pathological case.
-    private static var maxCellsPerQuery: Int64 { 4096 }
-
-    /// Roughly 45 km of rings before giving up and scanning.
-    private static var maxNearestRings: Int64 { 100 }
-
-    /// Columns around the globe: the wrap the ring and box walks fold on.
-    private static var lonCells: Int64 { Int64(360.0 / cellDegrees) }
-    private static var minLonCell: Int64 { -lonCells / 2 }
-
-    private static func wrapLon(_ lonCell: Int64) -> Int64 {
-        let span = lonCells
-        return minLonCell + ((lonCell - minLonCell) % span + span) % span
-    }
 
     /// 24 bits of position, enough for 16.7M markers, under the cell key.
-    /// 間引きクエリが index を使う上限のセル数。これを超える箱は、セルを
-    /// 歩くより全件を走査したほうが安い。android の
-    /// `MAX_CELLS_PER_THINNED_QUERY` と同じ値。
-    private static var maxCellsPerThinnedQuery: Int64 { 1 << 18 }
-
     private static var indexBits: Int64 { 24 }
     private static var indexMask: Int64 { (1 << 24) - 1 }
 
+    /// Past this many cells, decline the thinned query.
+    ///
+    /// Thinning cannot choose its own level — the caller's separation fixes it —
+    /// so this bound stays. Same value as android's
+    /// `MAX_CELLS_PER_THINNED_QUERY`.
+    private static var maxCellsPerThinnedQuery: Int64 { 1 << 18 }
+
+    /// The level `nearest` walks its rings at, and the reach that buys.
+    ///
+    /// Level 15 is 0.0055 degrees on a side, matching the flat cell this index
+    /// used to have, so 100 rings is about 45 km as before.
+    private static var nearestLevel: Int64 { 15 }
+    private static var maxNearestRings: Int64 { 100 }
+
     private let source: () -> [MarkerEntity<ActualMarker>]
     private var snapshot: [MarkerEntity<ActualMarker>] = []
-    /// Sorted `(cellKey << indexBits) | position-in-snapshot`.
+    /// Sorted `(mortonKey << indexBits) | position-in-snapshot`.
     private var packed: [Int64] = []
     private var dirty = true
 
@@ -84,26 +69,30 @@ final class MarkerGridIndex<ActualMarker> {
     func inBounds(_ bounds: GeoRectBounds) -> [MarkerEntity<ActualMarker>] {
         guard let southWest = bounds.southWest, let northEast = bounds.northEast else { return [] }
 
-        let latFrom = Self.cell(southWest.latitude)
-        let latTo = Self.cell(northEast.latitude)
-        let lonFrom = Self.cell(southWest.longitude)
-        let lonTo = Self.cell(northEast.longitude)
-
         // A box crossing the antimeridian has its east corner west of its west
         // one. Walking to the unwrapped end and folding each column back onto
         // the globe covers both halves without a second loop — and without the
         // `lonFrom...lonTo` that traps on a reversed range.
-        let lonEnd = northEast.longitude < southWest.longitude ? lonTo + Self.lonCells : lonTo
-
-        if (latTo - latFrom + 1) * (lonEnd - lonFrom + 1) > Self.maxCellsPerQuery {
-            return source().filter { bounds.contains(point: $0.state.position) }
-        }
+        let lonSpan = MarkerGrid.eastwardSpan(from: southWest.longitude, to: northEast.longitude)
+        let level = MarkerGrid.queryLevel(
+            latSpan: northEast.latitude - southWest.latitude,
+            lonSpan: lonSpan
+        )
+        let latFrom = MarkerGrid.latCell(southWest.latitude, level: level)
+        let latTo = MarkerGrid.latCell(northEast.latitude, level: level)
+        if latTo < latFrom { return [] }
+        let columns = MarkerGrid.columnWalk(from: southWest.longitude, spanning: lonSpan, level: level)
 
         rebuildIfNeeded()
         var found: [MarkerEntity<ActualMarker>] = []
         for latCell in latFrom...latTo {
-            for lonCell in lonFrom...lonEnd {
-                forEach(inCell: Self.cellKey(latCell, Self.wrapLon(lonCell))) { entity in
+            for step in 0..<columns.count {
+                let key = MarkerGrid.morton(
+                    latCell,
+                    MarkerGrid.wrap(columns.start + step, level: level),
+                    level: level
+                )
+                forEach(inCell: key, level: level) { entity in
                     if bounds.contains(point: entity.state.position) { found.append(entity) }
                 }
             }
@@ -111,7 +100,7 @@ final class MarkerGridIndex<ActualMarker> {
         return found
     }
 
-    /// The markers in `bounds`, at most one per cell.
+    /// One marker for each cell the bounds touch.
     ///
     /// The caller has said that markers closer together than
     /// `minSeparationDegrees` are interchangeable, so the index is free to hand
@@ -122,11 +111,34 @@ final class MarkerGridIndex<ActualMarker> {
     /// 0.72 microseconds — looking at the full set is 100 ms before anything is
     /// done with it.
     ///
-    /// A cell wholly inside the box needs no containment test, and the last
-    /// entry of its run can be taken without looking at the rest.
+    /// The level comes from the separation: the coarsest one whose cells are no
+    /// wider than the caller asked for.
     ///
-    /// Returns nil when the index cannot help: cells coarser than the caller's
-    /// separation would thin more than it asked for, and a box spanning more
+    /// ## Why the winner cannot depend on the bounds
+    ///
+    /// A cell's representative is the **last entry of its run, always** — not
+    /// the last entry that falls inside the bounds. The difference is what a
+    /// map made of tiles looks like at the seams.
+    ///
+    /// Tiles are rendered one at a time, each asking for its own box grown by
+    /// the icon overhang. A cell straddling the boundary is asked about twice,
+    /// by two different boxes. Choose the winner from what is inside the box
+    /// and the two tiles choose **different markers:** one marker gets its left
+    /// half drawn on the left tile and nothing on the right, so the icon is cut
+    /// down the seam with no error anywhere. Measured on Tokyo's street trees,
+    /// 74 markers at zoom 9 and 84 at zoom 10 were drawn by one tile and not by
+    /// its neighbour.
+    ///
+    /// Choosing without looking at the box removes the disagreement: a marker
+    /// whose icon reaches the next tile is inside that tile's grown box too, so
+    /// that tile asks about the same cell and gets the same answer.
+    ///
+    /// A returned marker may therefore lie just outside `bounds`, by less than
+    /// one cell. The renderer clips it; what it must not do is filter the list
+    /// back down to the box, because that would put the disagreement back.
+    ///
+    /// Returns nil when the index cannot help: a separation finer than the
+    /// bottom level would thin more than it asked for, and a box spanning more
     /// cells than `maxCellsPerThinnedQuery` is cheaper to scan.
     ///
     /// Mirrors `MarkerGridIndex.inBoundsThinned` in android-sdk.
@@ -134,46 +146,37 @@ final class MarkerGridIndex<ActualMarker> {
         _ bounds: GeoRectBounds,
         minSeparationDegrees: Double
     ) -> [MarkerEntity<ActualMarker>]? {
-        if minSeparationDegrees < Self.cellDegrees { return nil }
+        guard let level = MarkerGrid.level(forSeparation: minSeparationDegrees) else { return nil }
         guard let southWest = bounds.southWest, let northEast = bounds.northEast else { return nil }
 
-        let latFrom = Self.cell(southWest.latitude)
-        let latTo = Self.cell(northEast.latitude)
-        let lonFrom = Self.cell(southWest.longitude)
-        let lonTo = Self.cell(northEast.longitude)
-        // As in `inBounds`: a box crossing the antimeridian has its east corner
-        // west of its west one, so walk to the unwrapped end and fold back.
-        let lonEnd = northEast.longitude < southWest.longitude ? lonTo + Self.lonCells : lonTo
+        let lonSpan = MarkerGrid.eastwardSpan(from: southWest.longitude, to: northEast.longitude)
+        let latFrom = MarkerGrid.latCell(southWest.latitude, level: level)
+        let latTo = MarkerGrid.latCell(northEast.latitude, level: level)
+        if latTo < latFrom { return [] }
+        let columns = MarkerGrid.columnWalk(from: southWest.longitude, spanning: lonSpan, level: level)
 
-        if (latTo - latFrom + 1) * (lonEnd - lonFrom + 1) > Self.maxCellsPerThinnedQuery { return nil }
+        if (latTo - latFrom + 1) * columns.count > Self.maxCellsPerThinnedQuery { return nil }
 
         rebuildIfNeeded()
+        let shift = Self.indexBits + 2 * (MarkerGrid.gridDepth - level)
         var found: [MarkerEntity<ActualMarker>] = []
         for latCell in latFrom...latTo {
-            let latInside = latCell > latFrom && latCell < latTo
-            for lonCell in lonFrom...lonEnd {
-                let key = Self.cellKey(latCell, Self.wrapLon(lonCell))
-                let at = lowerBound(key << Self.indexBits)
+            for step in 0..<columns.count {
+                let key = MarkerGrid.morton(
+                    latCell,
+                    MarkerGrid.wrap(columns.start + step, level: level),
+                    level: level
+                )
+                let at = lowerBound(key << shift)
                 if at >= packed.count { continue }
-                let limit = (key + 1) << Self.indexBits
+                let limit = (key + 1) << shift
                 if packed[at] >= limit { continue }
-
-                if latInside && lonCell > lonFrom && lonCell < lonEnd {
-                    var last = at
-                    while last + 1 < packed.count && packed[last + 1] < limit { last += 1 }
-                    found.append(snapshot[Int(packed[last] & Self.indexMask)])
-                    continue
-                }
-                // On the border the cell straddles the box, so the last entry
-                // inside it is not necessarily the last entry of the run.
-                var winner: MarkerEntity<ActualMarker>?
-                var cursor = at
-                while cursor < packed.count && packed[cursor] < limit {
-                    let entity = snapshot[Int(packed[cursor] & Self.indexMask)]
-                    if bounds.contains(point: entity.state.position) { winner = entity }
-                    cursor += 1
-                }
-                if let winner { found.append(winner) }
+                // The run's last entry. No containment test anywhere: that is
+                // the whole point, and it is also why this is cheaper than the
+                // version that scanned every border cell.
+                var last = at
+                while last + 1 < packed.count && packed[last + 1] < limit { last += 1 }
+                found.append(snapshot[Int(packed[last] & Self.indexMask)])
             }
         }
         return found
@@ -192,22 +195,25 @@ final class MarkerGridIndex<ActualMarker> {
         rebuildIfNeeded()
         if packed.isEmpty { return nil }
 
-        let centreLat = Self.cell(position.latitude)
-        let centreLon = Self.cell(position.longitude)
+        let level = Self.nearestLevel
+        let centreLat = MarkerGrid.latCell(position.latitude, level: level)
+        let centreLon = MarkerGrid.lonCell(position.longitude, level: level)
 
         var best: MarkerEntity<ActualMarker>?
         var bestDistance = Double.greatestFiniteMagnitude
         var ring: Int64 = 0
 
         while ring <= Self.maxNearestRings {
-            forEach(inRing: ring, centreLat: centreLat, centreLon: centreLon) { entity in
+            forEach(inRing: ring, centreLat: centreLat, centreLon: centreLon, level: level) { entity in
                 let distance = Self.squaredDegrees(entity, position)
                 if distance < bestDistance {
                     bestDistance = distance
                     best = entity
                 }
             }
-            let reach = Double(ring) * Self.cellDegrees
+            // A ring is a square: the nearest unsearched point is `ring` cells
+            // away on the shorter axis, which is latitude.
+            let reach = Double(ring) * MarkerGrid.cellSize(level)
             if best != nil, reach * reach >= bestDistance { break }
             ring += 1
         }
@@ -230,27 +236,41 @@ final class MarkerGridIndex<ActualMarker> {
         inRing ring: Int64,
         centreLat: Int64,
         centreLon: Int64,
+        level: Int64,
         _ body: (MarkerEntity<ActualMarker>) -> Void
     ) {
+        func visit(_ latCell: Int64, _ lonCell: Int64) {
+            let rows = MarkerGrid.rows(level)
+            if latCell < 0 || latCell >= rows { return }
+            forEach(inCell: MarkerGrid.morton(latCell, MarkerGrid.wrap(lonCell, level: level), level: level),
+                    level: level, body)
+        }
         if ring == 0 {
-            forEach(inCell: Self.cellKey(centreLat, centreLon), body)
+            visit(centreLat, centreLon)
             return
         }
         for offset in -ring...ring {
-            forEach(inCell: Self.cellKey(centreLat - ring, Self.wrapLon(centreLon + offset)), body)
-            forEach(inCell: Self.cellKey(centreLat + ring, Self.wrapLon(centreLon + offset)), body)
+            visit(centreLat - ring, centreLon + offset)
+            visit(centreLat + ring, centreLon + offset)
         }
         if ring > 1 {
             for offset in (-ring + 1)...(ring - 1) {
-                forEach(inCell: Self.cellKey(centreLat + offset, Self.wrapLon(centreLon - ring)), body)
-                forEach(inCell: Self.cellKey(centreLat + offset, Self.wrapLon(centreLon + ring)), body)
+                visit(centreLat + offset, centreLon - ring)
+                visit(centreLat + offset, centreLon + ring)
             }
         }
     }
 
-    private func forEach(inCell key: Int64, _ body: (MarkerEntity<ActualMarker>) -> Void) {
-        var at = lowerBound(key << Self.indexBits)
-        let limit = (key + 1) << Self.indexBits
+    /// Walks one cell at `level`. Its markers are the run whose keys share the
+    /// cell's prefix, which is what interleaving the bits bought.
+    private func forEach(
+        inCell key: Int64,
+        level: Int64,
+        _ body: (MarkerEntity<ActualMarker>) -> Void
+    ) {
+        let shift = Self.indexBits + 2 * (MarkerGrid.gridDepth - level)
+        var at = lowerBound(key << shift)
+        let limit = (key + 1) << shift
         while at < packed.count, packed[at] < limit {
             body(snapshot[Int(packed[at] & Self.indexMask)])
             at += 1
@@ -263,26 +283,12 @@ final class MarkerGridIndex<ActualMarker> {
         var keys = [Int64]()
         keys.reserveCapacity(entities.count)
         for (at, entity) in entities.enumerated() {
-            keys.append((Self.cellKey(for: entity.state.position) << Self.indexBits) | Int64(at))
+            keys.append((MarkerGrid.mortonKey(for: entity.state.position) << Self.indexBits) | Int64(at))
         }
         keys.sort()
         snapshot = entities
         packed = keys
         dirty = false
-    }
-
-    private static func cell(_ degrees: Double) -> Int64 {
-        Int64((degrees / cellDegrees).rounded(.down))
-    }
-
-    private static func cellKey(for position: GeoPointProtocol) -> Int64 {
-        cellKey(cell(position.latitude), cell(position.longitude))
-    }
-
-    /// Offsets keep the keys positive, so their ordering matches the numeric
-    /// ordering the sort and the binary search depend on.
-    private static func cellKey(_ latCell: Int64, _ lonCell: Int64) -> Int64 {
-        ((latCell + 262_144) << 20) | (lonCell + 524_288)
     }
 
     private func lowerBound(_ target: Int64) -> Int {
