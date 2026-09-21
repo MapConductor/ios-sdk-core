@@ -14,11 +14,52 @@ public final class LocalTileServer {
     private var activeConnections = 0
     private var shedConnections = 0
 
+    /**
+     The lane tile drawing runs in: at most `renderWidth` at a time, below the
+     UI in priority.
+
+     Without it, every connection rendered its tile on the shared concurrent
+     queue, synchronously, as it arrived. A pinch makes the map ask for tiles at
+     every zoom the gesture passes through, so dozens of renders ran at once;
+     GCD answers that by spawning threads — far past the core count — and the
+     gesture itself starves. That is what "the map computes while I pinch" feels
+     like. android-sdk never had this: its server has had a bounded pool
+     (`MAX_WORKER_THREADS = 8`) from the start, which is why the same pinch on a
+     Pixel 5a feels fine.
+
+     `.utility` matters as much as the width. The renders are pure CPU; at
+     default QoS they compete with the main thread on equal terms, at utility
+     the gesture preempts them.
+     */
+    private let renderQueue = DispatchQueue(
+        label: "MapConductorCore.LocalTileServer.render",
+        qos: .utility,
+        attributes: .concurrent
+    )
+    private let renderGate: DispatchSemaphore
+    private let renderWidth: Int
+
+    /// Counters behind the once-a-second summary log.
+    private let statsLock = NSLock()
+    private var statsWindowStart = DispatchTime.now().uptimeNanoseconds
+    private var statsRendered = 0
+    private var statsRenderNanos: UInt64 = 0
+    private var statsMaxWaitNanos: UInt64 = 0
+    private var statsMaxActive = 0
+    private var statsNotFound = 0
+    private var statsFailed = 0
+    private var statsAbandoned = 0
+    private var activeRenders = 0
+
     private init(listener: NWListener, queue: DispatchQueue, baseUrl: String, forceNoStoreCache: Bool) {
         self.listener = listener
         self.queue = queue
         self.baseUrl = baseUrl
         self.forceNoStoreCache = forceNoStoreCache
+        // Two cores stay free for the gesture and the map's own GL thread.
+        // The same width android-sdk converges on for its 8-core devices.
+        renderWidth = min(8, max(2, ProcessInfo.processInfo.activeProcessorCount - 2))
+        renderGate = DispatchSemaphore(value: renderWidth)
     }
 
     public func register(routeId: String, provider: TileProvider) {
@@ -121,7 +162,7 @@ public final class LocalTileServer {
         // itself stays on the wildcard address (dual-stack) because some map
         // SDK HTTP stacks resolve localhost to ::1.
         guard isLoopback(connection) else {
-            MCLog.marker("LocalTileServer: rejected non-loopback connection from \(connection.endpoint)")
+            MCLog.tileServer("LocalTileServer: rejected non-loopback connection from \(connection.endpoint)")
             connection.cancel()
             return
         }
@@ -132,7 +173,7 @@ public final class LocalTileServer {
             shedConnections += 1
             let shed = shedConnections
             connectionsLock.unlock()
-            MCLog.marker("LocalTileServer: shed connection (saturated) total=\(shed)")
+            MCLog.tileServer("LocalTileServer: shed connection (saturated) total=\(shed)")
             connection.cancel()
             return
         }
@@ -234,8 +275,126 @@ public final class LocalTileServer {
             return
         }
 
-        let path = request.path.split(separator: "?")[0]
-        let tileResponse = resolveTile(path: String(path))
+        let path = String(request.path.split(separator: "?")[0])
+        let queuedAt = DispatchTime.now().uptimeNanoseconds
+        renderQueue.async { [weak self] in
+            guard let self else {
+                connection.cancel()
+                return
+            }
+            // The wait is the queue telling us the lane is full. It shows up in
+            // the summary log as wait(max); a long one during a pinch means the
+            // gesture is generating tiles faster than the lane drains them,
+            // which is the intended trade — the UI stays smooth and the tiles
+            // arrive a beat later.
+            self.renderGate.wait()
+            let waitNanos = DispatchTime.now().uptimeNanoseconds - queuedAt
+            self.statsLock.lock()
+            self.activeRenders += 1
+            self.statsMaxActive = max(self.statsMaxActive, self.activeRenders)
+            self.statsLock.unlock()
+
+            let renderStart = DispatchTime.now().uptimeNanoseconds
+            let outcome = self.resolveTile(path: path, connection: connection)
+            let renderNanos = DispatchTime.now().uptimeNanoseconds - renderStart
+            self.renderGate.signal()
+            self.statsLock.lock()
+            self.activeRenders -= 1
+            self.statsLock.unlock()
+
+            self.record(outcome: outcome, path: path, waitNanos: waitNanos, renderNanos: renderNanos)
+            self.respond(
+                outcome: outcome,
+                connection: connection,
+                remainingData: remainingData,
+                keepAlive: keepAlive,
+                handled: handled
+            )
+        }
+    }
+
+    /// Feeds the counters and emits the once-a-second summary plus anomalies.
+    private func record(outcome: TileOutcome, path: String, waitNanos: UInt64, renderNanos: UInt64) {
+        MCLog.tileDetail(String(
+            format: "tile %@ wait=%.0fms render=%.0fms",
+            path, Double(waitNanos) / 1e6, Double(renderNanos) / 1e6
+        ))
+        switch outcome {
+        case .notFound:
+            MCLog.tileServer("LocalTileServer: 404 \(path)")
+        case .failed:
+            // 503 -- the map will retry. If these repeat for the same path,
+            // the provider is failing deterministically; the path says which.
+            MCLog.tileServer("LocalTileServer: 503 \(path)")
+        case .abandoned:
+            MCLog.tileServer("LocalTileServer: abandoned \(path) after \(renderNanos / 1_000_000)ms")
+        case .tile:
+            break
+        }
+
+        statsLock.lock()
+        statsRendered += 1
+        statsRenderNanos += renderNanos
+        statsMaxWaitNanos = max(statsMaxWaitNanos, waitNanos)
+        if case .notFound = outcome { statsNotFound += 1 }
+        if case .failed = outcome { statsFailed += 1 }
+        if case .abandoned = outcome { statsAbandoned += 1 }
+        let now = DispatchTime.now().uptimeNanoseconds
+        let windowNanos = now - statsWindowStart
+        var line: String?
+        if windowNanos >= 1_000_000_000 {
+            line = String(
+                format: "LocalTileServer: %d tiles in %.1fs render=%.0fms wait(max)=%.0fms "
+                    + "parallel(max)=%d/%d notFound=%d failed=%d abandoned=%d",
+                statsRendered, Double(windowNanos) / 1e9,
+                Double(statsRenderNanos) / 1e6, Double(statsMaxWaitNanos) / 1e6,
+                statsMaxActive, renderWidth, statsNotFound, statsFailed, statsAbandoned
+            )
+            statsWindowStart = now
+            statsRendered = 0
+            statsRenderNanos = 0
+            statsMaxWaitNanos = 0
+            statsMaxActive = 0
+            statsNotFound = 0
+            statsFailed = 0
+            statsAbandoned = 0
+        }
+        statsLock.unlock()
+        if let line { MCLog.tileServer(line) }
+    }
+
+    private func respond(
+        outcome: TileOutcome,
+        connection: NWConnection,
+        remainingData: Data,
+        keepAlive: Bool,
+        handled: Int
+    ) {
+        if case .abandoned = outcome {
+            // Nobody is left to read an answer, and the only answer that would
+            // fit is "not found", which is a lie the map would believe. End the
+            // connection instead.
+            connection.cancel()
+            return
+        }
+        if case .failed = outcome {
+            sendResponse(
+                connection: connection,
+                status: "503 Service Unavailable",
+                contentType: "text/plain",
+                body: Data("Tile render failed".utf8),
+                keepAlive: keepAlive,
+                extraHeaders: ["Cache-Control": "no-store", "Retry-After": "1"]
+            ) { [weak self, weak connection] in
+                guard let self, let connection else { return }
+                self.finishRequest(connection: connection, remainingData: remainingData, keepAlive: keepAlive, handled: handled)
+            }
+            return
+        }
+        let tileResponse: TileResponse? = {
+            if case .tile(let response) = outcome { return response }
+            return nil
+        }()
         if let tileResponse {
             sendResponse(
                 connection: connection,
@@ -331,43 +490,64 @@ public final class LocalTileServer {
         }
     }
 
-    private func resolveTile(path: String) -> TileResponse? {
+    /// What a request resolved to. `abandoned` is deliberately not `notFound`:
+    /// the difference is what the map does next.
+    private enum TileOutcome {
+        case tile(TileResponse)
+        /// The path names nothing: bad route, bad coordinates. Answered 404,
+        /// and the map is right to stop asking.
+        case notFound
+        /// The provider could not draw it right now. Answered 503, which every
+        /// map SDK treats as retryable. A 404 here would be believed forever:
+        /// GMS caches "no tile" per coordinate, so one transient failure
+        /// becomes a permanent hole with its neighbours' icons cut at the edge.
+        case failed
+        /// The client gave up before the tile was drawn.
+        case abandoned
+    }
+
+    private func resolveTile(path: String, connection: NWConnection) -> TileOutcome {
         let trimmed = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard !trimmed.isEmpty else { return nil }
+        guard !trimmed.isEmpty else { return .notFound }
 
         let segments = trimmed.split(separator: "/").map(String.init)
         guard segments.count >= 6, segments[0] == "tiles" else {
-            return nil
+            return .notFound
         }
 
         let routeId = segments[1]
         guard Int(segments[2]) != nil else {
-            return nil
+            return .notFound
         }
         let hasCacheKey = segments.count >= 7
         let zIndex = hasCacheKey ? 4 : 3
         let xIndex = hasCacheKey ? 5 : 4
         let yIndex = hasCacheKey ? 6 : 5
         guard let z = Int(segments[zIndex]), let x = Int(segments[xIndex]) else {
-            return nil
+            return .notFound
         }
 
         guard let coordinate = parseTileCoordinate(segments[yIndex]) else {
-            return nil
+            return .notFound
         }
 
         guard let provider = getProvider(routeId: routeId) else {
-            return nil
+            return .notFound
         }
 
-        MCLog.marker(
-            "LocalTileServer.resolveTile routeId=\(routeId) z=\(z) x=\(x) " +
-                "y=\(coordinate.y) ratio=\(coordinate.pixelRatio)x"
-        )
+        // A cancelled connection means the map moved on. Checked repeatedly
+        // rather than once, because the expensive part is the drawing itself.
+        let gone = { @Sendable in
+            switch connection.state {
+            case .cancelled, .failed: return true
+            default: return false
+            }
+        }
         guard let bytes = provider.renderTile(
-            request: TileRequest(x: x, y: coordinate.y, z: z, pixelRatio: coordinate.pixelRatio)
+            request: TileRequest(x: x, y: coordinate.y, z: z, pixelRatio: coordinate.pixelRatio),
+            isCancelled: gone
         ) else {
-            return nil
+            return gone() ? .abandoned : .failed
         }
 
         let noStore: Bool = {
@@ -376,7 +556,7 @@ public final class LocalTileServer {
             return forceNoStoreCache
         }()
         let cacheControl = noStore ? Self.noStoreCacheControl : Self.longCacheControl
-        return TileResponse(body: bytes, cacheControl: cacheControl)
+        return .tile(TileResponse(body: bytes, cacheControl: cacheControl))
     }
 
     private func sendResponse(

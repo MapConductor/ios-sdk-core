@@ -131,8 +131,13 @@ final class MarkerTilingFlagTests: XCTestCase {
 
     // MARK: - Tile renderer
 
-    /// `MarkerTileRenderer` はタイル担当だけを焼く。ネイティブ担当しか無ければタイルは出ない。
-    func testTileRendererSkipsNativeEntities() {
+    /// `MarkerTileRenderer` はタイル担当だけを焼く。ネイティブ担当しか無ければ**透明**が出る。
+    ///
+    /// 以前は nil を期待していた。nil はサーバで 404 になり、地図 SDK が
+    /// 「このタイルは無い」と恒久に覚えてしまう。タイル⇄ネイティブの担当替えの
+    /// 一瞬に来た要求が 404 になると、そこだけ二度と描かれない穴になった
+    /// （後楽園で実際に起きた）。空は「透明という絵」で答える。
+    func testTileRendererSkipsNativeEntities() throws {
         let manager = MarkerManager<FakeMarker>()
         manager.registerEntity(
             MarkerEntity(
@@ -145,7 +150,23 @@ final class MarkerTilingFlagTests: XCTestCase {
         )
         let renderer = MarkerTileRenderer<FakeMarker>(markerManager: manager)
 
-        XCTAssertNil(renderer.renderTile(request: Self.tileRequest))
+        let png = try XCTUnwrap(renderer.renderTile(request: Self.tileRequest), "空でも絵は返る")
+        // 透明であること: デコードして全ピクセルの alpha が 0。
+        let image = try XCTUnwrap(UIImage(data: png)?.cgImage)
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 1, count: width * height * 4)
+        let context = CGContext(
+            data: &pixels, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )
+        context?.clear(CGRect(x: 0, y: 0, width: width, height: height))
+        context?.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        XCTAssertTrue(
+            stride(from: 3, to: pixels.count, by: 4).allSatisfy { pixels[$0] == 0 },
+            "ネイティブ担当のマーカーがタイルに描かれている"
+        )
     }
 
     /// タイル担当が居ればタイルは出る（上のテストが「常に nil」で通らないことの確認）。
