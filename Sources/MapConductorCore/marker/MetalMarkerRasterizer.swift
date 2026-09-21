@@ -165,19 +165,27 @@ final class MetalMarkerRasterizer {
                                   width: image.width, height: image.height)
                 context.draw(image, in: rect)
                 /*
-                 半テクセル内側に詰める。クアッドの端のピクセルはセルの境界
-                 ぴったりの UV をサンプルし、最近傍では**隣のアイコンの端の列**を
-                 拾うことがある。タイルの内側では円の縁の 1px で目立たないが、
-                 タイル境界でクリップされた円は切り口がそのまま画面に出るので、
-                 隣のタイルが描く正しい続きと色が食い違い、継ぎ目で丸が割れて
-                 見える -- 御茶ノ水・霞が関で実際に出た形。実機の実測では
-                 これで GPU と CPU の継ぎ目差分が 3 件 → 0 件になった。
+                 v は**下から**測る。
+
+                 `CGContext(data:)` の原点は左下で、「行 r」に置いたつもりの
+                 アイコンはメモリ上では行 rows-1-r に居る。テクスチャはメモリを
+                 そのまま積むので、上基準の v を渡すと**1 行反転ぶん別のアイコン**を
+                 サンプルする -- 単体テストでは 3x3 の行 0 と行 2 がそっくり
+                 入れ替わり、反転先が最終行の空セルに落ちたアイコンは絵ごと
+                 消えた。実機では「タイル右端のマーカーが消える」「1 つの丸に
+                 2 色」という継ぎ目の割れとして見えていた。アイコン自体は
+                 CG がイメージも同じ向きで描くため二重反転で正立しており、
+                 ずれるのは行の割り当てだけ。
+
+                 半テクセルの内側詰めは最近傍サンプリングが隣のセルの端を
+                 拾わないための保険。
                  */
                 let insetX = 0.5 / Double(width)
                 let insetY = 0.5 / Double(height)
+                let flippedY = Double(height) - rect.maxY
                 uv.append(CGRect(
                     x: rect.minX / Double(width) + insetX,
-                    y: rect.minY / Double(height) + insetY,
+                    y: flippedY / Double(height) + insetY,
                     width: rect.width / Double(width) - 2 * insetX,
                     height: rect.height / Double(height) - 2 * insetY
                 ))

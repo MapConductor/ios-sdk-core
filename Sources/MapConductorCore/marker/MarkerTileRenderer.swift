@@ -538,18 +538,17 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         if gpuResolved { return gpuCached }
         gpuResolved = true
         /*
-         既定は CPU。GPU は実験用のオプトイン。
+         既定は GPU。`MAPCONDUCTOR_MARKER_TILE_CPU=1` で切り分け用に CPU へ
+         落とせる。
 
-         GPU 経路は速い（実測でタイルあたり 20〜40ms の差）が、正しくない。
-         実機の A/B（`DeviceSeamReproBench`、144k・アイコン 101 種・z17）で、
-         同一の kept 集合・同一の描画順にもかかわらず GPU だけがタイル右端の
-         マーカーを描き落とし、別のマーカーの色を出した。49 境界中 3 で
-         継ぎ目の割れになり、CPU は 0。地図では「アイコンが切れる」
-         「1 つの丸に 2 色」という形で見え、御茶ノ水・霞が関で実際に出た。
-         原因はインスタンスとアトラスの対応のどこかまでしか特定できておらず、
-         直すまでは正しさを取る。戻すときはあのベンチが回帰網になる。
+         一時期 GPU を既定から外していた。アトラスの UV が CGContext の
+         下原点を考慮しておらず 1 行反転ぶん別のアイコンを指し、実機で
+         「タイル右端のマーカーが消える」「1 つの丸に 2 色」という継ぎ目の
+         割れになっていたため（詳細は MetalMarkerRasterizer.makeAtlas）。
+         根治後、`MetalMarkerRasterizerTests`（単体）と
+         `DeviceSeamReproBench`（実機の GPU/CPU 突き合わせ）が回帰網。
          */
-        guard ProcessInfo.processInfo.environment["MAPCONDUCTOR_MARKER_TILE_GPU"] == "1" else {
+        if ProcessInfo.processInfo.environment["MAPCONDUCTOR_MARKER_TILE_CPU"] == "1" {
             return nil
         }
         gpuCached = MetalMarkerRasterizer.createOrNull(tileSize: tileSize)
