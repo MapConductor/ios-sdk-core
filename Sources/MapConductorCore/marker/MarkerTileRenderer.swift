@@ -222,21 +222,17 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
                 hook(request)
             }
             /*
-             空のタイルは nil ではなく透明な PNG。
+             空のタイルは nil。透明な PNG に変えるのは `LocalTileServer` の仕事。
 
-             nil はサーバで 404 になり、地図 SDK は「このタイルは存在しない」と
-             覚えて二度と要求しない。マーカーの空タイルは**今**空なだけで、
-             データの取り込み中・ネイティブ⇄タイルの切り替え中に一瞬だけ空に
-             なることがある。その一瞬の 404 が恒久の穴になり、隣のタイルが
-             はみ出し分だけ描くので、穴の縁でアイコンが半分に切れて見える --
-             後楽園で実際に起きた形。
-
-             透明タイルは 1 度だけ作って使い回す。数百バイトで、キャッシュ側の
-             負担にはならない。本当にマーカーの無い場所も透明が正しい絵で、
-             あとからそこにマーカーが現れたときはデータ変更がタイル URL の
-             version を進めるので、古い透明が残ることもない。
+             nil を「タイルが無い」と解釈されると困る、という話は変わっていない
+             （地図 SDK は 404 を恒久記憶し、隣のタイルのはみ出し分だけが残って
+             穴の縁でアイコンが半分に切れる — 後楽園で実際に起きた形）。
+             変えたのは**誰が絵にするか**で、いまはサーバが空を透明タイルとして
+             200 で返す。ここで自前の透明タイルを返していたときは、同じく空で
+             nil を返す geojson / kml / groundimage / vectortile だけが 503 に
+             なっていた。android-sdk と同じく、意味の変換は一箇所に置く。
              */
-            return Self.transparentTile(size: tileSize)
+            return nil
         }
 
         let prepareStart = Self.tracePhases ? Self.now() : 0
@@ -510,9 +506,6 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
 
     // MARK: - Private
 
-    private static func transparentTile(size: Int) -> Data? {
-        TransparentTileCache.tile(size: size)
-    }
 
     private struct PreparedMarker {
         let bitmap: UIImage
@@ -810,22 +803,3 @@ private struct MarkerPlacement: Hashable {
     private final class AnyIconMarker {}
 }
 
-/// 透明タイルの置き場。`MarkerTileRenderer` はジェネリックで static stored
-/// property を持てないため、ここに出してある（`MarkerTilePhaseTrace` と同じ理由）。
-private enum TransparentTileCache {
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var cache: [Int: Data] = [:]
-
-    static func tile(size: Int) -> Data? {
-        lock.lock()
-        defer { lock.unlock() }
-        if let cached = cache[size] { return cached }
-        var pixels = [UInt8](repeating: 0, count: size * size * 4)
-        let png = pixels.withUnsafeMutableBytes { raw -> Data? in
-            guard let base = raw.baseAddress else { return nil }
-            return TilePngEncoder.encode(rgba: base, width: size, height: size, premultiplied: true)
-        }
-        cache[size] = png
-        return png
-    }
-}

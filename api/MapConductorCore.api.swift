@@ -255,10 +255,10 @@ public struct MapViewContent {
 }
 public protocol TileProvider : AnyObject {
   func renderTile(request: MapConductorCore::TileRequest) -> Foundation::Data?
-  func renderTile(request: MapConductorCore::TileRequest, isCancelled: () -> Swift::Bool) -> Foundation::Data?
+  func renderTile(request: MapConductorCore::TileRequest, isCancelled: () -> Swift::Bool) throws -> Foundation::Data?
 }
 extension MapConductorCore::TileProvider {
-  public func renderTile(request: MapConductorCore::TileRequest, isCancelled: () -> Swift::Bool) -> Foundation::Data?
+  public func renderTile(request: MapConductorCore::TileRequest, isCancelled: () -> Swift::Bool) throws -> Foundation::Data?
 }
 public struct TileRequest : Swift::Hashable {
   public let x: Swift::Int

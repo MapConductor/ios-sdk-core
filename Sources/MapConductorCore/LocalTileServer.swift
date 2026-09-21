@@ -328,7 +328,7 @@ public final class LocalTileServer {
             MCLog.tileServer("LocalTileServer: 503 \(path)")
         case .abandoned:
             MCLog.tileServer("LocalTileServer: abandoned \(path) after \(renderNanos / 1_000_000)ms")
-        case .tile:
+        case .empty, .tile:
             break
         }
 
@@ -392,8 +392,19 @@ public final class LocalTileServer {
             return
         }
         let tileResponse: TileResponse? = {
-            if case .tile(let response) = outcome { return response }
-            return nil
+            switch outcome {
+            case .tile(let response):
+                return response
+            case .empty(let pixelSize, let cacheControl):
+                // A transparent picture is what "nothing here" looks like. If
+                // the encoder cannot produce one the answer falls through to
+                // 404 below, which is the old behaviour and still wrong — but
+                // it only happens when PNG encoding itself is broken.
+                guard let png = TransparentTile.png(size: pixelSize) else { return nil }
+                return TileResponse(body: png, cacheControl: cacheControl)
+            default:
+                return nil
+            }
         }()
         if let tileResponse {
             sendResponse(
@@ -494,6 +505,11 @@ public final class LocalTileServer {
     /// the difference is what the map does next.
     private enum TileOutcome {
         case tile(TileResponse)
+        /// The provider had nothing to draw here. Answered with a transparent
+        /// tile: an empty spot is a real answer, and a cacheable one — the URL
+        /// carries the data version, so it is re-asked when the data changes.
+        /// Saying 404 or 503 instead is what leaves a hole in the map.
+        case empty(pixelSize: Int, cacheControl: String)
         /// The path names nothing: bad route, bad coordinates. Answered 404,
         /// and the map is right to stop asking.
         case notFound
@@ -516,7 +532,7 @@ public final class LocalTileServer {
         }
 
         let routeId = segments[1]
-        guard Int(segments[2]) != nil else {
+        guard let tileSize = Int(segments[2]) else {
             return .notFound
         }
         let hasCacheKey = segments.count >= 7
@@ -543,19 +559,32 @@ public final class LocalTileServer {
             default: return false
             }
         }
-        guard let bytes = provider.renderTile(
-            request: TileRequest(x: x, y: coordinate.y, z: z, pixelRatio: coordinate.pixelRatio),
-            isCancelled: gone
-        ) else {
-            return gone() ? .abandoned : .failed
-        }
-
         let noStore: Bool = {
             cacheOptionsLock.lock()
             defer { cacheOptionsLock.unlock() }
             return forceNoStoreCache
         }()
         let cacheControl = noStore ? Self.noStoreCacheControl : Self.longCacheControl
+
+        let bytes: Data?
+        do {
+            bytes = try provider.renderTile(
+                request: TileRequest(x: x, y: coordinate.y, z: z, pixelRatio: coordinate.pixelRatio),
+                isCancelled: gone
+            )
+        } catch {
+            MCLog.tileServer("LocalTileServer: render threw for \(trimmed): \(error)")
+            return gone() ? .abandoned : .failed
+        }
+        guard let bytes else {
+            // Nothing to draw. Answered with pixels, not with "no tile" —
+            // unless nobody is waiting any more, in which case the only thing
+            // worth doing is not answering.
+            return gone() ? .abandoned : .empty(
+                pixelSize: tileSize * coordinate.pixelRatio,
+                cacheControl: cacheControl
+            )
+        }
         return .tile(TileResponse(body: bytes, cacheControl: cacheControl))
     }
 
