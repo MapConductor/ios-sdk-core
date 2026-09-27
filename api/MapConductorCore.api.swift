@@ -2781,6 +2781,16 @@ final public class RasterLayerState : Combine::ObservableObject, Swift::Identifi
     get
   }
 }
+public protocol RasterTilePreference {
+  var preferredTileSize: Swift::Int { get }
+}
+public enum RasterTilePreferenceKey : MapConductorCore::MapServiceKey {
+  public typealias Value = MapConductorCore::RasterTilePreference
+}
+public struct FixedRasterTilePreference : MapConductorCore::RasterTilePreference {
+  public let preferredTileSize: Swift::Int
+  public init(preferredTileSize: Swift::Int)
+}
 public enum MarkerIconSize {
   public static let Small: CoreFoundation::CGFloat
   public static let Regular: CoreFoundation::CGFloat
