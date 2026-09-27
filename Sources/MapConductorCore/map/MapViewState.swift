@@ -159,7 +159,9 @@ open class MapViewState<ActualMapDesignType>: ObservableObject, MapViewStateProt
     }
 
     open func moveCameraTo(cameraPosition: MapCameraPosition, durationMillis: Long? = 0) {
-        let resolved = resolveCameraPosition(cameraPosition)
+        // カメラを渡されたらそのまま使う。「位置だけ動かして縮尺は保つ」は
+        // `moveCameraTo(position:)` のオーバーロードが担う。
+        let resolved = cameraPosition
         guard let controller = attachedMapController else {
             // まだ地図が無い。接続時に attachController がこの位置へ移動する。
             storedCameraPosition = resolved
@@ -191,17 +193,6 @@ open class MapViewState<ActualMapDesignType>: ObservableObject, MapViewStateProt
         attachedMapController?.holder
     }
 
-    /// ズーム・ベアリング・チルトがすべて 0 の「未指定」カメラは、位置だけを差し替える。
-    ///
-    /// アプリが `MapCameraPosition(position:)` だけを渡してきたときに、
-    /// いまの縮尺を保ったまま移動するための救済。全プロバイダが同じ判定をしていた。
-    private func resolveCameraPosition(_ target: MapCameraPosition) -> MapCameraPosition {
-        let isUnspecified = target.zoom == 0.0 && target.bearing == 0.0 && target.tilt == 0.0
-        if isUnspecified {
-            return storedCameraPosition.copy(position: target.position)
-        }
-        return target
-    }
 }
 
 public protocol MapOverlayProtocol: AnyObject {
