@@ -2950,3 +2950,6 @@ public enum BlankMapStyle {
   public static let json: Swift.String
   public static let fileURL: Foundation.URL
 }
+public enum TransparentTile {
+  public static func png(size: Swift.Int) -> Foundation.Data?
+}

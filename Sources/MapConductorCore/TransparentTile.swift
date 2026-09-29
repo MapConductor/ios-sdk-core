@@ -11,12 +11,18 @@ import Foundation
 /// 以前は `MarkerTileRenderer` が自分で透明タイルを返していて、同じことをする
 /// geojson / kml / groundimage / vectortile は nil のまま 503 になっていた。
 /// android-sdk-core の `TransparentTilePng` と対になっている。
-enum TransparentTile {
+/// A transparent PNG per pixel size, encoded once and kept.
+///
+/// What "nothing here" looks like to a map: the tile server answers an empty
+/// spot with it, and a backend that asks for tiles nobody will see (ArcGIS's
+/// 3D view loads every ancestor of the level on screen) is handed one instead
+/// of a render.
+public enum TransparentTile {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var cache: [Int: Data] = [:]
 
     /// 一辺 `size` ピクセルの透明 PNG。作れなければ nil。
-    static func png(size: Int) -> Data? {
+    public static func png(size: Int) -> Data? {
         let clamped = min(max(size, 1), maxSize)
         lock.lock()
         defer { lock.unlock() }
