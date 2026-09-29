@@ -1,7 +1,7 @@
 import Foundation
 import Network
 
-public final class LocalTileServer {
+public final class LocalTileServer: @unchecked Sendable {
     public private(set) var baseUrl: String
 
     private let listener: NWListener
@@ -96,6 +96,55 @@ public final class LocalTileServer {
 
     public func urlTemplate(routeId: String, tileSize: Int, cacheKey: String) -> String {
         "\(baseUrl)/tiles/\(routeId)/\(tileSize)/\(cacheKey)/{z}/{x}/{y}.png"
+    }
+
+    /**
+     Renders one of this server's URLs without going through TCP.
+
+     Native map SDKs that expose an in-process tile callback should use this
+     path. Besides avoiding a loopback HTTP round trip, their task cancellation
+     is authoritative: unlike a TCP FIN it really does mean that the map no
+     longer wants the tile.
+
+     The same render gate is shared with HTTP clients, so using the direct path
+     cannot create an unbounded number of CPU-heavy renders.
+     */
+    public func renderLocalTile(
+        url: URL,
+        isCancelled: @escaping @Sendable () -> Bool = { false }
+    ) -> Data? {
+        guard url.absoluteString.hasPrefix(baseUrl + "/") else { return nil }
+
+        let queuedAt = DispatchTime.now().uptimeNanoseconds
+        while renderGate.wait(timeout: .now() + .milliseconds(10)) != .success {
+            if isCancelled() { return nil }
+        }
+        let waitNanos = DispatchTime.now().uptimeNanoseconds - queuedAt
+
+        statsLock.lock()
+        activeRenders += 1
+        statsMaxActive = max(statsMaxActive, activeRenders)
+        statsLock.unlock()
+
+        let renderStart = DispatchTime.now().uptimeNanoseconds
+        let outcome = resolveTile(path: url.path, isCancelled: isCancelled)
+        let renderNanos = DispatchTime.now().uptimeNanoseconds - renderStart
+
+        statsLock.lock()
+        activeRenders -= 1
+        statsLock.unlock()
+        renderGate.signal()
+
+        record(outcome: outcome, path: url.path, waitNanos: waitNanos, renderNanos: renderNanos)
+
+        switch outcome {
+        case .tile(let response):
+            return response.body
+        case .empty(let pixelSize, _):
+            return TransparentTile.png(size: pixelSize)
+        case .notFound, .failed, .abandoned:
+            return nil
+        }
     }
 
     @available(*, deprecated, message: "`version` is ignored. Use `urlTemplate(routeId:tileSize:)` instead.")
@@ -295,7 +344,13 @@ public final class LocalTileServer {
             self.statsLock.unlock()
 
             let renderStart = DispatchTime.now().uptimeNanoseconds
-            let outcome = self.resolveTile(path: path, connection: connection)
+            let gone = { @Sendable in
+                switch connection.state {
+                case .cancelled, .failed: return true
+                default: return false
+                }
+            }
+            let outcome = self.resolveTile(path: path, isCancelled: gone)
             let renderNanos = DispatchTime.now().uptimeNanoseconds - renderStart
             self.renderGate.signal()
             self.statsLock.lock()
@@ -522,7 +577,10 @@ public final class LocalTileServer {
         case abandoned
     }
 
-    private func resolveTile(path: String, connection: NWConnection) -> TileOutcome {
+    private func resolveTile(
+        path: String,
+        isCancelled: @escaping @Sendable () -> Bool
+    ) -> TileOutcome {
         let trimmed = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !trimmed.isEmpty else { return .notFound }
 
@@ -551,14 +609,6 @@ public final class LocalTileServer {
             return .notFound
         }
 
-        // A cancelled connection means the map moved on. Checked repeatedly
-        // rather than once, because the expensive part is the drawing itself.
-        let gone = { @Sendable in
-            switch connection.state {
-            case .cancelled, .failed: return true
-            default: return false
-            }
-        }
         let noStore: Bool = {
             cacheOptionsLock.lock()
             defer { cacheOptionsLock.unlock() }
@@ -570,21 +620,22 @@ public final class LocalTileServer {
         do {
             bytes = try provider.renderTile(
                 request: TileRequest(x: x, y: coordinate.y, z: z, pixelRatio: coordinate.pixelRatio),
-                isCancelled: gone
+                isCancelled: isCancelled
             )
         } catch {
             MCLog.tileServer("LocalTileServer: render threw for \(trimmed): \(error)")
-            return gone() ? .abandoned : .failed
+            return isCancelled() ? .abandoned : .failed
         }
         guard let bytes else {
             // Nothing to draw. Answered with pixels, not with "no tile" —
             // unless nobody is waiting any more, in which case the only thing
             // worth doing is not answering.
-            return gone() ? .abandoned : .empty(
+            return isCancelled() ? .abandoned : .empty(
                 pixelSize: tileSize * coordinate.pixelRatio,
                 cacheControl: cacheControl
             )
         }
+        guard !isCancelled() else { return .abandoned }
         return .tile(TileResponse(body: bytes, cacheControl: cacheControl))
     }
 
