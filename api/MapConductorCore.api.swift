@@ -2945,3 +2945,8 @@ extension MapConductorCore::DeferredUntilReady : Swift::Sendable {}
 extension MapConductorCore::MapOverlayScope : Swift::Sendable {}
 extension MapConductorCore::OverlayCollector : Swift::Sendable {}
 extension MapConductorCore::TileScheme : Swift::RawRepresentable {}
+public enum BlankMapStyle {
+  public static let backgroundColor: Swift.String
+  public static let json: Swift.String
+  public static let fileURL: Foundation.URL
+}
