@@ -17,18 +17,25 @@ import os
 public enum InternalMapConductorApi {
   public static let spiGroup: Swift::String
 }
-@_hasMissingDesignatedInitializers final public class LocalTileServer {
+@_hasMissingDesignatedInitializers final public class LocalTileServer : @unchecked Swift::Sendable {
   final public var baseUrl: Swift::String {
     get
   }
   final public func register(routeId: Swift::String, provider: any MapConductorCore::TileProvider)
   final public func unregister(routeId: Swift::String)
+  final public func registerDocument(id: Swift::String, contentType: Swift::String, body: Foundation::Data)
+  final public func unregisterDocument(id: Swift::String)
+  final public func documentUrl(id: Swift::String) -> Swift::String
+  final public func registerFiles(routeId: Swift::String, directory: Foundation::URL, fallback: (@Sendable (_ relativePath: Swift::String) -> Foundation::Data?)? = nil)
+  final public func unregisterFiles(routeId: Swift::String)
+  final public func filesUrl(routeId: Swift::String) -> Swift::String
   final public var isListening: Swift::Bool {
     get
   }
   final public func setForceNoStoreCache(_ value: Swift::Bool)
   final public func urlTemplate(routeId: Swift::String, tileSize: Swift::Int) -> Swift::String
   final public func urlTemplate(routeId: Swift::String, tileSize: Swift::Int, cacheKey: Swift::String) -> Swift::String
+  final public func renderLocalTile(url: Foundation::URL, isCancelled: @escaping @Sendable () -> Swift::Bool = { false }) -> Foundation::Data?
   @available(*, deprecated, message: "`version` is ignored. Use `urlTemplate(routeId:tileSize:)` instead.")
   final public func urlTemplate(routeId: Swift::String, version: Swift::Int64) -> Swift::String
   final public func stop()
@@ -276,6 +283,9 @@ public enum TileServerRegistry {
   public static func get() -> MapConductorCore::LocalTileServer
   public static func get(forceNoStoreCache: Swift::Bool) -> MapConductorCore::LocalTileServer
   public static func setForceNoStoreCache(_ value: Swift::Bool)
+}
+public enum TransparentTile {
+  public static func png(size: Swift::Int) -> Foundation::Data?
 }
 public typealias Long = Swift::Int64
 final public class CoroutineScope {
@@ -1106,6 +1116,11 @@ public struct AttributionRule : Swift::Hashable {
 }
 public func resolveAttributionRules(_ rules: [MapConductorCore::AttributionRule], camera: any MapConductorCore::MapCameraPositionProtocol) -> [Swift::String]
 public func resolveMapAttributions(designRules: [MapConductorCore::AttributionRule], rasterLayers: [MapConductorCore::RasterLayer], camera: any MapConductorCore::MapCameraPositionProtocol) -> [Swift::String]
+public enum BlankMapStyle {
+  public static let backgroundColor: Swift::String
+  public static let json: Swift::String
+  public static let fileURL: Foundation::URL
+}
 public struct CameraRestriction : Swift::Equatable {
   public let bounds: MapConductorCore::GeoRectBounds?
   public let minZoom: Swift::Double?
@@ -1451,6 +1466,19 @@ final public class MapOverlayRegistry {
 public enum ScreenProjectionRequirement {
   @discardableResult
   public static func check(registry: any MapConductorCore::MapServiceRegistry, provider: Swift::String, feature: Swift::String) -> Swift::Bool
+}
+public protocol VectorStyleSupport : AnyObject {
+  func showStyle(url: Swift::String, attributionRules: [MapConductorCore::AttributionRule])
+  func clearStyle()
+}
+public enum VectorStyleSupportKey : MapConductorCore::MapServiceKey {
+  public typealias Value = MapConductorCore::VectorStyleSupport
+}
+final public class VectorStyleAsDesign<State> : MapConductorCore::VectorStyleSupport where State : MapConductorCore::MapViewStateProtocol {
+  public init(state: State, designId: @escaping (State.ActualMapDesignType) -> Swift::String, designFor: @escaping (_ url: Swift::String, _ attributionRules: [MapConductorCore::AttributionRule]) -> State.ActualMapDesignType)
+  final public func showStyle(url: Swift::String, attributionRules: [MapConductorCore::AttributionRule])
+  final public func clearStyle()
+  @objc deinit
 }
 extension MapConductorCore::MapViewHolderProtocol {
   public func buildVisibleRegion(inset: CoreFoundation::CGFloat = 0, requireAllCorners: Swift::Bool = true) -> MapConductorCore::VisibleRegion?
@@ -2945,11 +2973,3 @@ extension MapConductorCore::DeferredUntilReady : Swift::Sendable {}
 extension MapConductorCore::MapOverlayScope : Swift::Sendable {}
 extension MapConductorCore::OverlayCollector : Swift::Sendable {}
 extension MapConductorCore::TileScheme : Swift::RawRepresentable {}
-public enum BlankMapStyle {
-  public static let backgroundColor: Swift.String
-  public static let json: Swift.String
-  public static let fileURL: Foundation.URL
-}
-public enum TransparentTile {
-  public static func png(size: Swift.Int) -> Foundation.Data?
-}

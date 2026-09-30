@@ -8,6 +8,11 @@ public final class LocalTileServer: @unchecked Sendable {
     private let queue: DispatchQueue
     private let providersLock = NSLock()
     private var providers: [String: TileProvider] = [:]
+    /// Guarded by `providersLock`.
+    private var documents: [String: Document] = [:]
+    /// Guarded by `providersLock`. Directories served by route: an offline
+    /// package a map reads its tiles, glyphs and sprite from.
+    private var fileRoutes: [String: FileRoute] = [:]
     private let cacheOptionsLock = NSLock()
     private var forceNoStoreCache: Bool
     private let connectionsLock = NSLock()
@@ -72,6 +77,64 @@ public final class LocalTileServer: @unchecked Sendable {
         providersLock.lock()
         providers.removeValue(forKey: routeId)
         providersLock.unlock()
+    }
+
+    /**
+     Serves `body` at ``documentUrl(id:)`` until ``unregisterDocument(id:)``.
+
+     Whole documents beside the tiles: a style JSON that a vector-capable map
+     is to read directly, for one. Served `no-store` -- the id changes when the
+     content does, so there is nothing to revalidate, and a map holding on to a
+     stale document is harder to notice than one refetching a small one.
+
+     `id` must be URL-safe as given; it is matched against the request path
+     verbatim.
+     */
+    public func registerDocument(id: String, contentType: String, body: Data) {
+        providersLock.lock()
+        documents[id] = Document(contentType: contentType, body: body)
+        providersLock.unlock()
+    }
+
+    public func unregisterDocument(id: String) {
+        providersLock.lock()
+        documents.removeValue(forKey: id)
+        providersLock.unlock()
+    }
+
+    public func documentUrl(id: String) -> String {
+        "\(baseUrl)/\(Self.documentsPrefix)/\(id)"
+    }
+
+    /**
+     Serves the files under `directory` at ``filesUrl(routeId:)```/<relative path>`.
+
+     The content type follows the extension (`.mvt`, `.pbf`, `.json`, `.png`);
+     a file is served as immutable, since a package does not change under a
+     map. A path with no file is answered by `fallback` -- served `no-store`,
+     so what came from upstream is not mistaken for the package -- or, when
+     that is nil or answers nil, with 404, which the map takes as "no such
+     tile" and does not retry. The fallback runs on the render queue, off the
+     connection's thread.
+     */
+    public func registerFiles(
+        routeId: String,
+        directory: URL,
+        fallback: (@Sendable (_ relativePath: String) -> Data?)? = nil
+    ) {
+        providersLock.lock()
+        fileRoutes[routeId] = FileRoute(directory: directory, fallback: fallback)
+        providersLock.unlock()
+    }
+
+    public func unregisterFiles(routeId: String) {
+        providersLock.lock()
+        fileRoutes.removeValue(forKey: routeId)
+        providersLock.unlock()
+    }
+
+    public func filesUrl(routeId: String) -> String {
+        "\(baseUrl)/\(Self.filesPrefix)/\(routeId)"
     }
 
     public var isListening: Bool {
@@ -325,6 +388,39 @@ public final class LocalTileServer: @unchecked Sendable {
         }
 
         let path = String(request.path.split(separator: "?")[0])
+
+        let filesPrefix = "/\(Self.filesPrefix)/"
+        if path.hasPrefix(filesPrefix) {
+            serveFile(
+                routePath: String(path.dropFirst(filesPrefix.count)),
+                connection: connection,
+                remainingData: remainingData,
+                keepAlive: keepAlive,
+                handled: handled
+            )
+            return
+        }
+
+        let documentPrefix = "/\(Self.documentsPrefix)/"
+        if path.hasPrefix(documentPrefix) {
+            let id = String(path.dropFirst(documentPrefix.count))
+            providersLock.lock()
+            let document = documents[id]
+            providersLock.unlock()
+            sendResponse(
+                connection: connection,
+                status: document == nil ? "404 Not Found" : "200 OK",
+                contentType: document?.contentType ?? "text/plain",
+                body: document?.body ?? Data("Not found".utf8),
+                keepAlive: keepAlive,
+                extraHeaders: ["Cache-Control": Self.noStoreCacheControl]
+            ) { [weak self, weak connection] in
+                guard let self, let connection else { return }
+                self.finishRequest(connection: connection, remainingData: remainingData, keepAlive: keepAlive, handled: handled)
+            }
+            return
+        }
+
         let queuedAt = DispatchTime.now().uptimeNanoseconds
         renderQueue.async { [weak self] in
             guard let self else {
@@ -365,6 +461,79 @@ public final class LocalTileServer: @unchecked Sendable {
                 keepAlive: keepAlive,
                 handled: handled
             )
+        }
+    }
+
+    /// `<routeId>/<relative path>` under the files prefix.
+    private func serveFile(
+        routePath: String,
+        connection: NWConnection,
+        remainingData: Data,
+        keepAlive: Bool,
+        handled: Int
+    ) {
+        let routeId = String(routePath.prefix { $0 != "/" })
+        let encoded = routePath.count > routeId.count ? String(routePath.dropFirst(routeId.count + 1)) : ""
+        let relative = encoded.removingPercentEncoding ?? ""
+        providersLock.lock()
+        let route = fileRoutes[routeId]
+        providersLock.unlock()
+        // No escaping the directory, whatever the request says.
+        let safe = !relative.isEmpty && !relative.split(separator: "/", omittingEmptySubsequences: false)
+            .contains { $0 == ".." || $0.isEmpty }
+        let finish: () -> Void = { [weak self, weak connection] in
+            guard let self, let connection else { return }
+            self.finishRequest(connection: connection, remainingData: remainingData, keepAlive: keepAlive, handled: handled)
+        }
+        if let route, safe, let data = try? Data(contentsOf: route.directory.appendingPathComponent(relative)) {
+            sendResponse(
+                connection: connection,
+                status: "200 OK",
+                contentType: Self.contentType(for: relative),
+                body: data,
+                keepAlive: keepAlive,
+                extraHeaders: ["Cache-Control": Self.longCacheControl],
+                completion: finish
+            )
+            return
+        }
+        guard let route, safe, let fallback = route.fallback else {
+            sendResponse(
+                connection: connection,
+                status: "404 Not Found",
+                contentType: "text/plain",
+                body: Data("Not found".utf8),
+                keepAlive: keepAlive,
+                extraHeaders: ["Cache-Control": Self.noStoreCacheControl],
+                completion: finish
+            )
+            return
+        }
+        renderQueue.async { [weak self] in
+            guard let self else {
+                connection.cancel()
+                return
+            }
+            let fetched = fallback(relative)
+            self.sendResponse(
+                connection: connection,
+                status: fetched == nil ? "404 Not Found" : "200 OK",
+                contentType: fetched == nil ? "text/plain" : Self.contentType(for: relative),
+                body: fetched ?? Data("Not found".utf8),
+                keepAlive: keepAlive,
+                extraHeaders: ["Cache-Control": Self.noStoreCacheControl],
+                completion: finish
+            )
+        }
+    }
+
+    private static func contentType(for path: String) -> String {
+        switch (path as NSString).pathExtension.lowercased() {
+        case "mvt": return "application/vnd.mapbox-vector-tile"
+        case "pbf": return "application/x-protobuf"
+        case "json": return "application/json"
+        case "png": return "image/png"
+        default: return "application/octet-stream"
         }
     }
 
@@ -681,6 +850,19 @@ public final class LocalTileServer: @unchecked Sendable {
         let body: Data
         let cacheControl: String
     }
+
+    private struct Document {
+        let contentType: String
+        let body: Data
+    }
+
+    private struct FileRoute {
+        let directory: URL
+        let fallback: (@Sendable (String) -> Data?)?
+    }
+
+    private static let documentsPrefix = "docs"
+    private static let filesPrefix = "files"
 
     private static let maxKeepAliveRequests = 10
     private static let maxConcurrentConnections = 128

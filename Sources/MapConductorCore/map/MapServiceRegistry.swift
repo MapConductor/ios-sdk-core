@@ -250,6 +250,7 @@ public extension MutableMapServiceRegistry {
         // 3D だけが「タイルは 256pt」を宣言するので、外し忘れると 2D に切り替えた
         // あとも 256 が残り、2D は同じ画面を 4 倍の枚数で覆うことになる。
         remove(RasterTilePreferenceKey.self)
+        remove(VectorStyleSupportKey.self)
     }
 }
 
