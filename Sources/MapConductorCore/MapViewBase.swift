@@ -120,6 +120,12 @@ open class MapViewCoordinatorBase<State: MapViewStateProtocol>: NSObject {
         super.init()
     }
 
+    /// What the map offers the ``MapViewStyle`` installed on it.
+    ///
+    /// Every coordinator that derives from this gets one; a provider whose
+    /// coordinator does not (ArcGIS, the template) holds its own.
+    public private(set) lazy var styleHost = MapViewStyleHost(serviceRegistry: state.serviceRegistry)
+
     /// スクリーン空間の機能（InfoBubble・マーカーアニメーション）の入口に渡す関門。
     ///
     /// 同期投影を持たないプロバイダで「黙って無反応」にならないようにする。

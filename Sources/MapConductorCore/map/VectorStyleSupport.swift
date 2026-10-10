@@ -36,6 +36,25 @@ public protocol VectorStyleSupport: AnyObject {
      is left alone.
      */
     func clearStyle()
+
+    /**
+     Where the style the map is drawing came from, when that is knowable.
+
+     This is what lets a rule set adjust *whatever is showing* rather than a
+     style the app had to name: the document has to be read before a rule can
+     be matched against its layers, and only the provider knows where it came
+     from.
+
+     Nil when it is not a URL anything can fetch -- a provider's own named
+     design (`mapbox://styles/mapbox/standard`), a style that needs a key
+     this does not have. A caller that wanted it says so and leaves the map
+     alone rather than showing something unstyled.
+     */
+    var currentStyleUrl: String? { get }
+}
+
+public extension VectorStyleSupport {
+    var currentStyleUrl: String? { nil }
 }
 
 /// ``VectorStyleSupport`` の登録キー。
@@ -67,6 +86,7 @@ public final class VectorStyleAsDesign<State: MapViewStateProtocol>: VectorStyle
     private weak var state: State?
     private let designId: (State.ActualMapDesignType) -> String
     private let designFor: (String, [AttributionRule]) -> State.ActualMapDesignType
+    private let urlOf: ((State.ActualMapDesignType) -> String?)?
 
     private var installed: State.ActualMapDesignType?
     private var installedUrl: String?
@@ -76,11 +96,35 @@ public final class VectorStyleAsDesign<State: MapViewStateProtocol>: VectorStyle
     public init(
         state: State,
         designId: @escaping (State.ActualMapDesignType) -> String,
+        urlOf: ((State.ActualMapDesignType) -> String?)? = nil,
         designFor: @escaping (_ url: String, _ attributionRules: [AttributionRule]) -> State.ActualMapDesignType
     ) {
         self.state = state
         self.designId = designId
+        self.urlOf = urlOf
         self.designFor = designFor
+    }
+
+    /**
+     Where the design **the app chose** points, when it points anywhere
+     fetchable.
+
+     Deliberately not the URL this capability installed. That one is the
+     document the style module served a moment ago, and it is unregistered
+     from the tile server the instant the style comes off -- so answering
+     with it turns "adjust whatever is showing" into a 404 against our own
+     corpse. When one of ours is up, the honest answer is the design it
+     replaced.
+
+     Nil unless the provider supplied `urlOf`, and nil from that for a design
+     that is not a plain style document -- a provider's own named basemap, or
+     one that needs a key this does not have.
+     */
+    public var currentStyleUrl: String? {
+        guard let urlOf else { return nil }
+        if installed != nil { return previous.flatMap(urlOf) }
+        guard let state else { return nil }
+        return urlOf(state.mapDesignType)
     }
 
     public func showStyle(url: String, attributionRules: [AttributionRule]) {

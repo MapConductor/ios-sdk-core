@@ -202,6 +202,9 @@ extension MapConductorCore::MapViewBase where TopContent == SwiftUICore::EmptyVi
     get
   }
   @_Concurrency::MainActor public init(state: State, handlers: MapConductorCore::MapViewHandlers<State>)
+  @_Concurrency::MainActor public var styleHost: MapConductorCore::MapViewStyleHost {
+    get
+  }
   @_Concurrency::MainActor public func screenProjectionGate(feature: Swift::String) -> () -> Swift::Bool
   @_Concurrency::MainActor public var onMapLoaded: MapConductorCore::OnMapLoadedHandler<State>? {
     get
@@ -1102,6 +1105,23 @@ public struct MarkerIconMetrics {
   @_Concurrency::MainActor @preconcurrency @objc required dynamic public init?(coder: Foundation::NSCoder)
   @objc deinit
 }
+public protocol StyleMutationTarget {
+  var isReady: Swift::Bool { get }
+  func hasLayer(_ layerId: Swift::String) -> Swift::Bool
+  func setPaint(_ layerId: Swift::String, _ key: Swift::String, _ valueJson: Swift::String) throws
+  func setLayout(_ layerId: Swift::String, _ key: Swift::String, _ valueJson: Swift::String) throws
+  func setFilter(_ layerId: Swift::String, _ filterJson: Swift::String) throws
+  func setZoomRange(_ layerId: Swift::String, _ minZoom: Swift::Double, _ maxZoom: Swift::Double) throws
+  func addLayer(_ layerId: Swift::String, _ layerJson: Swift::String, _ beforeId: Swift::String?) throws
+  func removeLayer(_ layerId: Swift::String) throws
+}
+extension MapConductorCore::StyleMutationTarget {
+  public var isReady: Swift::Bool {
+    get
+  }
+}
+public func applyStyleMutations(_ target: any MapConductorCore::StyleMutationTarget, _ mutations: [MapConductorCore::StyleMutation]) -> [MapConductorCore::StyleMutation]
+public func describeStyleMutations(_ mutations: [MapConductorCore::StyleMutation]) -> Swift::String
 public struct AttributionRule : Swift::Hashable {
   public let attribution: Swift::String
   public let minZoom: Swift::Int?
@@ -1463,19 +1483,125 @@ final public class MapOverlayRegistry {
   final public func getAll() -> [any MapConductorCore::MapOverlayProtocol]
   @objc deinit
 }
+public protocol MapViewStyle {
+  var key: Swift::String { get }
+  func install(host: any MapConductorCore::MapStyleHost) -> MapConductorCore::MapStyleInstallation
+}
+public struct MapStyleInstallation {
+  public init(dispose: @escaping () -> Swift::Void, update: @escaping (any MapConductorCore::MapViewStyle) -> Swift::Bool = { _ in false })
+  public func dispose()
+  public func update(_ next: any MapConductorCore::MapViewStyle) -> Swift::Bool
+  public static let none: MapConductorCore::MapStyleInstallation
+}
+public protocol MapStyleHost : AnyObject {
+  var serviceRegistry: any MapConductorCore::MapServiceRegistry { get }
+  var tileServer: MapConductorCore::LocalTileServer { get }
+  var vectorStyleUrl: Swift::String? { get }
+  func onStyleLoaded(_ block: @escaping () -> Swift::Void) -> MapConductorCore::MapStyleInstallation
+  func upsertRaster(_ state: MapConductorCore::RasterLayerState)
+  func removeRaster(id: Swift::String)
+  func report(_ diagnostics: [Swift::String])
+}
+extension MapConductorCore::MapStyleHost {
+  public var vectorStyleUrl: Swift::String? {
+    get
+  }
+}
+public protocol RasterLayerMounting : AnyObject {
+  func upsert(state: MapConductorCore::RasterLayerState) async
+  func removeById(_ id: Swift::String) async
+}
+final public class MapViewStyleHost : MapConductorCore::MapStyleHost {
+  final public let serviceRegistry: any MapConductorCore::MapServiceRegistry
+  public init(serviceRegistry: any MapConductorCore::MapServiceRegistry)
+  @objc deinit
+  final public func apply(_ style: (any MapConductorCore::MapViewStyle)?, onDiagnostics: (([Swift::String]) -> Swift::Void)? = nil)
+  final public func dispose()
+  final public func notifyStyleLoaded()
+  final public var tileServer: MapConductorCore::LocalTileServer {
+    get
+  }
+  final public var vectorStyleUrl: Swift::String? {
+    get
+  }
+  final public func onStyleLoaded(_ block: @escaping () -> Swift::Void) -> MapConductorCore::MapStyleInstallation
+  final public func upsertRaster(_ state: MapConductorCore::RasterLayerState)
+  final public func removeRaster(id: Swift::String)
+  final public func report(_ diagnostics: [Swift::String])
+}
+extension MapConductorCore::MapViewCoordinatorBase {
+  @_Concurrency::MainActor public func applyStyle(_ style: (any MapConductorCore::MapViewStyle)?, onDiagnostics: (([Swift::String]) -> Swift::Void)? = nil)
+  @_Concurrency::MainActor public func disposeStyle()
+  @_Concurrency::MainActor public func notifyStyleLoaded()
+}
+@_Concurrency::MainActor @preconcurrency public struct MapViewStyleApplier : SwiftUI::UIViewRepresentable {
+  @_Concurrency::MainActor @preconcurrency public init(host: MapConductorCore::MapViewStyleHost, style: (any MapConductorCore::MapViewStyle)?, onDiagnostics: (([Swift::String]) -> Swift::Void)? = nil)
+  @_Concurrency::MainActor @preconcurrency public func makeUIView(context _: MapConductorCore::MapViewStyleApplier.SwiftUI::Context) -> UIKit::UIView
+  @_Concurrency::MainActor @preconcurrency public func updateUIView(_: UIKit::UIView, context _: MapConductorCore::MapViewStyleApplier.SwiftUI::Context)
+  public typealias Body = Swift::Never
+  public typealias Coordinator = Swift::Void
+  public typealias UIViewType = UIKit::UIView
+}
 public enum ScreenProjectionRequirement {
   @discardableResult
   public static func check(registry: any MapConductorCore::MapServiceRegistry, provider: Swift::String, feature: Swift::String) -> Swift::Bool
 }
+public enum StyleMutation : Swift::Equatable, Swift::Sendable {
+  case setPaint(layerId: Swift::String, key: Swift::String, value: Swift::String, previous: Swift::String)
+  case setLayout(layerId: Swift::String, key: Swift::String, value: Swift::String, previous: Swift::String)
+  case setFilter(layerId: Swift::String, value: Swift::String, previous: Swift::String)
+  case setZoomRange(layerId: Swift::String, minZoom: Swift::Double?, maxZoom: Swift::Double?, previousMinZoom: Swift::Double?, previousMaxZoom: Swift::Double?)
+  case addLayer(layerId: Swift::String, layer: Swift::String, beforeId: Swift::String?)
+  case removeLayer(layerId: Swift::String)
+  public var layerId: Swift::String {
+    get
+  }
+  public var target: Swift::String {
+    get
+  }
+  public var propertyName: Swift::String {
+    get
+  }
+  public func reversed() -> MapConductorCore::StyleMutation?
+  public static func parseList(_ json: Swift::String) -> [MapConductorCore::StyleMutation]
+  public static func jsonText(of value: Any?) -> Swift::String
+  public static func == (a: MapConductorCore::StyleMutation, b: MapConductorCore::StyleMutation) -> Swift::Bool
+}
+public protocol VectorStyleMutationSupport : AnyObject {
+  func apply(_ mutations: [MapConductorCore::StyleMutation]) -> [MapConductorCore::StyleMutation]
+  func clear()
+}
+public enum VectorStyleMutationSupportKey : MapConductorCore::MapServiceKey {
+  public typealias Value = MapConductorCore::VectorStyleMutationSupport
+}
+final public class StyleMutationStore : MapConductorCore::VectorStyleMutationSupport, @unchecked Swift::Sendable {
+  public init(applyNow: @escaping ([MapConductorCore::StyleMutation]) -> [MapConductorCore::StyleMutation])
+  final public func apply(_ mutations: [MapConductorCore::StyleMutation]) -> [MapConductorCore::StyleMutation]
+  final public func clear()
+  final public func onStyleLoaded()
+  final public var applied: [MapConductorCore::StyleMutation] {
+    get
+  }
+  @objc deinit
+}
 public protocol VectorStyleSupport : AnyObject {
   func showStyle(url: Swift::String, attributionRules: [MapConductorCore::AttributionRule])
   func clearStyle()
+  var currentStyleUrl: Swift::String? { get }
+}
+extension MapConductorCore::VectorStyleSupport {
+  public var currentStyleUrl: Swift::String? {
+    get
+  }
 }
 public enum VectorStyleSupportKey : MapConductorCore::MapServiceKey {
   public typealias Value = MapConductorCore::VectorStyleSupport
 }
 final public class VectorStyleAsDesign<State> : MapConductorCore::VectorStyleSupport where State : MapConductorCore::MapViewStateProtocol {
-  public init(state: State, designId: @escaping (State.ActualMapDesignType) -> Swift::String, designFor: @escaping (_ url: Swift::String, _ attributionRules: [MapConductorCore::AttributionRule]) -> State.ActualMapDesignType)
+  public init(state: State, designId: @escaping (State.ActualMapDesignType) -> Swift::String, urlOf: ((State.ActualMapDesignType) -> Swift::String?)? = nil, designFor: @escaping (_ url: Swift::String, _ attributionRules: [MapConductorCore::AttributionRule]) -> State.ActualMapDesignType)
+  final public var currentStyleUrl: Swift::String? {
+    get
+  }
   final public func showStyle(url: Swift::String, attributionRules: [MapConductorCore::AttributionRule])
   final public func clearStyle()
   @objc deinit
@@ -2587,7 +2713,7 @@ final public class RasterHeaderRuleSet : @unchecked Swift::Sendable {
   public static func warnUnsupported(provider: Swift::String, state: MapConductorCore::RasterLayerState, supportsUserAgent: Swift::Bool = false)
   @objc deinit
 }
-open class RasterLayerController<ActualLayer, Renderer> : MapConductorCore::OverlayControllerProtocol, MapConductorCore::SlottedOverlayController where ActualLayer == Renderer.ActualLayer, Renderer : MapConductorCore::RasterLayerOverlayRendererProtocol {
+open class RasterLayerController<ActualLayer, Renderer> : MapConductorCore::OverlayControllerProtocol, MapConductorCore::SlottedOverlayController, MapConductorCore::RasterLayerMounting where ActualLayer == Renderer.ActualLayer, Renderer : MapConductorCore::RasterLayerOverlayRendererProtocol {
   public typealias StateType = MapConductorCore::RasterLayerState
   public typealias EntityType = MapConductorCore::RasterLayerEntity<ActualLayer>
   public typealias EventType = MapConductorCore::RasterLayerEvent
@@ -2961,6 +3087,7 @@ extension MapConductorCore::MapDiagnosticLevel : Swift::RawRepresentable {}
 extension MapConductorCore::MapServiceRegistryScope : Swift::Sendable {}
 extension MapConductorCore::InitState : Swift::Equatable {}
 extension MapConductorCore::InitState : Swift::Hashable {}
+extension MapConductorCore::MapViewStyleApplier : Swift::Sendable {}
 extension MapConductorCore::DefaultMarkerEventController : Swift::Sendable {}
 extension MapConductorCore::MarkerDragGestureState : Swift::Equatable {}
 extension MapConductorCore::MarkerDragGestureState : Swift::Hashable {}
