@@ -275,7 +275,8 @@ public struct TileRequest : Swift::Hashable {
   public let y: Swift::Int
   public let z: Swift::Int
   public let pixelRatio: Swift::Int
-  public init(x: Swift::Int, y: Swift::Int, z: Swift::Int, pixelRatio: Swift::Int = 1)
+  public let sourceZoomOffset: Swift::Int
+  public init(x: Swift::Int, y: Swift::Int, z: Swift::Int, pixelRatio: Swift::Int = 1, sourceZoomOffset: Swift::Int = 0)
   public static func == (a: MapConductorCore::TileRequest, b: MapConductorCore::TileRequest) -> Swift::Bool
   public func hash(into hasher: inout Swift::Hasher)
   public var hashValue: Swift::Int {
@@ -2937,13 +2938,20 @@ final public class RasterLayerState : Combine::ObservableObject, Swift::Identifi
 }
 public protocol RasterTilePreference {
   var preferredTileSize: Swift::Int { get }
+  var layoutInDevicePixels: Swift::Bool { get }
+}
+extension MapConductorCore::RasterTilePreference {
+  public var layoutInDevicePixels: Swift::Bool {
+    get
+  }
 }
 public enum RasterTilePreferenceKey : MapConductorCore::MapServiceKey {
   public typealias Value = MapConductorCore::RasterTilePreference
 }
 public struct FixedRasterTilePreference : MapConductorCore::RasterTilePreference {
   public let preferredTileSize: Swift::Int
-  public init(preferredTileSize: Swift::Int)
+  public let layoutInDevicePixels: Swift::Bool
+  public init(preferredTileSize: Swift::Int, layoutInDevicePixels: Swift::Bool = false)
 }
 public enum MarkerIconSize {
   public static let Small: CoreFoundation::CGFloat

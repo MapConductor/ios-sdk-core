@@ -17,6 +17,23 @@ import Foundation
 public protocol RasterTilePreference {
     /// この SDK に渡してほしいタイルの一辺（ポイント）。
     var preferredTileSize: Int { get }
+
+    /// この SDK がラスタータイルを **物理ピクセル** でレイアウトするなら true。
+    ///
+    /// 地図 SDK には 2 つの流儀がある。宣言された一辺をポイントとして敷くものと、
+    /// 物理ピクセルとして敷くもの。後者に 2x の画面で「512」と宣言すると
+    /// 256 pt しか覆わず、1 段深いズームを要求してスタイルをそこで読む —
+    /// ラベルは半分、道路は倍の密度になる（web の HERE で実測）。供給側は
+    /// この流儀を知りようがないので、プロバイダが言う。
+    ///
+    /// true のとき、供給側は ``preferredTileSize`` × scale を宣言し、描画は
+    /// 同じピクセル数で行い、スタイルには ``preferredTileSize`` pt として
+    /// 読ませる。既定は false。android-sdk / react-sdk の同名フィールドに対応。
+    var layoutInDevicePixels: Bool { get }
+}
+
+extension RasterTilePreference {
+    public var layoutInDevicePixels: Bool { false }
 }
 
 /// ``RasterTilePreference`` の登録キー。
@@ -29,8 +46,10 @@ public enum RasterTilePreferenceKey: MapServiceKey {
 /// 値だけを持つ既定の実装。プロバイダが 1 行で登録できるように。
 public struct FixedRasterTilePreference: RasterTilePreference {
     public let preferredTileSize: Int
+    public let layoutInDevicePixels: Bool
 
-    public init(preferredTileSize: Int) {
+    public init(preferredTileSize: Int, layoutInDevicePixels: Bool = false) {
         self.preferredTileSize = preferredTileSize
+        self.layoutInDevicePixels = layoutInDevicePixels
     }
 }
