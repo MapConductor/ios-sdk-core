@@ -190,7 +190,11 @@ public final class LocalTileServer: @unchecked Sendable {
         statsLock.unlock()
 
         let renderStart = DispatchTime.now().uptimeNanoseconds
-        let outcome = resolveTile(path: url.path, isCancelled: isCancelled)
+        let outcome = resolveTile(
+            path: url.path, sourceZoomOffset: Self.sourceZoomOffset(in: url.absoluteString),
+            isCancelled: isCancelled
+        )
+
         let renderNanos = DispatchTime.now().uptimeNanoseconds - renderStart
 
         statsLock.lock()
@@ -388,6 +392,7 @@ public final class LocalTileServer: @unchecked Sendable {
         }
 
         let path = String(request.path.split(separator: "?")[0])
+        let sourceZoomOffset = Self.sourceZoomOffset(in: request.path)
 
         let filesPrefix = "/\(Self.filesPrefix)/"
         if path.hasPrefix(filesPrefix) {
@@ -446,7 +451,7 @@ public final class LocalTileServer: @unchecked Sendable {
                 default: return false
                 }
             }
-            let outcome = self.resolveTile(path: path, isCancelled: gone)
+            let outcome = self.resolveTile(path: path, sourceZoomOffset: sourceZoomOffset, isCancelled: gone)
             let renderNanos = DispatchTime.now().uptimeNanoseconds - renderStart
             self.renderGate.signal()
             self.statsLock.lock()
@@ -746,8 +751,15 @@ public final class LocalTileServer: @unchecked Sendable {
         case abandoned
     }
 
+    private static func sourceZoomOffset(in url: String) -> Int {
+        let value = URLComponents(string: url)?.queryItems?
+            .first(where: { $0.name == "sourceZoomOffset" })?.value
+        return max(0, min(8, Int(value ?? "0") ?? 0))
+    }
+
     private func resolveTile(
         path: String,
+        sourceZoomOffset: Int = 0,
         isCancelled: @escaping @Sendable () -> Bool
     ) -> TileOutcome {
         let trimmed = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -788,7 +800,7 @@ public final class LocalTileServer: @unchecked Sendable {
         let bytes: Data?
         do {
             bytes = try provider.renderTile(
-                request: TileRequest(x: x, y: coordinate.y, z: z, pixelRatio: coordinate.pixelRatio),
+                request: TileRequest(x: x, y: coordinate.y, z: z, pixelRatio: coordinate.pixelRatio, sourceZoomOffset: sourceZoomOffset),
                 isCancelled: isCancelled
             )
         } catch {

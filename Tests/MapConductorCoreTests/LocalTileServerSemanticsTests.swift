@@ -61,6 +61,31 @@ final class LocalTileServerSemanticsTests: XCTestCase {
         func renderTile(request: TileRequest) -> Data? { png }
     }
 
+    private final class RequestProvider: TileProvider {
+        var request: TileRequest?
+        func renderTile(request: TileRequest) -> Data? {
+            self.request = request
+            return nil
+        }
+    }
+
+    func testSourceDetailOverrideReachesDirectAndHTTPProviders() throws {
+        let provider = RequestProvider()
+        server.register(routeId: routeId, provider: provider)
+        let template = server.urlTemplate(routeId: routeId, tileSize: 256)
+        let path = template.replacingOccurrences(of: "{z}", with: "8")
+            .replacingOccurrences(of: "{x}", with: "226")
+            .replacingOccurrences(of: "{y}", with: "100")
+        let url = try XCTUnwrap(URL(string: path + "?sourceZoomOffset=1"))
+        XCTAssertNotNil(server.renderLocalTile(url: url))
+        XCTAssertEqual(provider.request?.sourceZoomOffset, 1)
+        XCTAssertEqual(provider.request?.z, 8)
+        _ = try fetch(z: 8, x: 226, y: 100, sourceZoomOffset: 2)
+        XCTAssertEqual(provider.request?.sourceZoomOffset, 2)
+        _ = try fetch(z: 8, x: 226, y: 100)
+        XCTAssertEqual(provider.request?.sourceZoomOffset, 0)
+    }
+
     private struct Answer {
         let status: Int
         let headers: [AnyHashable: Any]
@@ -68,7 +93,7 @@ final class LocalTileServerSemanticsTests: XCTestCase {
     }
 
     /// タイルを 1 枚取りに行く。`urlTemplate` が返す URL をそのまま使う。
-    private func fetch(z: Int, x: Int, y: Int, tileSize: Int = 512, retina: Bool = false) throws -> Answer {
+    private func fetch(z: Int, x: Int, y: Int, tileSize: Int = 512, retina: Bool = false, sourceZoomOffset: Int? = nil) throws -> Answer {
         let template = server.urlTemplate(routeId: routeId, tileSize: tileSize)
         var text = template
             .replacingOccurrences(of: "{z}", with: "\(z)")
@@ -77,6 +102,7 @@ final class LocalTileServerSemanticsTests: XCTestCase {
         if retina {
             text = text.replacingOccurrences(of: ".png", with: "@2x.png")
         }
+        if let sourceZoomOffset { text += "?sourceZoomOffset=\(sourceZoomOffset)" }
         let url = try XCTUnwrap(URL(string: text))
 
         var answer: Answer?
