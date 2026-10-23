@@ -1,6 +1,6 @@
 import CoreGraphics
 import XCTest
-@testable import MapConductorCore
+@_spi(MapConductorDriver) @testable import MapConductorCore
 
 /// ``MarkerHitTest`` の判定境界。
 ///
@@ -83,5 +83,40 @@ final class MarkerHitTestTests: XCTestCase {
         let height = icon.iconSize * icon.scale
         XCTAssertTrue(hits(0, -height, state: state))
         XCTAssertFalse(hits(0, -height - tolerance - 0.5, state: state))
+    }
+}
+
+/// ``MarkerHitTest/pickIndex(touch:rects:tolerance:)`` の選び方。android-sdk の
+/// `MarkerHitTestPickTest`、react-sdk の `MarkerHitPick.test.mjs` と同じ観点を見る。
+final class MarkerHitTestPickTests: XCTestCase {
+    private func rect(_ x: CGFloat, _ y: CGFloat, width: CGFloat = 48, height: CGFloat = 48, anchorX: CGFloat = 0.5)
+        -> MarkerHitTest.ScreenRect {
+        MarkerHitTest.ScreenRect(
+            anchorScreen: CGPoint(x: x, y: y),
+            width: width,
+            height: height,
+            anchor: CGPoint(x: anchorX, y: 1)
+        )
+    }
+
+    func testIconUnderTheFingerBeatsANearerTip() {
+        // labelled: 先端 (0, 100)、ラベルを右へ伸ばして幅 200（矩形 x -24..176, y 52..100）。
+        // nearTip:  先端 (150, 70) でタップ点にずっと近いが、矩形 (126..174, 22..70) はタップ点に届かない。
+        let labelled = rect(0, 100, width: 200, anchorX: 0.12)
+        let nearTip = rect(150, 70)
+        XCTAssertEqual(MarkerHitTest.pickIndex(touch: CGPoint(x: 150, y: 80), rects: [nearTip, labelled], tolerance: 14), 1)
+    }
+
+    func testFrontmostWinsWhenTwoIconsOverlap() {
+        let back = rect(100, 100)
+        let front = rect(100, 120)
+        XCTAssertEqual(MarkerHitTest.pickIndex(touch: CGPoint(x: 100, y: 90), rects: [back, front], tolerance: 14), 1)
+    }
+
+    func testToleranceOnlyWhenNothingIsUnderTheFinger() {
+        let far = rect(100, 100)
+        let near = rect(140, 100)
+        XCTAssertEqual(MarkerHitTest.pickIndex(touch: CGPoint(x: 170, y: 105), rects: [far, near], tolerance: 40), 1)
+        XCTAssertNil(MarkerHitTest.pickIndex(touch: CGPoint(x: 400, y: 400), rects: [far, near], tolerance: 14))
     }
 }
