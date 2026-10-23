@@ -143,20 +143,22 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
     }
 
     public func find(position: GeoPointProtocol) -> MarkerEntity<ActualMarker>? {
-        guard let nearest = markerManager.findNearest(position: position) else { return nil }
-        // android-sdk の StrategyMarkerController.find() と同じスクリーン空間の
-        // 「アイコン境界 + tapTolerance」矩形判定。投影 closure 未設定のときは従来どおり
-        // 最近傍をそのまま返す（geo→screen 投影ができないプロバイダ向けフォールバック）。
-        guard let projector = markerProjector,
-              let touchScreen = projector(position),
-              let markerScreen = projector(nearest.state.position) else {
-            return nearest
+        // android-sdk の StrategyMarkerController.find() と同じ。タップ点の周りのマーカーを候補にし、
+        // 指の下にアイコン（ラベル込み）が描かれているものを優先する（MarkerHitTest.pick）。
+        // 投影 closure 未設定のときは従来どおり最近傍をそのまま返す
+        // （geo→screen 投影ができないプロバイダ向けフォールバック）。
+        guard let projector = markerProjector else {
+            return markerManager.findNearest(position: position)
         }
-        return MarkerHitTest.hitsIcon(
+        guard let touchScreen = projector(position),
+              let bounds = MarkerHitTest.searchBounds(position: position, touchScreen: touchScreen, project: projector)
+        else { return nil }
+        return MarkerHitTest.pick(
             touchScreen: touchScreen,
-            markerScreen: markerScreen,
-            state: nearest.state
-        ) ? nearest : nil
+            candidates: markerManager.findMarkersInBounds(bounds),
+            state: { $0.state },
+            project: projector
+        )
     }
 
     /// カメラ変更を受けて再クラスタリングする。

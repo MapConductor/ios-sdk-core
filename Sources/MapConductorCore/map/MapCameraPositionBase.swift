@@ -41,6 +41,11 @@ public struct VisibleRegion: Equatable, Hashable {
 public protocol MapCameraPositionProtocol {
     var position: GeoPointProtocol { get }
     var zoom: Double { get }
+    /// 地図の回転角（度、0 が北）。
+    ///
+    /// 値を増やすと地図は**時計回り（右）**に回る。90 なら地図が右へ 90 度回り、
+    /// 画面の上には西が来る。多くのネイティブ SDK の「カメラの向き（heading）」とは
+    /// 符号が逆なので、変換は ``CameraBearing`` を通すこと。
     var bearing: Double { get }
     var tilt: Double { get }
     var paddings: MapPaddingsProtocol? { get }

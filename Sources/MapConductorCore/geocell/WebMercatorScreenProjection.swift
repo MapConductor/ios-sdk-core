@@ -45,8 +45,9 @@ public enum WebMercatorScreenProjection {
         var sx = dx * worldSize
         var sy = (target.y - center.y) * worldSize
         if camera.bearing != 0 {
-            // bearing は「画面の上が指す方位（北から時計回り）」。世界を -bearing 回す。
-            let angle = -camera.bearing * .pi / 180.0
+            // 画面の上が指す方位はカメラの heading（= bearing の符号反転）。世界を
+            // -heading 回すと、その方位が画面の上（-y）に来る。
+            let angle = -CameraBearing.toNativeHeading(camera.bearing) * .pi / 180.0
             let rx = sx * cos(angle) - sy * sin(angle)
             let ry = sx * sin(angle) + sy * cos(angle)
             sx = rx
@@ -66,7 +67,7 @@ public enum WebMercatorScreenProjection {
         var sx = offset.x - size.width / 2.0
         var sy = offset.y - size.height / 2.0
         if camera.bearing != 0 {
-            let angle = camera.bearing * .pi / 180.0
+            let angle = CameraBearing.toNativeHeading(camera.bearing) * .pi / 180.0
             let rx = sx * cos(angle) - sy * sin(angle)
             let ry = sx * sin(angle) + sy * cos(angle)
             sx = rx

@@ -79,13 +79,20 @@ final class WebMercatorScreenProjectionGoldenTests: XCTestCase {
         XCTAssertEqual(ratio, 2, accuracy: 1e-9)
     }
 
-    func testBearing90PutsEastAtTheTop() throws {
+    /// bearing は「地図を時計回りに回す量」。90 なら地図が右へ 90 度回り、
+    /// 画面の上には**西**が来る（東は画面の下）。
+    func testBearing90PutsWestAtTheTop() throws {
         let c = camera(bearing: 90)
+        let west = try XCTUnwrap(
+            project(GeoPoint(latitude: c.position.latitude, longitude: c.position.longitude - 0.05), c)
+        )
+        XCTAssertLessThan(west.y, 400)
+        XCTAssertEqual(west.x, 200, accuracy: 1e-6)
+
         let east = try XCTUnwrap(
             project(GeoPoint(latitude: c.position.latitude, longitude: c.position.longitude + 0.05), c)
         )
-        XCTAssertLessThan(east.y, 400)
-        XCTAssertEqual(east.x, 200, accuracy: 1e-6)
+        XCTAssertGreaterThan(east.y, 400)
     }
 
     func testDatelineWrapsTheShortWay() throws {
