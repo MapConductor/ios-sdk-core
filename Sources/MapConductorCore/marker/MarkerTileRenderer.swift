@@ -94,7 +94,12 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         cacheLock.unlock()
     }
 
-    /// Returns the closest marker whose rendered icon bounds contain the screen point.
+    /// Returns the tiled marker under the screen point.
+    ///
+    /// 選び方はコアの `MarkerHitTest.pickIndex` と同じ。タップ点の周りのタイル化マーカーを候補にし、
+    /// 描かれた（ラベル込みの）アイコンの矩形にタップ点が入っているものを、先端の近い別の
+    /// マーカーより優先する。以前は最寄りの 1 つだけを見ていたので、隣のピンの頭や横に置いた
+    /// ラベルのタップが外れていた。
     public func hitTest(
         screenPoint: CGPoint,
         markerIds: Set<String>,
@@ -104,29 +109,34 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         unproject: (CGPoint) -> GeoPoint?,
         project: (GeoPoint) -> CGPoint?
     ) -> MarkerState? {
-        // Android resolves one spatially indexed nearest marker before applying the
-        // rendered-icon bounds check. Do the same here: iterating every tiled marker
-        // made each tap O(n), including a projection and icon conversion per marker.
+        let projectAny: (GeoPointProtocol) -> CGPoint? = { project(GeoPoint.from(position: $0)) }
         guard let position = unproject(screenPoint),
-              let entity = markerManager.findNearest(position: position),
-              markerIds.contains(entity.state.id),
-              entity.state.clickable,
-              let markerPoint = project(entity.state.position) else { return nil }
+              let bounds = MarkerHitTest.searchBounds(
+                  position: position,
+                  touchScreen: screenPoint,
+                  project: projectAny
+              ) else { return nil }
 
-        let icon = entity.state.icon?.toBitmapIcon() ?? defaultIcon
-        let callbackScale = max(iconScaleCallback?(entity.state, zoom) ?? 1, 0)
-        let scale = CGFloat(callbackScale * extraIconScale) / max(renderScaleToScreenScale, 1)
-        let width = max(icon.size.width * scale, 1)
-        let height = max(icon.size.height * scale, 1)
-        let dx = screenPoint.x - markerPoint.x
-        let dy = screenPoint.y - markerPoint.y
-        let left = -icon.anchor.x * width - tolerance
-        let right = (1 - icon.anchor.x) * width + tolerance
-        let top = -icon.anchor.y * height - tolerance
-        let bottom = (1 - icon.anchor.y) * height + tolerance
-
-        guard dx >= left, dx <= right, dy >= top, dy <= bottom else { return nil }
-        return entity.state
+        var states: [MarkerState] = []
+        var rects: [MarkerHitTest.ScreenRect] = []
+        for entity in markerManager.findMarkersInBounds(bounds) {
+            guard markerIds.contains(entity.state.id),
+                  entity.state.clickable,
+                  let markerPoint = project(entity.state.position) else { continue }
+            let icon = entity.state.icon?.toBitmapIcon() ?? defaultIcon
+            let callbackScale = max(iconScaleCallback?(entity.state, zoom) ?? 1, 0)
+            let scale = CGFloat(callbackScale * extraIconScale) / max(renderScaleToScreenScale, 1)
+            states.append(entity.state)
+            rects.append(
+                MarkerHitTest.ScreenRect(
+                    anchorScreen: markerPoint,
+                    width: max(icon.size.width * scale, 1),
+                    height: max(icon.size.height * scale, 1),
+                    anchor: icon.anchor
+                )
+            )
+        }
+        return MarkerHitTest.pickIndex(touch: screenPoint, rects: rects, tolerance: tolerance).map { states[$0] }
     }
 
     /// タイル 1 枚の時間の行き先を出す。`MC_MARKER_PHASES` が立っているときだけ。

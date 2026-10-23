@@ -14,6 +14,7 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
     public static let defaultLabelStrokeColor: UIColor = DefaultMarkerIcon.defaultLabelStrokeColor
     public static let defaultLabelTypeFace: UIFont = DefaultMarkerIcon.defaultLabelTypeFace
     public static let defaultInfoAnchor: CGPoint = DefaultMarkerIcon.defaultInfoAnchor
+    public static let defaultLabelPosition: String = DefaultMarkerIcon.defaultLabelPosition
     public static let defaultAnchor = CGPoint(x: 0.5, y: 1.0)
 
     public let scale: CGFloat
@@ -30,6 +31,10 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
     public let labelTextSize: CGFloat
     public let labelTypeFace: UIFont
     public let labelStrokeColor: UIColor
+    /// ラベルをピンに対してどこへ置くか。書き方は `ColorDefaultIcon.labelPosition` と同じ。
+    public let labelPosition: String
+    /// 指定された infoAnchor（ピン本体に対する割合）。`infoAnchor` はビットマップに対する割合へ直した値。
+    private let requestedInfoAnchor: CGPoint
     private let bitmapIcon: BitmapIcon
 
     public init(
@@ -42,6 +47,7 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
         labelTextSize: CGFloat = defaultLabelTextSize,
         labelTypeFace: UIFont = defaultLabelTypeFace,
         labelStrokeColor: UIColor = defaultLabelStrokeColor,
+        labelPosition: String = defaultLabelPosition,
         infoAnchor: CGPoint = defaultInfoAnchor,
         iconSize: CGFloat = defaultIconSize,
         debug: Bool = false
@@ -55,11 +61,11 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
         self.labelTextSize = labelTextSize
         self.labelTypeFace = labelTypeFace
         self.labelStrokeColor = labelStrokeColor
-        self.infoAnchor = infoAnchor
+        self.labelPosition = labelPosition
+        self.requestedInfoAnchor = infoAnchor
         self.iconSize = iconSize
         self.debug = debug
-        self.anchor = Self.defaultAnchor
-        self.bitmapIcon = Self.makeIcon(
+        let bitmapIcon = Self.makeIcon(
             backgroundImage: backgroundImage,
             iconSize: iconSize,
             scale: scale,
@@ -70,10 +76,14 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
             labelTextSize: labelTextSize,
             labelTypeFace: labelTypeFace,
             labelStrokeColor: labelStrokeColor,
-            anchor: Self.defaultAnchor,
+            labelPosition: labelPosition,
             infoAnchor: infoAnchor,
             debug: debug
         )
+        // ラベルを横や上に置くとビットマップが片側へ伸びるので、どちらもレイアウトから求めた値を使う。
+        self.anchor = bitmapIcon.anchor
+        self.infoAnchor = bitmapIcon.infoAnchor
+        self.bitmapIcon = bitmapIcon
     }
 
     public func toBitmapIcon() -> BitmapIcon { bitmapIcon }
@@ -88,8 +98,9 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
         result = result &* 31 &+ labelTextSize.hashValue
         result = result &* 31 &+ labelTypeFace.hashValue
         result = result &* 31 &+ labelStrokeColor.hashValue
-        result = result &* 31 &+ infoAnchor.x.hashValue
-        result = result &* 31 &+ infoAnchor.y.hashValue
+        result = result &* 31 &+ labelPosition.hashValue
+        result = result &* 31 &+ requestedInfoAnchor.x.hashValue
+        result = result &* 31 &+ requestedInfoAnchor.y.hashValue
         result = result &* 31 &+ iconSize.hashValue
         result = result &* 31 &+ debug.hashValue
         return result
@@ -105,6 +116,7 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
         labelTextSize: CGFloat? = nil,
         labelTypeFace: UIFont? = nil,
         labelStrokeColor: UIColor? = nil,
+        labelPosition: String? = nil,
         iconSize: CGFloat? = nil,
         debug: Bool? = nil
     ) -> ImageDefaultIcon {
@@ -118,7 +130,8 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
             labelTextSize: labelTextSize ?? self.labelTextSize,
             labelTypeFace: labelTypeFace ?? self.labelTypeFace,
             labelStrokeColor: labelStrokeColor ?? self.labelStrokeColor,
-            infoAnchor: self.infoAnchor,
+            labelPosition: labelPosition ?? self.labelPosition,
+            infoAnchor: self.requestedInfoAnchor,
             iconSize: iconSize ?? self.iconSize,
             debug: debug ?? self.debug
         )
@@ -135,7 +148,7 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
         labelTextSize: CGFloat,
         labelTypeFace: UIFont,
         labelStrokeColor: UIColor,
-        anchor: CGPoint,
+        labelPosition: String,
         infoAnchor: CGPoint,
         debug: Bool
     ) -> BitmapIcon {
@@ -148,11 +161,22 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
             labelSize = DefaultMarkerIcon.measureLabel(label, font: resolvedFont, strokeWidth: outlineStrokeWidth)
         }
 
-        let padding = canvasSize * 0.1
-        let bitmapWidth = max(canvasSize, labelSize.width + padding)
-        let bitmapHeight = canvasSize
-        let markerOffsetX = (bitmapWidth - canvasSize) / 2.0
-        let markerRect = CGRect(x: markerOffsetX, y: 0, width: canvasSize, height: canvasSize)
+        let layout = DefaultIconLayout.make(
+            canvasSize: canvasSize,
+            iconScale: scale,
+            strokeWidth: strokeWidth,
+            labelSize: labelSize,
+            outlineStrokeWidth: outlineStrokeWidth,
+            labelPosition: labelPosition
+        )
+        let bitmapWidth = layout.bitmapWidth
+        let bitmapHeight = layout.bitmapHeight
+        let markerRect = CGRect(
+            x: layout.markerOffsetX,
+            y: layout.markerOffsetY,
+            width: canvasSize,
+            height: canvasSize
+        )
 
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = UIScreen.main.scale
@@ -171,7 +195,8 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
                 canvasSize: canvasSize,
                 iconScale: scale,
                 strokeWidth: strokeWidth,
-                horizontalOffset: markerOffsetX
+                horizontalOffset: layout.markerOffsetX,
+                verticalOffset: layout.markerOffsetY
             )
 
             context.cgContext.saveGState()
@@ -215,8 +240,8 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
                     labelFont: resolvedFont,
                     labelTextColor: labelTextColor ?? defaultLabelTextColor,
                     labelStrokeColor: labelStrokeColor,
-                    canvasSize: canvasSize,
-                    offsetX: markerOffsetX,
+                    center: layout.labelCenter,
+                    bitmapHeight: bitmapHeight,
                     outlineStrokeWidth: outlineStrokeWidth,
                     pixelScale: format.scale
                 )
@@ -225,11 +250,11 @@ public final class ImageDefaultIcon: MarkerIconProtocol {
 
         return BitmapIcon(
             bitmap: image,
-            anchor: anchor,
+            anchor: layout.anchor,
             size: CGSize(width: bitmapWidth, height: bitmapHeight),
             scale: scale,
             iconSize: iconSize,
-            infoAnchor: infoAnchor,
+            infoAnchor: layout.infoAnchor(for: infoAnchor),
             debug: debug
         )
     }
