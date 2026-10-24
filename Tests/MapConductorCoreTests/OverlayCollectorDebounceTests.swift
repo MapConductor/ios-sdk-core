@@ -14,19 +14,15 @@ import XCTest
 @MainActor
 final class OverlayCollectorDebounceTests: XCTestCase {
 
-    /// テスト用の最小 state。`overlayChangePublisher()` を手で叩ける。
+    /// テスト用の最小 state。`mutate()` で書き込みが起きたことにできる。
     private final class TestState: OverlayCollectableState {
         let id: String
-        private let subject = PassthroughSubject<Void, Never>()
+        let mutations = StateMutationSignal()
 
         init(id: String) { self.id = id }
 
-        func overlayChangePublisher() -> AnyPublisher<Void, Never> {
-            subject.eraseToAnyPublisher()
-        }
-
         /// in-place 変更が起きたことにする。
-        func mutate() { subject.send(()) }
+        func mutate() { mutations.notifyMutated() }
     }
 
     /// 窓（5ms）より十分長く待つ。

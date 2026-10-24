@@ -31,16 +31,20 @@ public typealias OnCircleEventHandler = (CircleEvent) -> Void
 public final class CircleState: ObservableObject, Identifiable, Equatable, Hashable {
     public let id: String
 
-    @Published public var center: GeoPointProtocol
-    @Published public var radiusMeters: Double
-    @Published public var geodesic: Bool
-    @Published public var clickable: Bool
-    @Published public var strokeColor: UIColor
-    @Published public var strokeWidth: Double
-    @Published public var fillColor: UIColor
-    @Published public var extra: Any?
-    @Published public var zIndex: Int?
-    @Published public var onClick: OnCircleEventHandler?
+    /// Writes to the fields below are announced here rather than discovered by
+    /// subscribing to each state. See ``StateMutationSignal``.
+    public let mutations = StateMutationSignal()
+
+    @Published public var center: GeoPointProtocol { didSet { mutations.notifyMutated() } }
+    @Published public var radiusMeters: Double { didSet { mutations.notifyMutated() } }
+    @Published public var geodesic: Bool { didSet { mutations.notifyMutated() } }
+    @Published public var clickable: Bool { didSet { mutations.notifyMutated() } }
+    @Published public var strokeColor: UIColor { didSet { mutations.notifyMutated() } }
+    @Published public var strokeWidth: Double { didSet { mutations.notifyMutated() } }
+    @Published public var fillColor: UIColor { didSet { mutations.notifyMutated() } }
+    @Published public var extra: Any? { didSet { mutations.notifyMutated() } }
+    @Published public var zIndex: Int? { didSet { mutations.notifyMutated() } }
+    @Published public var onClick: OnCircleEventHandler? { didSet { mutations.notifyMutated() } }
 
     public init(
         center: GeoPointProtocol,

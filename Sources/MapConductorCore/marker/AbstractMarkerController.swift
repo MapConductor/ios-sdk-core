@@ -123,6 +123,16 @@ open class AbstractMarkerController<
     open func add(data: [MarkerState]) async {
         if markerManager.isDestroyed { return }
         MCLog.marker("AbstractMarkerController.add count=\(data.count)")
+        let addStart = DispatchTime.now().uptimeNanoseconds
+        defer {
+            let addMs = Double(DispatchTime.now().uptimeNanoseconds - addStart) / 1e6
+            if addMs > 100 {
+                // メインアクター上で走るので、この時間はそのまま UI が止まった
+                // 時間になり得る。ピンチ中に出続けるなら、上流が同じ一覧を
+                // 送り直している（syncMarkers の fast path が効いていない）。
+                MCLog.probe("SLOW markerController.add \(Int(addMs))ms count=\(data.count)")
+            }
+        }
         let entitiesToAnimate: [MarkerEntity<ActualMarker>] = await semaphore.withPermit {
             if markerManager.isDestroyed { return [] }
             var modifiedEntities: [MarkerEntity<ActualMarker>] = []

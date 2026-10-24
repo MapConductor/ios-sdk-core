@@ -30,15 +30,19 @@ public typealias OnPolygonEventHandler = (PolygonEvent) -> Void
 public final class PolygonState: ObservableObject, Identifiable, Equatable, Hashable {
     public let id: String
 
-    @Published public var strokeColor: UIColor
-    @Published public var strokeWidth: Double
-    @Published public var fillColor: UIColor
-    @Published public var geodesic: Bool
-    @Published public var zIndex: Int
-    @Published public var points: [GeoPointProtocol]
-    @Published public var holes: [[GeoPointProtocol]]
-    @Published public var extra: Any?
-    @Published public var onClick: OnPolygonEventHandler?
+    /// Writes to the fields below are announced here rather than discovered by
+    /// subscribing to each state. See ``StateMutationSignal``.
+    public let mutations = StateMutationSignal()
+
+    @Published public var strokeColor: UIColor { didSet { mutations.notifyMutated() } }
+    @Published public var strokeWidth: Double { didSet { mutations.notifyMutated() } }
+    @Published public var fillColor: UIColor { didSet { mutations.notifyMutated() } }
+    @Published public var geodesic: Bool { didSet { mutations.notifyMutated() } }
+    @Published public var zIndex: Int { didSet { mutations.notifyMutated() } }
+    @Published public var points: [GeoPointProtocol] { didSet { mutations.notifyMutated() } }
+    @Published public var holes: [[GeoPointProtocol]] { didSet { mutations.notifyMutated() } }
+    @Published public var extra: Any? { didSet { mutations.notifyMutated() } }
+    @Published public var onClick: OnPolygonEventHandler? { didSet { mutations.notifyMutated() } }
 
     /// android-sdk の `Polygon(state)` コンポーザブルは `LaunchedEffect(state)` の中で
     /// `unionHolesInPlace()` を呼ぶため、穴のユニオンは「1 つの state インスタンスにつき 1 回」

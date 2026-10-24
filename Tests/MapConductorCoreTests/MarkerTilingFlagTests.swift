@@ -131,8 +131,15 @@ final class MarkerTilingFlagTests: XCTestCase {
 
     // MARK: - Tile renderer
 
-    /// `MarkerTileRenderer` はタイル担当だけを焼く。ネイティブ担当しか無ければタイルは出ない。
-    func testTileRendererSkipsNativeEntities() {
+    /// `MarkerTileRenderer` はタイル担当だけを焼く。ネイティブ担当しか無ければ
+    /// 描くものが無いので nil を返す。
+    ///
+    /// nil は「タイルが無い」ではなく「ここは空」。透明な絵に変えるのは
+    /// `LocalTileServer` の仕事で、そこが 404 や 503 を返さないことは
+    /// `LocalTileServerSemanticsTests` が見ている。一時期ここで透明タイルを
+    /// 作っていたが、同じく空で nil を返す geojson / kml / groundimage /
+    /// vectortile だけが 503 になるので、android-sdk と同じくサーバ一点へ寄せた。
+    func testTileRendererSkipsNativeEntities() throws {
         let manager = MarkerManager<FakeMarker>()
         manager.registerEntity(
             MarkerEntity(
@@ -145,7 +152,10 @@ final class MarkerTilingFlagTests: XCTestCase {
         )
         let renderer = MarkerTileRenderer<FakeMarker>(markerManager: manager)
 
-        XCTAssertNil(renderer.renderTile(request: Self.tileRequest))
+        XCTAssertNil(
+            renderer.renderTile(request: Self.tileRequest),
+            "ネイティブ担当のマーカーがタイルに描かれている"
+        )
     }
 
     /// タイル担当が居ればタイルは出る（上のテストが「常に nil」で通らないことの確認）。

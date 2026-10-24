@@ -11,7 +11,15 @@ public final class MarkerManager<ActualMarker> {
     public let minMarkerCount: Int
 
     private var entities: [String: MarkerEntity<ActualMarker>] = [:]
+    /// Only `findByIdPrefix` still needs hex cells; it is built the first time
+    /// that is called, so nothing else pays for it.
     private var cellRegistry: HexCellRegistry<ActualMarker>?
+    /// The index the per-tile queries use. Weak, because the manager owns the
+    /// markers and the index only ever borrows them.
+    private lazy var gridIndex = MarkerGridIndex<ActualMarker> { [weak self] in
+        guard let self else { return [] }
+        return Array(self.entities.values)
+    }
     private var destroyed = false
     private let lock = NSLock()
 
@@ -65,6 +73,7 @@ public final class MarkerManager<ActualMarker> {
         let removed = entities.removeValue(forKey: id)
         if let removed {
             cellRegistry?.removePoint(entity: removed)
+            gridIndex.invalidate()
         }
         return removed
     }
@@ -75,6 +84,7 @@ public final class MarkerManager<ActualMarker> {
         guard usableLocked("registerEntity") else { return }
         entities[entity.state.id] = entity
         cellRegistry?.setPoint(entity: entity)
+        gridIndex.invalidate()
     }
 
     public func updateEntity(_ entity: MarkerEntity<ActualMarker>) {
@@ -83,6 +93,7 @@ public final class MarkerManager<ActualMarker> {
         guard usableLocked("updateEntity") else { return }
         entities[entity.state.id] = entity
         cellRegistry?.setPoint(entity: entity)
+        gridIndex.invalidate()
     }
 
     public func metersPerPixel(
@@ -105,20 +116,7 @@ public final class MarkerManager<ActualMarker> {
         guard usableLocked("findNearest") else { return nil }
 
         if entities.count > minMarkerCount {
-            let registry = ensureCellRegistryLocked()
-            if let nearestCell = registry.findNearest(point: position),
-               let ids = registry.getEntryIDsByHexCell(nearestCell) {
-                return ids
-                    .compactMap { entities[$0] }
-                    .min(by: { lhs, rhs in
-                        let dx1 = lhs.state.position.latitude - position.latitude
-                        let dy1 = lhs.state.position.longitude - position.longitude
-                        let dx2 = rhs.state.position.latitude - position.latitude
-                        let dy2 = rhs.state.position.longitude - position.longitude
-                        return dx1 * dx1 + dy1 * dy1 < dx2 * dx2 + dy2 * dy2
-                    })
-            }
-            return bruteForceNearestLocked(position: position)
+            return gridIndex.nearest(position: position) ?? bruteForceNearestLocked(position: position)
         }
 
         return bruteForceNearestLocked(position: position)
@@ -138,7 +136,9 @@ public final class MarkerManager<ActualMarker> {
         lock.lock()
         defer { lock.unlock() }
         guard usableLocked("findByIdPrefix") else { return [] }
-        return cellRegistry?.findByIdPrefix(prefix) ?? []
+        // The registry is built here and nowhere else: this is the one caller
+        // that needs hex cells rather than markers.
+        return ensureCellRegistryLocked().findByIdPrefix(prefix)
     }
 
     private func ensureCellRegistryLocked() -> HexCellRegistry<ActualMarker> {
@@ -166,20 +166,41 @@ public final class MarkerManager<ActualMarker> {
         defer { lock.unlock() }
         guard usableLocked("findMarkersInBounds") else { return [] }
 
-        if entities.count > minMarkerCount,
-           let center = bounds.center,
-           let northEast = bounds.northEast {
-            let registry = ensureCellRegistryLocked()
-            let distance = Spherical.computeDistanceBetween(from: center, to: northEast)
-            let hexCells = registry.findWithinRadiusWithDistance(point: center, radius: distance)
-            let entryIDs = hexCells.compactMap { registry.getEntryIDsByHexCell($0.cell) }
-                .flatMap { $0 }
-            return entryIDs.compactMap { entities[$0] }
+        if entities.count > minMarkerCount {
+            return gridIndex.inBounds(bounds)
         }
 
         return entities.values.filter { entity in
             bounds.contains(point: entity.state.position)
         }
+    }
+
+    /// The markers in `bounds`, thinned to at most one per
+    /// `minSeparationDegrees`.
+    ///
+    /// The caller is saying that markers closer than that are
+    /// interchangeable, which lets the index answer from its cells instead of
+    /// reading every marker. It declines — and this falls back to the full
+    /// query — when its cells are too coarse to honour the separation, so the
+    /// caller still has to apply the real rule to what comes back.
+    ///
+    /// Mirrors `findMarkersInBounds(bounds, minSeparationDegrees)` in
+    /// android-sdk.
+    public func findMarkersInBounds(
+        _ bounds: GeoRectBounds,
+        minSeparationDegrees: Double
+    ) -> [MarkerEntity<ActualMarker>] {
+        if bounds.isEmpty { return [] }
+
+        lock.lock()
+        if usableLocked("findMarkersInBounds"), entities.count > minMarkerCount,
+           let thinned = gridIndex.inBoundsThinned(bounds, minSeparationDegrees: minSeparationDegrees) {
+            lock.unlock()
+            return thinned
+        }
+        lock.unlock()
+
+        return findMarkersInBounds(bounds)
     }
 
     public func getMemoryStats() -> MarkerManagerStats {
@@ -188,8 +209,8 @@ public final class MarkerManager<ActualMarker> {
         _ = usableLocked("getMemoryStats")
         return MarkerManagerStats(
             entityCount: entities.count,
-            hasSpatialIndex: cellRegistry != nil,
-            spatialIndexInitialized: cellRegistry != nil,
+            hasSpatialIndex: true,
+            spatialIndexInitialized: gridIndex.isBuilt,
             estimatedMemoryKB: Int(estimateMemoryUsageLocked() / 1024)
         )
     }
@@ -197,7 +218,11 @@ public final class MarkerManager<ActualMarker> {
     private func estimateMemoryUsageLocked() -> Int64 {
         let entityMapOverhead = Int64(entities.count) * 64
         let entityObjects = Int64(entities.count) * 200
-        let spatialIndexSize = cellRegistry == nil ? 0 : Int64(entities.count) * 100
+        let gridSize = gridIndex.estimatedBytes()
+        // The hex registry is usually absent; when findByIdPrefix has built it,
+        // it costs a cell object and a string id per marker.
+        let hexSize = cellRegistry == nil ? 0 : Int64(entities.count) * 100
+        let spatialIndexSize = gridSize + hexSize
         return entityMapOverhead + entityObjects + spatialIndexSize
     }
 
@@ -207,6 +232,7 @@ public final class MarkerManager<ActualMarker> {
         guard usableLocked("clear") else { return }
         entities.removeAll()
         cellRegistry?.clear()
+        gridIndex.invalidate()
     }
 
     public func destroy() {
@@ -217,6 +243,7 @@ public final class MarkerManager<ActualMarker> {
         entities.removeAll()
         cellRegistry?.clear()
         cellRegistry = nil
+        gridIndex.invalidate()
     }
 
     public var isDestroyed: Bool {

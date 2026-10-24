@@ -1,4 +1,5 @@
-open class RasterLayerController<ActualLayer, Renderer: RasterLayerOverlayRendererProtocol>: OverlayControllerProtocol, SlottedOverlayController
+open class RasterLayerController<ActualLayer, Renderer: RasterLayerOverlayRendererProtocol>: OverlayControllerProtocol, SlottedOverlayController,
+    RasterLayerMounting
 where Renderer.ActualLayer == ActualLayer {
     public typealias StateType = RasterLayerState
     public typealias EntityType = RasterLayerEntity<ActualLayer>

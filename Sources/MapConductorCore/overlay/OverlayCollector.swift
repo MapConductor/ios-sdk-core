@@ -30,7 +30,10 @@ import Foundation
 public final class OverlayCollector<S: OverlayCollectableState> {
     private var statesById: [String: S] = [:]
     private var order: [String] = []
-    private var subscriptions: [String: AnyCancellable] = [:]
+    /// Who is currently reporting mutations. A state reports to at most one
+    /// collector, so leaving a stale listener on a dropped state would send its
+    /// writes to a collector that no longer holds it.
+    private var listening: [String: S] = [:]
     private var latest: [S] = []
 
     private var membershipHandler: (([S]) -> Void)?
@@ -88,10 +91,9 @@ public final class OverlayCollector<S: OverlayCollectableState> {
         var next: [String: S] = [:]
         for state in states {
             if let existing = statesById[state.id], existing !== state {
-                // Same id, new instance → drop the stale subscription and treat
-                // it as a membership change so the renderer re-adds it.
-                subscriptions[state.id]?.cancel()
-                subscriptions.removeValue(forKey: state.id)
+                // Same id, new instance → stop listening to the old one and
+                // treat it as a membership change so the renderer re-adds it.
+                existing.mutations.listen(nil)
                 membershipChanged = true
             }
             next[state.id] = state
@@ -101,21 +103,22 @@ public final class OverlayCollector<S: OverlayCollectableState> {
         latest = states
 
         for id in oldIds.subtracting(newIds) {
-            subscriptions[id]?.cancel()
-            subscriptions.removeValue(forKey: id)
+            listening.removeValue(forKey: id)?.mutations.listen(nil)
         }
 
         if membershipChanged {
             scheduleMembership()
         }
 
-        for state in states where subscriptions[state.id] == nil {
-            subscriptions[state.id] = state.overlayChangePublisher()
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self, weak state] _ in
-                    guard let self, let state, self.statesById[state.id] != nil else { return }
-                    self.scheduleUpdate(state)
-                }
+        for state in listening.values where next[state.id] !== state {
+            state.mutations.listen(nil)
+        }
+        listening = next
+        for state in states {
+            state.mutations.listen { [weak self, weak state] in
+                guard let self, let state, self.statesById[state.id] === state else { return }
+                self.scheduleUpdate(state)
+            }
         }
     }
 
@@ -196,8 +199,8 @@ public final class OverlayCollector<S: OverlayCollectableState> {
     }
 
     public func clear() {
-        subscriptions.values.forEach { $0.cancel() }
-        subscriptions.removeAll()
+        listening.values.forEach { $0.mutations.listen(nil) }
+        listening.removeAll()
         statesById.removeAll()
         order.removeAll()
         latest.removeAll()

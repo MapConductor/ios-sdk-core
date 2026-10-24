@@ -143,6 +143,47 @@ public final class KDTree: Sendable {
         return results
     }
 
+    /// Cells within `radius`, unordered.
+    ///
+    /// The sorted, distance-carrying variant exists for callers that want the
+    /// nearest first. Bounds queries do not: they use every cell and ignore the
+    /// distances, and sorting them is the dominant cost of the search. A cell
+    /// carries a String, so sorting 20k of them moves 20k refcounted structs
+    /// through ~286k comparisons — 42 ms of a 64 ms query on an iPad Pro.
+    public func withinRadius(query: CGPoint, radius: Double) -> [HexCell] {
+        precondition(radius >= 0, "Radius must be non-negative")
+        guard let root else { return [] }
+
+        var results: [HexCell] = []
+        withinRadiusUnordered(node: root, query: query, radiusSq: radius * radius, results: &results)
+        return results
+    }
+
+    private func withinRadiusUnordered(
+        node: Node,
+        query: CGPoint,
+        radiusSq: Double,
+        results: inout [HexCell]
+    ) {
+        if squaredDistance(query, node.cell.centerXY) <= radiusSq {
+            results.append(node.cell)
+        }
+
+        let axis = node.axis
+        let queryVal = axis == 0 ? query.x : query.y
+        let nodeVal = axis == 0 ? node.cell.centerXY.x : node.cell.centerXY.y
+        let nearChild = queryVal < nodeVal ? node.left : node.right
+        let farChild = queryVal < nodeVal ? node.right : node.left
+
+        if let nearChild {
+            withinRadiusUnordered(node: nearChild, query: query, radiusSq: radiusSq, results: &results)
+        }
+        let axisDistance = queryVal - nodeVal
+        if axisDistance * axisDistance <= radiusSq, let farChild {
+            withinRadiusUnordered(node: farChild, query: query, radiusSq: radiusSq, results: &results)
+        }
+    }
+
     private func withinRadius(node: Node, query: CGPoint, radiusSq: Double, results: inout [HexCellWithDistance]) {
         let distSq = squaredDistance(query, node.cell.centerXY)
         if distSq <= radiusSq {
