@@ -54,27 +54,59 @@ public protocol MapCameraPositionProtocol {
 
 public final class MapCameraPosition: MapCameraPositionProtocol {
     public var position: GeoPointProtocol { positionValue }
+    /// 指定されなかったときは 0。指定されたかどうかは ``isZoomSpecified`` で区別する。
     public let zoom: Double
+    /// 指定されなかったときは 0。指定されたかどうかは ``isBearingSpecified`` で区別する。
     public let bearing: Double
+    /// 指定されなかったときは 0。指定されたかどうかは ``isTiltSpecified`` で区別する。
     public let tilt: Double
     public let paddings: MapPaddingsProtocol?
     public let visibleRegion: VisibleRegion?
     private let positionValue: GeoPoint
 
+    /// `zoom` / `bearing` / `tilt` が明示されたか。
+    ///
+    /// 明示された 0（zoom 0 = 世界全体、真北、真上から）と未指定を区別するために持つ。
+    /// ``MapViewState/moveCameraTo(cameraPosition:durationMillis:)`` は未指定の
+    /// プロパティだけを現在のカメラから引き継ぐ（``resolved(onto:)``）。
+    public let isZoomSpecified: Bool
+    public let isBearingSpecified: Bool
+    public let isTiltSpecified: Bool
+
     public init(
         position: GeoPointProtocol,
-        zoom: Double = 0.0,
-        bearing: Double = 0.0,
-        tilt: Double = 0.0,
+        zoom: Double? = nil,
+        bearing: Double? = nil,
+        tilt: Double? = nil,
         paddings: MapPaddingsProtocol? = MapPaddings.Zeros,
         visibleRegion: VisibleRegion? = nil
     ) {
         self.positionValue = GeoPoint.from(position: position)
-        self.zoom = zoom
-        self.bearing = bearing
-        self.tilt = tilt
+        self.zoom = zoom ?? 0.0
+        self.bearing = bearing ?? 0.0
+        self.tilt = tilt ?? 0.0
+        self.isZoomSpecified = zoom != nil
+        self.isBearingSpecified = bearing != nil
+        self.isTiltSpecified = tilt != nil
         self.paddings = paddings
         self.visibleRegion = visibleRegion
+    }
+
+    /// 未指定の `zoom` / `bearing` / `tilt` を `current` の値で埋めたカメラを返す。
+    ///
+    /// 明示されたプロパティは、0 であってもそのまま使う。
+    public func resolved(onto current: MapCameraPositionProtocol) -> MapCameraPosition {
+        if isZoomSpecified && isBearingSpecified && isTiltSpecified {
+            return self
+        }
+        return MapCameraPosition(
+            position: positionValue,
+            zoom: isZoomSpecified ? zoom : current.zoom,
+            bearing: isBearingSpecified ? bearing : current.bearing,
+            tilt: isTiltSpecified ? tilt : current.tilt,
+            paddings: paddings,
+            visibleRegion: visibleRegion
+        )
     }
 
     public func equals(other: MapCameraPositionProtocol) -> Bool {
@@ -92,11 +124,12 @@ public final class MapCameraPosition: MapCameraPositionProtocol {
         paddings: MapPaddingsProtocol? = nil,
         visibleRegion: VisibleRegion? = nil
     ) -> MapCameraPosition {
+        // 渡されなかったプロパティは、未指定だったならコピー後も未指定のまま。
         MapCameraPosition(
             position: position ?? self.positionValue,
-            zoom: zoom ?? self.zoom,
-            bearing: bearing ?? self.bearing,
-            tilt: tilt ?? self.tilt,
+            zoom: zoom ?? (isZoomSpecified ? self.zoom : nil),
+            bearing: bearing ?? (isBearingSpecified ? self.bearing : nil),
+            tilt: tilt ?? (isTiltSpecified ? self.tilt : nil),
             paddings: paddings ?? self.paddings,
             visibleRegion: visibleRegion ?? self.visibleRegion
         )
