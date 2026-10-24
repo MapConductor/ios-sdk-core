@@ -1204,7 +1204,11 @@ final public class MapCameraPosition : MapConductorCore::MapCameraPositionProtoc
   final public let tilt: Swift::Double
   final public let paddings: (any MapConductorCore::MapPaddingsProtocol)?
   final public let visibleRegion: MapConductorCore::VisibleRegion?
-  public init(position: any MapConductorCore::GeoPointProtocol, zoom: Swift::Double = 0.0, bearing: Swift::Double = 0.0, tilt: Swift::Double = 0.0, paddings: (any MapConductorCore::MapPaddingsProtocol)? = MapPaddings.Zeros, visibleRegion: MapConductorCore::VisibleRegion? = nil)
+  final public let isZoomSpecified: Swift::Bool
+  final public let isBearingSpecified: Swift::Bool
+  final public let isTiltSpecified: Swift::Bool
+  public init(position: any MapConductorCore::GeoPointProtocol, zoom: Swift::Double? = nil, bearing: Swift::Double? = nil, tilt: Swift::Double? = nil, paddings: (any MapConductorCore::MapPaddingsProtocol)? = MapPaddings.Zeros, visibleRegion: MapConductorCore::VisibleRegion? = nil)
+  final public func resolved(onto current: any MapConductorCore::MapCameraPositionProtocol) -> MapConductorCore::MapCameraPosition
   final public func equals(other: any MapConductorCore::MapCameraPositionProtocol) -> Swift::Bool
   final public func copy(position: (any MapConductorCore::GeoPointProtocol)? = nil, zoom: Swift::Double? = nil, bearing: Swift::Double? = nil, tilt: Swift::Double? = nil, paddings: (any MapConductorCore::MapPaddingsProtocol)? = nil, visibleRegion: MapConductorCore::VisibleRegion? = nil) -> MapConductorCore::MapCameraPosition
   final public func hashCode() -> Swift::Int

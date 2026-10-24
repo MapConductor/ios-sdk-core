@@ -159,9 +159,9 @@ open class MapViewState<ActualMapDesignType>: ObservableObject, MapViewStateProt
     }
 
     open func moveCameraTo(cameraPosition: MapCameraPosition, durationMillis: Long? = 0) {
-        // カメラを渡されたらそのまま使う。「位置だけ動かして縮尺は保つ」は
-        // `moveCameraTo(position:)` のオーバーロードが担う。
-        let resolved = cameraPosition
+        // 明示されたプロパティは 0 でもそのまま使い、未指定のものだけ現在のカメラから
+        // 引き継ぐ。`MapCameraPosition(position:)` なら位置だけが動く。
+        let resolved = cameraPosition.resolved(onto: storedCameraPosition)
         guard let controller = attachedMapController else {
             // まだ地図が無い。接続時に attachController がこの位置へ移動する。
             storedCameraPosition = resolved
