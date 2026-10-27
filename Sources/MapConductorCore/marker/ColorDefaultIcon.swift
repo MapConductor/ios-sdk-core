@@ -34,7 +34,7 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
     /// ラベルをピンに対してどこへ置くか。CSS の `background-position` と同じ書き方で、
     /// 横（left / center / right）と縦（top / center / bottom）のキーワードを空白区切りで
     /// 並べる。順序は問わず、片方だけなら残りは center。
-    /// - left / right はピンの外側に置き、縦はピンの上端・頭の中心・先端に揃える。
+    /// - left / right はピンの外側に置き、縦はピンの上端・上端と先端の中間・先端に揃える。
     /// - center 列の top / bottom はピンの上・下の外側に置く。
     public let labelPosition: String
     /// 指定された infoAnchor（ピン本体に対する割合）。`infoAnchor` はビットマップに対する割合へ直した値。
@@ -539,9 +539,11 @@ struct DefaultIconLayout {
 
         var cy = headCenterY
         if h != 0 {
-            // 横に置くときは、縦はピンの上端・頭の中心・先端に揃える。
+            // 横に置くときは、縦はピンの上端・上端と先端の中間・先端に揃える。
+            // center を頭の中心にすると、ピン全体の中央より上に見える。
             if v < 0 { cy = pinTop + labelHeight / 2.0 }
             if v > 0 { cy = pinBottom - labelHeight / 2.0 }
+            if v == 0 { cy = (pinTop + pinBottom) / 2.0 }
         } else {
             // 中央列の top / bottom はピンと重ならないよう上下の外側に置く。
             if v < 0 { cy = pinTop - gap - labelHeight / 2.0 }

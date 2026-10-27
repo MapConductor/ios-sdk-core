@@ -41,6 +41,21 @@ final class DefaultIconLabelPositionTests: XCTestCase {
         XCTAssertEqual(icon.anchor, icon.toBitmapIcon().anchor)
     }
 
+    func testSideCenterIsHalfwayDownThePin() {
+        // 横に置いた center は、ピンの上端と先端の真ん中（頭の中心ではない）。
+        let metrics = DefaultMarkerIcon.markerPathMetrics(canvasSize: 48, iconScale: 1, strokeWidth: 1)
+        let middle = metrics.offsetY + 12.0 * metrics.markerScale
+        for position in ["right center", "left center", "right"] {
+            let layout = DefaultIconLayout.make(
+                canvasSize: 48, iconScale: 1, strokeWidth: 1,
+                labelSize: CGSize(width: 60, height: 16), outlineStrokeWidth: 2,
+                labelPosition: position
+            )
+            XCTAssertEqual(layout.labelCenter.y - layout.markerOffsetY, middle, accuracy: 0.001, position)
+            XCTAssertGreaterThan(middle, 48 * 0.35 + 3, "the head's center is well above the middle")
+        }
+    }
+
     func testLeftIsNearlyMirrorOfRight() {
         // ピン形は外接箱の中で 0.25 単位だけ右に寄っているので、1pt までの差は許す。
         let right = tip(ColorDefaultIcon(label: label, labelPosition: "right"))
