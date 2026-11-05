@@ -11,9 +11,6 @@ public final class MarkerManager<ActualMarker> {
     public let minMarkerCount: Int
 
     private var entities: [String: MarkerEntity<ActualMarker>] = [:]
-    /// Only `findByIdPrefix` still needs hex cells; it is built the first time
-    /// that is called, so nothing else pays for it.
-    private var cellRegistry: HexCellRegistry<ActualMarker>?
     /// The index the per-tile queries use. Weak, because the manager owns the
     /// markers and the index only ever borrows them.
     private lazy var gridIndex = MarkerGridIndex<ActualMarker> { [weak self] in
@@ -72,7 +69,6 @@ public final class MarkerManager<ActualMarker> {
         guard usableLocked("removeEntity") else { return nil }
         let removed = entities.removeValue(forKey: id)
         if let removed {
-            cellRegistry?.removePoint(entity: removed)
             gridIndex.invalidate()
         }
         return removed
@@ -83,7 +79,6 @@ public final class MarkerManager<ActualMarker> {
         defer { lock.unlock() }
         guard usableLocked("registerEntity") else { return }
         entities[entity.state.id] = entity
-        cellRegistry?.setPoint(entity: entity)
         gridIndex.invalidate()
     }
 
@@ -92,7 +87,6 @@ public final class MarkerManager<ActualMarker> {
         defer { lock.unlock() }
         guard usableLocked("updateEntity") else { return }
         entities[entity.state.id] = entity
-        cellRegistry?.setPoint(entity: entity)
         gridIndex.invalidate()
     }
 
@@ -130,26 +124,6 @@ public final class MarkerManager<ActualMarker> {
             let dy2 = rhs.state.position.longitude - position.longitude
             return dx1 * dx1 + dy1 * dy1 < dx2 * dx2 + dy2 * dy2
         }
-    }
-
-    public func findByIdPrefix(_ prefix: String) -> [HexCell] {
-        lock.lock()
-        defer { lock.unlock() }
-        guard usableLocked("findByIdPrefix") else { return [] }
-        // The registry is built here and nowhere else: this is the one caller
-        // that needs hex cells rather than markers.
-        return ensureCellRegistryLocked().findByIdPrefix(prefix)
-    }
-
-    private func ensureCellRegistryLocked() -> HexCellRegistry<ActualMarker> {
-        if let cellRegistry { return cellRegistry }
-
-        let newRegistry = HexCellRegistry<ActualMarker>(geocell: geocell, zoom: 20.0)
-        for entity in entities.values {
-            newRegistry.setPoint(entity: entity)
-        }
-        cellRegistry = newRegistry
-        return newRegistry
     }
 
     public func allEntities() -> [MarkerEntity<ActualMarker>] {
@@ -218,11 +192,7 @@ public final class MarkerManager<ActualMarker> {
     private func estimateMemoryUsageLocked() -> Int64 {
         let entityMapOverhead = Int64(entities.count) * 64
         let entityObjects = Int64(entities.count) * 200
-        let gridSize = gridIndex.estimatedBytes()
-        // The hex registry is usually absent; when findByIdPrefix has built it,
-        // it costs a cell object and a string id per marker.
-        let hexSize = cellRegistry == nil ? 0 : Int64(entities.count) * 100
-        let spatialIndexSize = gridSize + hexSize
+        let spatialIndexSize = gridIndex.estimatedBytes()
         return entityMapOverhead + entityObjects + spatialIndexSize
     }
 
@@ -231,7 +201,6 @@ public final class MarkerManager<ActualMarker> {
         defer { lock.unlock() }
         guard usableLocked("clear") else { return }
         entities.removeAll()
-        cellRegistry?.clear()
         gridIndex.invalidate()
     }
 
@@ -241,8 +210,6 @@ public final class MarkerManager<ActualMarker> {
         if destroyed { return }
         destroyed = true
         entities.removeAll()
-        cellRegistry?.clear()
-        cellRegistry = nil
         gridIndex.invalidate()
     }
 

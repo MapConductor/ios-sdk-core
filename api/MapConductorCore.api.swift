@@ -712,39 +712,6 @@ public enum Earth {
   public static let semiMinorAxisMeters: Swift::Double
   public static let eccentricitySquared: Swift::Double
 }
-final public class HexCellRegistry<ActualMarker> {
-  public init(geocell: any MapConductorCore::HexGeocellProtocol, zoom: Swift::Double)
-  final public func getCell(entity: MapConductorCore::MarkerEntity<ActualMarker>) -> MapConductorCore::HexCell
-  @discardableResult
-  final public func setPoint(entity: MapConductorCore::MarkerEntity<ActualMarker>) -> MapConductorCore::HexCell
-  final public func contains(hexId: Swift::String) -> Swift::Bool
-  @discardableResult
-  final public func removePoint(entity: MapConductorCore::MarkerEntity<ActualMarker>) -> Swift::Bool
-  final public func clear()
-  final public func findNearest(point: any MapConductorCore::GeoPointProtocol) -> MapConductorCore::HexCell?
-  final public func findNearestWithDistance(point: any MapConductorCore::GeoPointProtocol) -> MapConductorCore::HexCellWithDistance?
-  final public func findNearestKWithDistance(point: any MapConductorCore::GeoPointProtocol, k: Swift::Int) -> [MapConductorCore::HexCellWithDistance]
-  final public func findWithinRadiusWithDistance(point: any MapConductorCore::GeoPointProtocol, radius: Swift::Double) -> [MapConductorCore::HexCellWithDistance]
-  final public func findWithinRadius(point: any MapConductorCore::GeoPointProtocol, radius: Swift::Double) -> [MapConductorCore::HexCell]
-  final public func all() -> [MapConductorCore::HexCell]
-  final public func getEntryIDsByHexCell(_ hexCell: MapConductorCore::HexCell) -> Swift::Set<Swift::String>?
-  final public func metersPerPixel(position: any MapConductorCore::GeoPointProtocol, zoom: Swift::Double, pixels: Swift::Double, tileSize: Swift::Int = 256) -> Swift::Double
-  final public func findWithinPixelRadius(position: any MapConductorCore::GeoPointProtocol, zoom: Swift::Double, pixels: Swift::Double, tileSize: Swift::Int = 256) -> [MapConductorCore::HexCellWithDistance]
-  final public func findByIdPrefix(_ prefix: Swift::String) -> [MapConductorCore::HexCell]
-  final public func getStats() -> MapConductorCore::RegistryStats
-  @objc deinit
-}
-public struct RegistryStats : Swift::Sendable, Swift::Hashable {
-  public let totalCells: Swift::Int
-  public let totalEntries: Swift::Int
-  public let kdTreeBuilt: Swift::Bool
-  public let needsRebuild: Swift::Bool
-  public static func == (a: MapConductorCore::RegistryStats, b: MapConductorCore::RegistryStats) -> Swift::Bool
-  public func hash(into hasher: inout Swift::Hasher)
-  public var hashValue: Swift::Int {
-    get
-  }
-}
 public struct HexCoord : Swift::Sendable, Swift::Hashable, Swift::CustomStringConvertible {
   public let q: Swift::Int
   public let r: Swift::Int
@@ -793,15 +760,6 @@ public struct HexCell : Swift::Sendable, Swift::Hashable {
     get
   }
 }
-public struct HexCellWithDistance : Swift::Sendable, Swift::Hashable {
-  public let cell: MapConductorCore::HexCell
-  public let distanceMeters: Swift::Double
-  public static func == (a: MapConductorCore::HexCellWithDistance, b: MapConductorCore::HexCellWithDistance) -> Swift::Bool
-  public func hash(into hasher: inout Swift::Hasher)
-  public var hashValue: Swift::Int {
-    get
-  }
-}
 public struct IdentifiedHexCell : Swift::Sendable, Swift::Hashable {
   public let id: Swift::String
   public let cell: MapConductorCore::HexCell
@@ -838,15 +796,6 @@ public struct HexGeocell : MapConductorCore::HexGeocellProtocol {
   public func hexDistance(a: MapConductorCore::HexCoord, b: MapConductorCore::HexCoord) -> Swift::Int
   public func hexRange(center: MapConductorCore::HexCoord, radius: Swift::Int) -> [MapConductorCore::HexCoord]
   public static func defaultGeocell() -> any MapConductorCore::HexGeocellProtocol
-}
-final public class KDTree : Swift::Sendable {
-  public init(points: [MapConductorCore::HexCell])
-  final public func nearest(query: CoreFoundation::CGPoint) -> MapConductorCore::HexCell?
-  final public func nearestWithDistance(query: CoreFoundation::CGPoint) -> MapConductorCore::HexCellWithDistance?
-  final public func nearestKWithDistance(query: CoreFoundation::CGPoint, k: Swift::Int) -> [MapConductorCore::HexCellWithDistance]
-  final public func withinRadiusWithDistance(query: CoreFoundation::CGPoint, radius: Swift::Double) -> [MapConductorCore::HexCellWithDistance]
-  final public func withinRadius(query: CoreFoundation::CGPoint, radius: Swift::Double) -> [MapConductorCore::HexCell]
-  @objc deinit
 }
 public protocol ProjectionProtocol : Swift::Sendable {
   func project(_ point: any MapConductorCore::GeoPointProtocol) -> CoreFoundation::CGPoint
@@ -1871,7 +1820,6 @@ final public class MarkerManager<ActualMarker> {
   final public func updateEntity(_ entity: MapConductorCore::MarkerEntity<ActualMarker>)
   final public func metersPerPixel(position: any MapConductorCore::GeoPointProtocol, zoom: Swift::Double, pixels: Swift::Double, tileSize: Swift::Int = 256) -> Swift::Double
   final public func findNearest(position: any MapConductorCore::GeoPointProtocol) -> MapConductorCore::MarkerEntity<ActualMarker>?
-  final public func findByIdPrefix(_ prefix: Swift::String) -> [MapConductorCore::HexCell]
   final public func allEntities() -> [MapConductorCore::MarkerEntity<ActualMarker>]
   final public func findMarkersInBounds(_ bounds: MapConductorCore::GeoRectBounds) -> [MapConductorCore::MarkerEntity<ActualMarker>]
   final public func findMarkersInBounds(_ bounds: MapConductorCore::GeoRectBounds, minSeparationDegrees: Swift::Double) -> [MapConductorCore::MarkerEntity<ActualMarker>]
