@@ -73,11 +73,6 @@ public struct HexCell: Sendable, Hashable {
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
-public struct HexCellWithDistance: Sendable, Hashable {
-    public let cell: HexCell
-    public let distanceMeters: Double
-}
-
 public struct IdentifiedHexCell: Sendable, Hashable {
     public let id: String
     public let cell: HexCell

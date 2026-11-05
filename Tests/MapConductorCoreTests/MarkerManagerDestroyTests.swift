@@ -57,7 +57,6 @@ final class MarkerManagerDestroyTests: XCTestCase {
         XCTAssertNil(manager.removeEntity("a"))
         XCTAssertTrue(manager.allEntities().isEmpty)
         XCTAssertNil(manager.findNearest(position: GeoPoint(latitude: 35.0, longitude: 139.0)))
-        XCTAssertTrue(manager.findByIdPrefix("a").isEmpty)
     }
 
     /// destroy は何度呼んでもよい。

@@ -2,11 +2,11 @@ import Foundation
 
 /// A hierarchical lat/lng grid over the markers, held as one sorted array of Int64.
 ///
-/// Replaces the hex-cell registry on the paths that run per tile. That index was
-/// built at a fixed zoom of 20, which puts a cell at about 12 cm — street trees
-/// are metres apart, so every marker landed in its own cell and the index
-/// grouped nothing, while costing a HexCell and a String id per marker plus a
-/// kd-tree node each. On Tokyo's 144,183 street trees, building it on Android
+/// Replaced the hex-cell registry, since removed, on the paths that run per
+/// tile. That index was built at a fixed zoom of 20, which puts a cell at about
+/// 12 cm — street trees are metres apart, so every marker landed in its own
+/// cell and the index grouped nothing, while costing a HexCell and a String id
+/// per marker plus a kd-tree node each. On Tokyo's 144,183 street trees, building it on Android
 /// aborted the process; this builds in 41 ms and 1.15 MB there.
 ///
 /// Each marker is one Int64: its cell key above its position in a snapshot, so
