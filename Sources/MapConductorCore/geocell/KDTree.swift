@@ -20,25 +20,59 @@ public final class KDTree: Sendable {
     private let root: Node?
 
     public init(points: [HexCell]) {
-        self.root = points.isEmpty ? nil : Self.build(items: points, depth: 0)
+        // 呼び出し元の配列は並べ替えない（値型なのでコピーに対して並べ替える）
+        var items = points
+        self.root = items.isEmpty ? nil : Self.build(items: &items, from: 0, to: items.count, depth: 0)
     }
 
-    private static func build(items: [HexCell], depth: Int) -> Node? {
-        if items.isEmpty { return nil }
+    /// 再帰的に K-D 木を構築する。
+    ///
+    /// `items[from..<to]` の中で中央値だけを選び（quickselect）、左右を同じ配列のまま
+    /// 再帰する。階層ごとにソートして配列を作ると、数万件で数百ミリ秒かかり、
+    /// マーカーを足し引きした直後の空間検索がその間止まる。
+    private static func build(items: inout [HexCell], from: Int, to: Int, depth: Int) -> Node? {
+        if from >= to { return nil }
 
         let axis = depth % 2
-        let sorted = items.sorted { lhs, rhs in
-            if axis == 0 { lhs.centerXY.x < rhs.centerXY.x }
-            else { lhs.centerXY.y < rhs.centerXY.y }
-        }
-        let mid = sorted.count / 2
+        let mid = from + (to - from) / 2
+        selectNth(&items, left: from, right: to - 1, k: mid, axis: axis)
 
         return Node(
-            cell: sorted[mid],
-            left: build(items: Array(sorted[..<mid]), depth: depth + 1),
-            right: build(items: mid + 1 < sorted.count ? Array(sorted[(mid + 1)...]) : [], depth: depth + 1),
+            cell: items[mid],
+            left: build(items: &items, from: from, to: mid, depth: depth + 1),
+            right: build(items: &items, from: mid + 1, to: to, depth: depth + 1),
             axis: axis
         )
+    }
+
+    private static func axisValue(_ cell: HexCell, _ axis: Int) -> CGFloat {
+        axis == 0 ? cell.centerXY.x : cell.centerXY.y
+    }
+
+    /// `items[left...right]` を、`items[k]` が軸の値で k 番目になるよう並べ替える
+    /// （左は以下、右は以上）。Wirth の quickselect。
+    ///
+    /// 六角セルの中心は列ごとに同じ x を持つので、等しい値が大量に並ぶ。
+    /// 左右から寄せる分割にしてあるのはそのため（片側に寄せる分割だと O(n²) になる）。
+    private static func selectNth(_ items: inout [HexCell], left: Int, right: Int, k: Int, axis: Int) {
+        var lo = left
+        var hi = right
+        while lo < hi {
+            let pivot = axisValue(items[k], axis)
+            var i = lo
+            var j = hi
+            repeat {
+                while axisValue(items[i], axis) < pivot { i += 1 }
+                while pivot < axisValue(items[j], axis) { j -= 1 }
+                if i <= j {
+                    items.swapAt(i, j)
+                    i += 1
+                    j -= 1
+                }
+            } while i <= j
+            if j < k { lo = i }
+            if k < i { hi = j }
+        }
     }
 
     public func nearest(query: CGPoint) -> HexCell? {

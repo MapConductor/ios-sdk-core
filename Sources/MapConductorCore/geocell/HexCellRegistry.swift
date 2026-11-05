@@ -29,29 +29,43 @@ public final class HexCellRegistry<ActualMarker> {
     }
 
     /// Register or update an entity in the registry.
+    ///
+    /// K-D 木が持つのはセルなので、**セルの集合が変わったときだけ**作り直しの印を付ける。
+    /// 位置の変わらない更新や、既にあるセルへの追加のたびに作り直すと、マーカーを
+    /// 差し替えるたびに次の空間検索（タップの当たり判定など）が全件の再構築を待つことになる。
     @discardableResult
     public func setPoint(entity: MarkerEntity<ActualMarker>) -> HexCell {
         lock.lock()
         defer { lock.unlock() }
 
         let entityId = entity.state.id
-
-        if let oldCellId = allEntries[entityId] {
-            _ = removeFromCell(cellId: oldCellId, entityId: entityId)
-        }
-
         let cell = getCell(entity: entity)
         let cellId = cell.id
 
-        allCells[cellId] = cell
+        let oldCellId = allEntries[entityId]
+        // 同じセルのまま（位置が変わらない更新など）
+        if oldCellId == cellId, let sameCell = allCells[cellId] { return sameCell }
+
+        var cellsChanged = false
+        if let oldCellId {
+            _ = removeFromCell(cellId: oldCellId, entityId: entityId)
+            cellsChanged = allCells[oldCellId] == nil
+        }
+
+        // 新しいセルへ。既にあるセルは置き換えない（木が持っているものと揃える）
+        let existing = allCells[cellId]
+        if existing == nil {
+            allCells[cellId] = cell
+            cellsChanged = true
+        }
         allEntries[entityId] = cellId
 
         var entryIds = entryIDsByCell[cellId] ?? Set<String>()
         entryIds.insert(entityId)
         entryIDsByCell[cellId] = entryIds
 
-        markDirty()
-        return cell
+        if cellsChanged { markDirty() }
+        return existing ?? cell
     }
 
     public func contains(hexId: String) -> Bool {
@@ -72,7 +86,8 @@ public final class HexCellRegistry<ActualMarker> {
         let removed = removeFromCell(cellId: cellId, entityId: entityId)
         if removed {
             allEntries.removeValue(forKey: entityId)
-            markDirty()
+            // セルにまだ他のエンティティが残っていれば、木は変わらない
+            if allCells[cellId] == nil { markDirty() }
         }
         return removed
     }
