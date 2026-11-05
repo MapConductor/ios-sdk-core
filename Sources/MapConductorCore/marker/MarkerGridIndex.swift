@@ -19,6 +19,27 @@ import Foundation
 /// the finest one — the first version had a single fixed cell size of 0.005
 /// degrees, and a continent-wide box paid for it.
 ///
+/// ## Changes are applied, not rebuilt
+///
+/// The first version threw the index away on every change, so a query after
+/// any change paid the full build. An app that swaps a few hundred markers on
+/// every pan paid it on every tap and every tile; on Android's Pixel 5a that
+/// was 83 ms at 60,000 markers and 212 ms at 144,000 after 300 swaps, and a
+/// drag paid it every frame.
+///
+/// Now a marker that arrives takes the next slot and its entry waits in
+/// `pending`; the next query sorts only those and merges them into `packed` in
+/// one linear pass. A marker that leaves only empties its slot — queries skip
+/// empty slots, and the next merge drops their entries. Only when half the
+/// slots are empty, or the index lost track of a marker, does it rebuild from
+/// the manager's collection.
+///
+/// Finding a leaving marker's entry needs no map. Its entry is in the run of
+/// the cell its position falls in, found by binary search and matched by
+/// identity. The exception is a marker whose position was changed in place
+/// after it was filed — a drag does that — and for that one the slots are
+/// scanned, which is still far less than a rebuild.
+///
 /// Not synchronised. `MarkerManager` holds its lock across every call, and
 /// taking a second one here would only add cost to a path that is already
 /// serialised.
@@ -44,10 +65,23 @@ final class MarkerGridIndex<ActualMarker> {
     private static var nearestLevel: Int64 { 15 }
     private static var maxNearestRings: Int64 { 100 }
 
+    /// Slots the index can hand out before it has to rebuild to renumber them.
+    private static var maxSlots: Int { 1 << 24 }
+
+    /// Below this many empty slots a rebuild is never worth it. Above it, the
+    /// index rebuilds once half its slots are empty: the dead entries cost a
+    /// skip on every query, and the snapshot holds a slot for each.
+    private static var rebuildMinSlots: Int { 4096 }
+
     private let source: () -> [MarkerEntity<ActualMarker>]
-    private var snapshot: [MarkerEntity<ActualMarker>] = []
-    /// Sorted `(mortonKey << indexBits) | position-in-snapshot`.
+    /// Slot -> marker. A marker that left leaves a nil.
+    private var snapshot: [MarkerEntity<ActualMarker>?] = []
+    /// Sorted `(mortonKey << indexBits) | slot`.
     private var packed: [Int64] = []
+    /// Entries for markers that arrived since the last merge, unsorted.
+    private var pending: [Int64] = []
+    /// Slots emptied by markers that left.
+    private var emptySlots = 0
     private var dirty = true
 
     init(source: @escaping () -> [MarkerEntity<ActualMarker>]) {
@@ -58,11 +92,82 @@ final class MarkerGridIndex<ActualMarker> {
     var isBuilt: Bool { !dirty }
 
     /// Roughly what the index costs: two words a marker, key and reference.
-    func estimatedBytes() -> Int64 { Int64(packed.count) * 8 + Int64(snapshot.count) * 8 }
+    func estimatedBytes() -> Int64 {
+        Int64(packed.count) * 8 + Int64(snapshot.count) * 8 + Int64(pending.count) * 8
+    }
 
     /// Marks the index stale. The rebuild happens on the next query.
     func invalidate() {
         dirty = true
+    }
+
+    /// Files a marker that was not in the index.
+    func add(_ entity: MarkerEntity<ActualMarker>) {
+        // Until the first build, or while a rebuild is due, the rebuild reads the
+        // manager's collection and will see this marker there.
+        if dirty { return }
+        if snapshot.count == Self.maxSlots {
+            dirty = true
+            return
+        }
+        let slot = snapshot.count
+        snapshot.append(entity)
+        pending.append((MarkerGrid.mortonKey(for: entity.state.position) << Self.indexBits) | Int64(slot))
+    }
+
+    /// Forgets a marker.
+    func remove(_ entity: MarkerEntity<ActualMarker>) {
+        if dirty { return }
+        guard let slot = locate(entity) else {
+            // Not where it should be: the index lost track of it somewhere, so
+            // stop trusting it rather than return a marker that has gone.
+            dirty = true
+            return
+        }
+        snapshot[slot] = nil
+        emptySlots += 1
+    }
+
+    /// `previous` is replaced by `entity` under the same id — the same object
+    /// after a change, or a new one.
+    ///
+    /// Most updates leave the marker in its cell: an icon or a flag changed.
+    /// Then only the reference in its slot is swapped, and nothing waits for a
+    /// merge.
+    func replace(_ previous: MarkerEntity<ActualMarker>, with entity: MarkerEntity<ActualMarker>) {
+        if dirty { return }
+        if let slot = locate(previous, inCell: MarkerGrid.mortonKey(for: entity.state.position)) {
+            snapshot[slot] = entity
+            return
+        }
+        remove(previous)
+        add(entity)
+    }
+
+    /// The slot holding `entity`, if any.
+    private func locate(_ entity: MarkerEntity<ActualMarker>) -> Int? {
+        if let slot = locate(entity, inCell: MarkerGrid.mortonKey(for: entity.state.position)) {
+            return slot
+        }
+        // Its position changed in place since it was filed, so its entry is in
+        // some other cell's run. Scan the slots.
+        return snapshot.firstIndex { $0 === entity }
+    }
+
+    /// The slot holding `entity` if it was filed under bottom-level `key`.
+    private func locate(_ entity: MarkerEntity<ActualMarker>, inCell key: Int64) -> Int? {
+        for entry in pending where entry >> Self.indexBits == key {
+            let slot = Int(entry & Self.indexMask)
+            if snapshot[slot] === entity { return slot }
+        }
+        let limit = (key + 1) << Self.indexBits
+        var at = lowerBound(key << Self.indexBits)
+        while at < packed.count, packed[at] < limit {
+            let slot = Int(packed[at] & Self.indexMask)
+            if snapshot[slot] === entity { return slot }
+            at += 1
+        }
+        return nil
     }
 
     /// Markers whose position falls inside `bounds`.
@@ -171,12 +276,20 @@ final class MarkerGridIndex<ActualMarker> {
                 if at >= packed.count { continue }
                 let limit = (key + 1) << shift
                 if packed[at] >= limit { continue }
-                // The run's last entry. No containment test anywhere: that is
-                // the whole point, and it is also why this is cheaper than the
-                // version that scanned every border cell.
+                // The run's last live entry. No containment test anywhere: that
+                // is the whole point, and it is also why this is cheaper than
+                // the version that scanned every border cell. A marker that
+                // left empties its slot without moving the entries, so step
+                // back over those.
                 var last = at
                 while last + 1 < packed.count && packed[last + 1] < limit { last += 1 }
-                found.append(snapshot[Int(packed[last] & Self.indexMask)])
+                while last >= at {
+                    if let entity = snapshot[Int(packed[last] & Self.indexMask)] {
+                        found.append(entity)
+                        break
+                    }
+                    last -= 1
+                }
             }
         }
         return found
@@ -272,13 +385,21 @@ final class MarkerGridIndex<ActualMarker> {
         var at = lowerBound(key << shift)
         let limit = (key + 1) << shift
         while at < packed.count, packed[at] < limit {
-            body(snapshot[Int(packed[at] & Self.indexMask)])
+            if let entity = snapshot[Int(packed[at] & Self.indexMask)] { body(entity) }
             at += 1
         }
     }
 
     private func rebuildIfNeeded() {
-        guard dirty else { return }
+        if !dirty, emptySlots > Self.rebuildMinSlots, emptySlots * 2 > snapshot.count { dirty = true }
+        if dirty {
+            rebuild()
+        } else if !pending.isEmpty {
+            merge()
+        }
+    }
+
+    private func rebuild() {
         let entities = source()
         var keys = [Int64]()
         keys.reserveCapacity(entities.count)
@@ -288,7 +409,34 @@ final class MarkerGridIndex<ActualMarker> {
         keys.sort()
         snapshot = entities
         packed = keys
+        pending = []
+        emptySlots = 0
         dirty = false
+    }
+
+    /// Folds the markers that arrived into `packed`: sort those alone, then one
+    /// pass over both sorted runs. Entries whose slot was emptied are dropped on
+    /// the way, from either side.
+    private func merge() {
+        pending.sort()
+        var merged: [Int64] = []
+        merged.reserveCapacity(packed.count + pending.count)
+        var i = 0
+        var j = 0
+        while i < packed.count || j < pending.count {
+            let takeOld = j >= pending.count || (i < packed.count && packed[i] < pending[j])
+            let entry: Int64
+            if takeOld {
+                entry = packed[i]
+                i += 1
+            } else {
+                entry = pending[j]
+                j += 1
+            }
+            if snapshot[Int(entry & Self.indexMask)] != nil { merged.append(entry) }
+        }
+        packed = merged
+        pending.removeAll(keepingCapacity: true)
     }
 
     private func lowerBound(_ target: Int64) -> Int {

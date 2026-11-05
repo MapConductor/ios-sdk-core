@@ -286,4 +286,169 @@ final class MarkerGridIndexTests: XCTestCase {
         }
         XCTAssertEqual(nonEmpty, 7, "空の集合どうしを比べているだけになっている")
     }
+
+    /// Changes are applied to the built index, not rebuilt from the collection.
+    ///
+    /// The index is queried first so every change lands on a built index, and
+    /// the collection counts how often it is read: a rebuild reads it, applying
+    /// a change does not. After every kind of change the answers still have to
+    /// be a scan's — a slot left pointing at a marker that went, or an entry
+    /// left in the cell a marker moved out of, does not fail loudly; it returns
+    /// a marker that is not there.
+    ///
+    /// Pairs with android-sdk's `changesAreAppliedWithoutARebuild`.
+    func testChangesAreAppliedWithoutARebuild() {
+        var markers = scatter(count: 5000, latitude: 35.68, longitude: 139.76, spread: 0.6)
+        var reads = 0
+        let index = MarkerGridIndex<Int> {
+            reads += 1
+            return markers
+        }
+        let boxes = [
+            bounds(35.6812, 139.7612, 35.6814, 139.7614),
+            bounds(35.68, 139.76, 35.69, 139.77),
+            bounds(35.6, 139.6, 35.8, 139.9),
+            bounds(35.0, 139.0, 36.5, 140.5),
+        ]
+        let probes = [
+            GeoPoint(latitude: 35.68, longitude: 139.76),
+            GeoPoint(latitude: 35.5, longitude: 139.6),
+            GeoPoint(latitude: 35.9, longitude: 140.0),
+        ]
+
+        func cellOf(_ entity: MarkerEntity<Int>) -> String {
+            MarkerGrid.geocell(
+                latitude: entity.state.position.latitude,
+                longitude: entity.state.position.longitude,
+                characters: 9
+            )
+        }
+
+        func assertMatchesScan(_ label: String) {
+            // By identity: a replaced marker has the same id as the one it replaced.
+            let live = Set(markers.map(ObjectIdentifier.init))
+            for (at, box) in boxes.enumerated() {
+                let expected = ids(markers.filter { box.contains(point: $0.state.position) })
+                let found = index.inBounds(box)
+                XCTAssertEqual(ids(found), expected, "\(label), box \(at)")
+                XCTAssertEqual(found.count, expected.count, "\(label), box \(at): a marker twice")
+                XCTAssertTrue(found.allSatisfy { live.contains(ObjectIdentifier($0)) }, "\(label), box \(at): a replaced object")
+            }
+            for point in probes + markers.prefix(20).map(\.state.position) {
+                let best = markers.map { squared($0, point) }.min()!
+                XCTAssertEqual(index.nearest(position: point).map { squared($0, point) }, best, "\(label), nearest")
+            }
+            let box = bounds(35.60, 139.68, 35.76, 139.84)
+            guard let kept = index.inBoundsThinned(box, minSeparationDegrees: 0.005) else {
+                return XCTFail("\(label): thinning declined")
+            }
+            XCTAssertTrue(kept.allSatisfy { live.contains(ObjectIdentifier($0)) }, "\(label): thinning returned a marker that left")
+            let inside = Set(markers.filter { box.contains(point: $0.state.position) }.map(cellOf))
+            XCTAssertTrue(Set(kept.map(cellOf)).isSuperset(of: inside), "\(label): a populated cell went unrepresented")
+        }
+
+        assertMatchesScan("built")
+        XCTAssertEqual(reads, 1)
+
+        var seed: UInt64 = 99
+        func next() -> Double {
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Double(seed >> 11) / Double(UInt64(1) << 53)
+        }
+        func anywhere() -> GeoPoint {
+            GeoPoint(latitude: 35.38 + next() * 0.6, longitude: 139.46 + next() * 0.6)
+        }
+        var nextId = 10_000
+        for round in 0..<5 {
+            for _ in 0..<200 {
+                switch Int(next() * 5) {
+                case 0:
+                    // A new marker.
+                    let position = anywhere()
+                    let added = entity(nextId, position.latitude, position.longitude)
+                    nextId += 1
+                    markers.append(added)
+                    index.add(added)
+                case 1:
+                    // A marker leaves.
+                    let gone = markers.remove(at: Int(next() * Double(markers.count)))
+                    index.remove(gone)
+                case 2:
+                    // Replaced by a new object in the same place: an icon change.
+                    let at = Int(next() * Double(markers.count))
+                    let old = markers[at]
+                    let replacement = entity(Int(old.state.id)!, old.state.position.latitude, old.state.position.longitude)
+                    markers[at] = replacement
+                    index.replace(old, with: replacement)
+                case 3:
+                    // Replaced by a new object somewhere else.
+                    let at = Int(next() * Double(markers.count))
+                    let old = markers[at]
+                    let position = anywhere()
+                    let moved = entity(Int(old.state.id)!, position.latitude, position.longitude)
+                    markers[at] = moved
+                    index.replace(old, with: moved)
+                default:
+                    // Moved in place, as a drag does, then reported.
+                    let dragged = markers[Int(next() * Double(markers.count))]
+                    dragged.state.position = anywhere()
+                    index.replace(dragged, with: dragged)
+                }
+            }
+            assertMatchesScan("round \(round)")
+        }
+        XCTAssertEqual(reads, 1, "a change was applied by rebuilding")
+    }
+
+    /// A cell whose representative left is still represented.
+    ///
+    /// The thinned query takes the last entry of a cell's run. A marker that
+    /// leaves empties its slot but keeps its entry until the next merge, and
+    /// with nothing added since, there is no merge: the query has to step back
+    /// past it to the one before, or the cell drops out of the map.
+    func testThinnedQuerySkipsAMarkerThatLeft() {
+        let first = entity(0, 35.68, 139.76)
+        let second = entity(1, 35.68, 139.76)
+        var markers = [first, second]
+        let index = MarkerGridIndex<Int> { markers }
+        let box = bounds(35.67, 139.75, 35.69, 139.77)
+        XCTAssertEqual(index.inBoundsThinned(box, minSeparationDegrees: 0.01)?.map(ObjectIdentifier.init), [ObjectIdentifier(second)])
+
+        markers.removeLast()
+        index.remove(second)
+        XCTAssertEqual(index.inBoundsThinned(box, minSeparationDegrees: 0.01)?.map(ObjectIdentifier.init), [ObjectIdentifier(first)])
+    }
+
+    /// A marker the index cannot find makes it rebuild rather than trust itself.
+    func testRemovingAnUnknownMarkerRebuilds() {
+        let markers = scatter(count: 1000, latitude: 35.68, longitude: 139.76, spread: 0.6)
+        var reads = 0
+        let index = MarkerGridIndex<Int> {
+            reads += 1
+            return markers
+        }
+        let box = bounds(35.0, 139.0, 36.5, 140.5)
+        XCTAssertEqual(index.inBounds(box).count, markers.count)
+
+        index.remove(entity(99_999, 35.68, 139.76))
+        XCTAssertFalse(index.isBuilt)
+        XCTAssertEqual(index.inBounds(box).count, markers.count)
+        XCTAssertEqual(reads, 2)
+    }
+
+    /// Once half the slots are empty, a rebuild compacts them.
+    func testManyRemovalsCompactByRebuilding() {
+        var markers = scatter(count: 20_000, latitude: 35.68, longitude: 139.76, spread: 0.6)
+        var reads = 0
+        let index = MarkerGridIndex<Int> {
+            reads += 1
+            return markers
+        }
+        let box = bounds(35.0, 139.0, 36.5, 140.5)
+        _ = index.inBounds(box)
+
+        for _ in 0..<12_000 { index.remove(markers.removeLast()) }
+        XCTAssertEqual(ids(index.inBounds(box)), ids(markers))
+        XCTAssertEqual(reads, 2)
+    }
 }
