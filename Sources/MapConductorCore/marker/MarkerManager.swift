@@ -69,7 +69,7 @@ public final class MarkerManager<ActualMarker> {
         guard usableLocked("removeEntity") else { return nil }
         let removed = entities.removeValue(forKey: id)
         if let removed {
-            gridIndex.invalidate()
+            gridIndex.remove(removed)
         }
         return removed
     }
@@ -78,16 +78,24 @@ public final class MarkerManager<ActualMarker> {
         lock.lock()
         defer { lock.unlock() }
         guard usableLocked("registerEntity") else { return }
-        entities[entity.state.id] = entity
-        gridIndex.invalidate()
+        fileLocked(entities.updateValue(entity, forKey: entity.state.id), entity)
     }
 
     public func updateEntity(_ entity: MarkerEntity<ActualMarker>) {
         lock.lock()
         defer { lock.unlock() }
         guard usableLocked("updateEntity") else { return }
-        entities[entity.state.id] = entity
-        gridIndex.invalidate()
+        // A marker that moved changes which cell it belongs to.
+        fileLocked(entities.updateValue(entity, forKey: entity.state.id), entity)
+    }
+
+    /// Tells the index that `entity` took the place of `previous`, if there was one.
+    private func fileLocked(_ previous: MarkerEntity<ActualMarker>?, _ entity: MarkerEntity<ActualMarker>) {
+        if let previous {
+            gridIndex.replace(previous, with: entity)
+        } else {
+            gridIndex.add(entity)
+        }
     }
 
     public func metersPerPixel(
