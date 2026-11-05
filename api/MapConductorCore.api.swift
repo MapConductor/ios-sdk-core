@@ -1623,16 +1623,18 @@ final public class ColorDefaultIcon : MapConductorCore::MarkerIconProtocol {
   public static let defaultLabelTypeFace: UIKit::UIFont
   public static let defaultInfoAnchor: CoreFoundation::CGPoint
   public static let defaultLabelPosition: Swift::String
+  public static let defaultLabelWritingMode: Swift::String
   final public let scale: CoreFoundation::CGFloat
   final public let anchor: CoreFoundation::CGPoint
   final public let iconSize: CoreFoundation::CGFloat
   final public let infoAnchor: CoreFoundation::CGPoint
   final public let debug: Swift::Bool
   final public let labelPosition: Swift::String
-  public init(fillColor: UIKit::UIColor = defaultFillColor, strokeColor: UIKit::UIColor = defaultStrokeColor, strokeWidth: CoreFoundation::CGFloat = defaultStrokeWidth, scale: CoreFoundation::CGFloat = 1.0, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = defaultLabelTextColor, labelTextSize: CoreFoundation::CGFloat = defaultLabelTextSize, labelTypeFace: UIKit::UIFont = defaultLabelTypeFace, labelStrokeColor: UIKit::UIColor = defaultLabelStrokeColor, labelPosition: Swift::String = defaultLabelPosition, infoAnchor: CoreFoundation::CGPoint = defaultInfoAnchor, iconSize: CoreFoundation::CGFloat = defaultIconSize, debug: Swift::Bool = false)
+  final public let labelWritingMode: Swift::String
+  public init(fillColor: UIKit::UIColor = defaultFillColor, strokeColor: UIKit::UIColor = defaultStrokeColor, strokeWidth: CoreFoundation::CGFloat = defaultStrokeWidth, scale: CoreFoundation::CGFloat = 1.0, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = defaultLabelTextColor, labelTextSize: CoreFoundation::CGFloat = defaultLabelTextSize, labelTypeFace: UIKit::UIFont = defaultLabelTypeFace, labelStrokeColor: UIKit::UIColor = defaultLabelStrokeColor, labelPosition: Swift::String = defaultLabelPosition, labelWritingMode: Swift::String = defaultLabelWritingMode, infoAnchor: CoreFoundation::CGPoint = defaultInfoAnchor, iconSize: CoreFoundation::CGFloat = defaultIconSize, debug: Swift::Bool = false)
   final public func toBitmapIcon() -> MapConductorCore::BitmapIcon
   final public func hashCode() -> Swift::Int
-  final public func copy(fillColor: UIKit::UIColor? = nil, strokeColor: UIKit::UIColor? = nil, strokeWidth: CoreFoundation::CGFloat? = nil, scale: CoreFoundation::CGFloat? = nil, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = nil, labelTextSize: CoreFoundation::CGFloat? = nil, labelTypeFace: UIKit::UIFont? = nil, labelStrokeColor: UIKit::UIColor? = nil, labelPosition: Swift::String? = nil, iconSize: CoreFoundation::CGFloat? = nil, debug: Swift::Bool? = nil) -> MapConductorCore::ColorDefaultIcon
+  final public func copy(fillColor: UIKit::UIColor? = nil, strokeColor: UIKit::UIColor? = nil, strokeWidth: CoreFoundation::CGFloat? = nil, scale: CoreFoundation::CGFloat? = nil, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = nil, labelTextSize: CoreFoundation::CGFloat? = nil, labelTypeFace: UIKit::UIFont? = nil, labelStrokeColor: UIKit::UIColor? = nil, labelPosition: Swift::String? = nil, labelWritingMode: Swift::String? = nil, iconSize: CoreFoundation::CGFloat? = nil, debug: Swift::Bool? = nil) -> MapConductorCore::ColorDefaultIcon
   @objc deinit
 }
 public typealias DefaultMarkerIcon = MapConductorCore::ColorDefaultIcon
@@ -1708,10 +1710,17 @@ final public class ImageIcon : MapConductorCore::MarkerIconProtocol {
   final public let anchor: CoreFoundation::CGPoint
   final public let infoAnchor: CoreFoundation::CGPoint
   final public let debug: Swift::Bool
-  public init(image: UIKit::UIImage, iconSize: CoreFoundation::CGFloat = defaultIconSize, scale: CoreFoundation::CGFloat = 1.0, anchor: CoreFoundation::CGPoint = defaultAnchor, infoAnchor: CoreFoundation::CGPoint = defaultInfoAnchor, debug: Swift::Bool = false)
+  final public let label: Swift::String?
+  final public let labelTextColor: UIKit::UIColor?
+  final public let labelTextSize: CoreFoundation::CGFloat
+  final public let labelTypeFace: UIKit::UIFont
+  final public let labelStrokeColor: UIKit::UIColor
+  final public let labelPosition: Swift::String
+  final public let labelWritingMode: Swift::String
+  public init(image: UIKit::UIImage, iconSize: CoreFoundation::CGFloat = defaultIconSize, scale: CoreFoundation::CGFloat = 1.0, anchor: CoreFoundation::CGPoint = defaultAnchor, infoAnchor: CoreFoundation::CGPoint = defaultInfoAnchor, debug: Swift::Bool = false, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = ColorDefaultIcon.defaultLabelTextColor, labelTextSize: CoreFoundation::CGFloat = ColorDefaultIcon.defaultLabelTextSize, labelTypeFace: UIKit::UIFont = ColorDefaultIcon.defaultLabelTypeFace, labelStrokeColor: UIKit::UIColor = ColorDefaultIcon.defaultLabelStrokeColor, labelPosition: Swift::String = ColorDefaultIcon.defaultLabelPosition, labelWritingMode: Swift::String = ColorDefaultIcon.defaultLabelWritingMode)
   final public func toBitmapIcon() -> MapConductorCore::BitmapIcon
   final public func hashCode() -> Swift::Int
-  final public func copy(image: UIKit::UIImage? = nil, iconSize: CoreFoundation::CGFloat? = nil, scale: CoreFoundation::CGFloat? = nil, anchor: CoreFoundation::CGPoint? = nil, infoAnchor: CoreFoundation::CGPoint? = nil, debug: Swift::Bool? = nil) -> MapConductorCore::ImageIcon
+  final public func copy(image: UIKit::UIImage? = nil, iconSize: CoreFoundation::CGFloat? = nil, scale: CoreFoundation::CGFloat? = nil, anchor: CoreFoundation::CGPoint? = nil, infoAnchor: CoreFoundation::CGPoint? = nil, debug: Swift::Bool? = nil, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = nil, labelTextSize: CoreFoundation::CGFloat? = nil, labelTypeFace: UIKit::UIFont? = nil, labelStrokeColor: UIKit::UIColor? = nil, labelPosition: Swift::String? = nil, labelWritingMode: Swift::String? = nil) -> MapConductorCore::ImageIcon
   @objc deinit
 }
 public struct MarkerAnimationOverlayEntry {

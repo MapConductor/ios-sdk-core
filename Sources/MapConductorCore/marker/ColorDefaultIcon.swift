@@ -3,7 +3,7 @@ import UIKit
 
 /// 単色で塗る既定アイコン（カラーフィル版の DefaultIcon）。
 /// `DefaultMarkerIcon` はこれの別名。
-public final class ColorDefaultIcon: MarkerIconProtocol {
+public final class ColorDefaultIcon: MarkerIconProtocol, TileLabelledIcon {
     public static let defaultIconSize: CGFloat = Settings.Default.iconSize
     public static let defaultStrokeWidth: CGFloat = Settings.Default.iconStroke
     public static let defaultFillColor: UIColor = .red
@@ -15,6 +15,8 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
     public static let defaultInfoAnchor = CGPoint(x: 0.5, y: 0.0)
     /// ラベルの既定位置。ピンの頭に重ねる（従来どおり）。書き方は `labelPosition` を参照。
     public static let defaultLabelPosition = "center center"
+    /// ラベルの既定の書字方向。横書き。書き方は `labelWritingMode` を参照。
+    public static let defaultLabelWritingMode = LabelTypesetter.horizontal
 
 
     public let scale: CGFloat
@@ -37,9 +39,20 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
     /// - left / right はピンの外側に置き、縦はピンの上端・上端と先端の中間・先端に揃える。
     /// - center 列の top / bottom はピンの上・下の外側に置く。
     public let labelPosition: String
+    /// ラベルの書字方向。CSS の `writing-mode` と同じ書き方で、`horizontal-tb`（既定）か
+    /// `vertical-rl` / `vertical-lr`（縦書き）。縦書きは 1 文字ぶんの幅で縦に並ぶので、
+    /// 横に詰まって並ぶ点にも名前を付けやすい。
+    public let labelWritingMode: String
     /// 指定された infoAnchor（ピン本体に対する割合）。`infoAnchor` はビットマップに対する割合へ直した値。
     private let requestedInfoAnchor: CGPoint
-    private let bitmapIcon: BitmapIcon
+    private let layout: DefaultIconLayout
+    private let labelFont: UIFont
+    private let outlineStrokeWidth: CGFloat
+    private let labelSize: CGSize
+    /// 焼き込みのビットマップ。ネイティブマーカーとして使われたときに初めて作る。
+    private let bitmapIcon: LazyBox<BitmapIcon>
+    /// ラベルを除いたピン。タイル描画が使う。
+    private let body: LazyBox<BitmapIcon>
 
     public init(
         fillColor: UIColor = defaultFillColor,
@@ -52,6 +65,7 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
         labelTypeFace: UIFont = defaultLabelTypeFace,
         labelStrokeColor: UIColor = defaultLabelStrokeColor,
         labelPosition: String = defaultLabelPosition,
+        labelWritingMode: String = defaultLabelWritingMode,
         infoAnchor: CGPoint = defaultInfoAnchor,
         iconSize: CGFloat = defaultIconSize,
         debug: Bool = false
@@ -66,32 +80,137 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
         self.labelTypeFace = labelTypeFace
         self.labelStrokeColor = labelStrokeColor
         self.labelPosition = labelPosition
+        self.labelWritingMode = labelWritingMode
         self.requestedInfoAnchor = infoAnchor
         self.iconSize = iconSize
         self.debug = debug
-        let bitmapIcon = ColorDefaultIcon.makeIcon(
+        // 配置は文字の幅を測るだけなので、ここで済ませる。画像は作らない。
+        let canvasSize = iconSize * scale
+        let font = labelTypeFace.withSize(labelTextSize)
+        let outline = max(1.0 * scale, 2.0)
+        let vertical = LabelTypesetter.isVertical(labelWritingMode)
+        let labelSize = label.map {
+            ColorDefaultIcon.measureLabel($0, font: font, strokeWidth: outline, vertical: vertical)
+        } ?? .zero
+        let layout = DefaultIconLayout.make(
+            canvasSize: canvasSize,
+            iconScale: scale,
+            strokeWidth: strokeWidth,
+            labelSize: labelSize,
+            outlineStrokeWidth: outline,
+            labelPosition: labelPosition
+        )
+        self.layout = layout
+        self.labelFont = font
+        self.outlineStrokeWidth = outline
+        self.labelSize = labelSize
+        // ラベルを横や上に置くとビットマップが片側へ伸びるので、どちらもレイアウトから求めた値を使う。
+        self.anchor = layout.anchor
+        self.infoAnchor = layout.infoAnchor(for: infoAnchor)
+        if labelSize != .zero {
+            LabelledIconExtent.note(size: CGSize(width: layout.bitmapWidth, height: layout.bitmapHeight), anchor: layout.anchor)
+        }
+        self.bitmapIcon = LazyBox {
+            ColorDefaultIcon.makeIcon(
+                iconSize: iconSize,
+                scale: scale,
+                fillColor: fillColor,
+                strokeColor: strokeColor,
+                strokeWidth: strokeWidth,
+                label: label,
+                labelTextColor: labelTextColor,
+                labelTextSize: labelTextSize,
+                labelTypeFace: labelTypeFace,
+                labelStrokeColor: labelStrokeColor,
+                labelPosition: labelPosition,
+                labelWritingMode: labelWritingMode,
+                infoAnchor: infoAnchor,
+                debug: debug
+            )
+        }
+        self.body = LazyBox {
+            ColorDefaultIcon.sharedBody(
+                iconSize: iconSize,
+                scale: scale,
+                fillColor: fillColor,
+                strokeColor: strokeColor,
+                strokeWidth: strokeWidth,
+                infoAnchor: infoAnchor,
+                debug: debug
+            )
+        }
+    }
+
+    public func toBitmapIcon() -> BitmapIcon {
+        bitmapIcon.get()
+    }
+
+    var tileBody: BitmapIcon { body.get() }
+
+    var tileLabel: MarkerTileLabel? {
+        guard let label, labelSize != .zero else { return nil }
+        let anchorX = layout.anchor.x * layout.bitmapWidth
+        let anchorY = layout.anchor.y * layout.bitmapHeight
+        return MarkerTileLabel(
+            text: label,
+            font: labelFont,
+            textColor: labelTextColor ?? Self.defaultLabelTextColor,
+            strokeColor: labelStrokeColor,
+            outlineStrokeWidth: outlineStrokeWidth,
+            centerOffset: CGPoint(x: layout.labelCenter.x - anchorX, y: layout.labelCenter.y - anchorY),
+            size: labelSize,
+            vertical: LabelTypesetter.isVertical(labelWritingMode)
+        )
+    }
+
+    var layoutSize: CGSize { CGSize(width: layout.bitmapWidth, height: layout.bitmapHeight) }
+
+    /// ラベルを除いたピン。色や大きさが同じなら、ラベルの違うアイコンの間で 1 枚を共有する。
+    private static var bodies: [String: BitmapIcon] = [:]
+    private static let bodiesLock = NSLock()
+
+    private static func sharedBody(
+        iconSize: CGFloat,
+        scale: CGFloat,
+        fillColor: UIColor,
+        strokeColor: UIColor,
+        strokeWidth: CGFloat,
+        infoAnchor: CGPoint,
+        debug: Bool
+    ) -> BitmapIcon {
+        func rgba(_ color: UIColor) -> String {
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            color.getRed(&r, green: &g, blue: &b, alpha: &a)
+            return "\(r),\(g),\(b),\(a)"
+        }
+        let key = [rgba(fillColor), rgba(strokeColor), "\(strokeWidth)", "\(scale)", "\(iconSize)",
+                   "\(infoAnchor.x),\(infoAnchor.y)", "\(debug)"].joined(separator: "|")
+        bodiesLock.lock()
+        if let cached = bodies[key] {
+            bodiesLock.unlock()
+            return cached
+        }
+        bodiesLock.unlock()
+        let made = makeIcon(
             iconSize: iconSize,
             scale: scale,
             fillColor: fillColor,
             strokeColor: strokeColor,
             strokeWidth: strokeWidth,
-            label: label,
-            labelTextColor: labelTextColor,
-            labelTextSize: labelTextSize,
-            labelTypeFace: labelTypeFace,
-            labelStrokeColor: labelStrokeColor,
-            labelPosition: labelPosition,
+            label: nil,
+            labelTextColor: nil,
+            labelTextSize: defaultLabelTextSize,
+            labelTypeFace: defaultLabelTypeFace,
+            labelStrokeColor: defaultLabelStrokeColor,
+            labelPosition: defaultLabelPosition,
             infoAnchor: infoAnchor,
             debug: debug
         )
-        // ラベルを横や上に置くとビットマップが片側へ伸びるので、どちらもレイアウトから求めた値を使う。
-        self.anchor = bitmapIcon.anchor
-        self.infoAnchor = bitmapIcon.infoAnchor
-        self.bitmapIcon = bitmapIcon
-    }
-
-    public func toBitmapIcon() -> BitmapIcon {
-        bitmapIcon
+        bodiesLock.lock()
+        defer { bodiesLock.unlock() }
+        if let raced = bodies[key] { return raced }
+        bodies[key] = made
+        return made
     }
 
     public func hashCode() -> Int {
@@ -105,6 +224,7 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
         result = result &* 31 &+ labelTypeFace.hashValue
         result = result &* 31 &+ labelStrokeColor.hashValue
         result = result &* 31 &+ labelPosition.hashValue
+        result = result &* 31 &+ labelWritingMode.hashValue
         result = result &* 31 &+ requestedInfoAnchor.x.hashValue
         result = result &* 31 &+ requestedInfoAnchor.y.hashValue
         result = result &* 31 &+ iconSize.hashValue
@@ -123,6 +243,7 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
         labelTypeFace: UIFont? = nil,
         labelStrokeColor: UIColor? = nil,
         labelPosition: String? = nil,
+        labelWritingMode: String? = nil,
         iconSize: CGFloat? = nil,
         debug: Bool? = nil
     ) -> ColorDefaultIcon {
@@ -137,6 +258,7 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
             labelTypeFace: labelTypeFace ?? self.labelTypeFace,
             labelStrokeColor: labelStrokeColor ?? self.labelStrokeColor,
             labelPosition: labelPosition ?? self.labelPosition,
+            labelWritingMode: labelWritingMode ?? self.labelWritingMode,
             infoAnchor: self.requestedInfoAnchor,
             iconSize: iconSize ?? self.iconSize,
             debug: debug ?? self.debug
@@ -155,6 +277,7 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
         labelTypeFace: UIFont,
         labelStrokeColor: UIColor,
         labelPosition: String,
+        labelWritingMode: String = defaultLabelWritingMode,
         infoAnchor: CGPoint,
         debug: Bool
     ) -> BitmapIcon {
@@ -162,9 +285,10 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
         let resolvedFont = labelTypeFace.withSize(labelTextSize)
         let outlineStrokeWidth = max(1.0 * scale, 2.0)
 
+        let vertical = LabelTypesetter.isVertical(labelWritingMode)
         var labelSize: CGSize = .zero
         if let label {
-            labelSize = measureLabel(label, font: resolvedFont, strokeWidth: outlineStrokeWidth)
+            labelSize = measureLabel(label, font: resolvedFont, strokeWidth: outlineStrokeWidth, vertical: vertical)
         }
 
         let layout = DefaultIconLayout.make(
@@ -217,7 +341,8 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
                     center: layout.labelCenter,
                     bitmapHeight: bitmapHeight,
                     outlineStrokeWidth: outlineStrokeWidth,
-                    pixelScale: format.scale
+                    pixelScale: format.scale,
+                    vertical: vertical
                 )
             }
         }
@@ -231,18 +356,17 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
         )
     }
 
-    internal static func measureLabel(_ label: String, font: UIFont, strokeWidth: CGFloat) -> CGSize {
-        let attributes: [NSAttributedString.Key: Any] = [.font: font]
-        let line = CTLineCreateWithAttributedString(NSAttributedString(string: label, attributes: attributes))
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-        var leading: CGFloat = 0
-        let width = CGFloat(CTLineGetTypographicBounds(line, &ascent, &descent, &leading))
-        let height = ascent + descent
-        let padding = strokeWidth * 2.0
-        return CGSize(width: width + padding, height: height + padding)
+    internal static func measureLabel(
+        _ label: String,
+        font: UIFont,
+        strokeWidth: CGFloat,
+        vertical: Bool = false
+    ) -> CGSize {
+        LabelTypesetter.measure(label, font: font, strokeWidth: strokeWidth, vertical: vertical)
     }
 
+    /// 焼き込みのビットマップ（上が原点）に、`center` を中心にラベルを描く。
+    /// 文字の組み方はタイル描画と同じ ``LabelTypesetter``。
     internal static func drawLabel(
         context: CGContext,
         labelText: String,
@@ -250,65 +374,23 @@ public final class ColorDefaultIcon: MarkerIconProtocol {
         labelTextColor: UIColor,
         labelStrokeColor: UIColor,
         center: CGPoint,
-        bitmapHeight: CGFloat,
+        bitmapHeight _: CGFloat,
         outlineStrokeWidth: CGFloat,
-        pixelScale: CGFloat
+        pixelScale: CGFloat,
+        vertical: Bool = false
     ) {
-        // DefaultIconLayout が決めたラベルの中心。既定ではマーカーの円形部分の中心。
-        let markerCenterX = center.x
-        let markerCenterY = center.y
-
-        let baseAttributes: [NSAttributedString.Key: Any] = [.font: labelFont]
-        let baseLine = CTLineCreateWithAttributedString(NSAttributedString(string: labelText, attributes: baseAttributes))
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-        var leading: CGFloat = 0
-        let lineWidth = CGFloat(CTLineGetTypographicBounds(baseLine, &ascent, &descent, &leading))
-        let baselineY = markerCenterY + (ascent - descent) / 2.0
-
-        let drawX = alignToPixel(markerCenterX - lineWidth / 2.0, scale: pixelScale)
-        let drawBaselineY = alignToPixel(baselineY, scale: pixelScale)
-        let strokePercent = (outlineStrokeWidth / max(labelFont.pointSize, 1.0)) * 100.0
-
-        context.saveGState()
-        context.textMatrix = .identity
-        context.setLineJoin(.round)
-        context.setLineCap(.round)
-        context.setShouldAntialias(true)
-        context.setAllowsFontSmoothing(true)
-        context.setShouldSmoothFonts(true)
-        context.setAllowsFontSubpixelPositioning(false)
-        context.setShouldSubpixelPositionFonts(false)
-
-        context.translateBy(x: 0, y: bitmapHeight)
-        context.scaleBy(x: 1.0, y: -1.0)
-
-        let flippedBaselineY = bitmapHeight - drawBaselineY
-        context.textPosition = CGPoint(x: drawX, y: flippedBaselineY)
-
-        let strokeAttributes: [NSAttributedString.Key: Any] = [
-            .font: labelFont,
-            .strokeColor: labelStrokeColor,
-            .strokeWidth: strokePercent,
-            .foregroundColor: labelStrokeColor
-        ]
-        let fillAttributes: [NSAttributedString.Key: Any] = [
-            .font: labelFont,
-            .foregroundColor: labelTextColor
-        ]
-
-        let strokeLine = CTLineCreateWithAttributedString(
-            NSAttributedString(string: labelText, attributes: strokeAttributes)
+        LabelTypesetter.draw(
+            labelText,
+            in: context,
+            centerX: center.x,
+            centerY: center.y,
+            font: labelFont,
+            textColor: labelTextColor,
+            strokeColor: labelStrokeColor,
+            outlineStrokeWidth: outlineStrokeWidth,
+            vertical: vertical,
+            pixelScale: pixelScale
         )
-        CTLineDraw(strokeLine, context)
-
-        context.textPosition = CGPoint(x: drawX, y: flippedBaselineY)
-        let fillLine = CTLineCreateWithAttributedString(
-            NSAttributedString(string: labelText, attributes: fillAttributes)
-        )
-        CTLineDraw(fillLine, context)
-
-        context.restoreGState()
     }
 
     internal static func alignToPixel(_ value: CGFloat, scale: CGFloat) -> CGFloat {
@@ -497,6 +579,49 @@ struct DefaultIconLayout {
     ) -> DefaultIconLayout {
         // 円形部分の中心
         let headCenterY = canvasSize * 0.35
+        // ピンの見えている輪郭（設計座標で x: 4〜20, y: 0〜24）。外接箱より細いので、
+        // ラベルを横に置くときはこちらに沿わせる。
+        let metrics = DefaultMarkerIcon.markerPathMetrics(
+            canvasSize: canvasSize,
+            iconScale: iconScale,
+            strokeWidth: strokeWidth
+        )
+        let s = metrics.markerScale
+        let body = CGRect(
+            x: metrics.offsetX + 4.0 * s,
+            y: metrics.offsetY,
+            width: 16.0 * s,
+            height: 24.0 * s
+        )
+        return make(
+            canvasSize: canvasSize,
+            body: body,
+            centerY: headCenterY,
+            // 横に置くときの縦の中央は、ピンの上端と先端の中間。頭の中心にすると、
+            // ピン全体の中央より上に見える。
+            sideCenterY: body.midY,
+            labelSize: labelSize,
+            outlineStrokeWidth: outlineStrokeWidth,
+            labelPosition: labelPosition
+        )
+    }
+
+    /// 本体の形によらない配置。既定のピンと画像アイコンで共通。
+    ///
+    /// - `body`: ラベルを避けて置く、本体の描かれている範囲（本体の左上を原点とする）。
+    /// - `centerY`: `center center` のときのラベルの縦位置。
+    /// - `sideCenterY`: 左右に置き、縦を指定しないときのラベルの縦位置。
+    ///
+    /// react-sdk の `computeIconLabelLayout` と同じ計算。
+    static func make(
+        canvasSize: CGFloat,
+        body: CGRect,
+        centerY: CGFloat,
+        sideCenterY: CGFloat,
+        labelSize: CGSize,
+        outlineStrokeWidth: CGFloat,
+        labelPosition: String
+    ) -> DefaultIconLayout {
         let padding = canvasSize * 0.1
 
         guard labelSize != .zero else {
@@ -506,23 +631,11 @@ struct DefaultIconLayout {
                 bitmapHeight: canvasSize,
                 markerOffsetX: 0,
                 markerOffsetY: 0,
-                labelCenter: CGPoint(x: canvasSize / 2.0, y: headCenterY)
+                labelCenter: CGPoint(x: canvasSize / 2.0, y: centerY)
             )
         }
 
         let (h, v) = parseLabelPosition(labelPosition)
-        // ピンの見えている輪郭（設計座標で x: 4〜20, y: 0〜24）。外接箱より細いので、
-        // ラベルを横に置くときはこちらに沿わせる。
-        let metrics = DefaultMarkerIcon.markerPathMetrics(
-            canvasSize: canvasSize,
-            iconScale: iconScale,
-            strokeWidth: strokeWidth
-        )
-        let s = metrics.markerScale
-        let pinLeft = metrics.offsetX + 4.0 * s
-        let pinRight = metrics.offsetX + 20.0 * s
-        let pinTop = metrics.offsetY
-        let pinBottom = metrics.offsetY + 24.0 * s
         let gap = max(outlineStrokeWidth, canvasSize * 0.05)
         let labelWidth = labelSize.width
         let labelHeight = labelSize.height
@@ -530,24 +643,23 @@ struct DefaultIconLayout {
         // マーカー本体の左上を原点とした座標でラベルの中心を決める。
         let cx: CGFloat
         if h < 0 {
-            cx = pinLeft - gap - labelWidth / 2.0
+            cx = body.minX - gap - labelWidth / 2.0
         } else if h > 0 {
-            cx = pinRight + gap + labelWidth / 2.0
+            cx = body.maxX + gap + labelWidth / 2.0
         } else {
             cx = canvasSize / 2.0
         }
 
-        var cy = headCenterY
+        var cy = centerY
         if h != 0 {
-            // 横に置くときは、縦はピンの上端・上端と先端の中間・先端に揃える。
-            // center を頭の中心にすると、ピン全体の中央より上に見える。
-            if v < 0 { cy = pinTop + labelHeight / 2.0 }
-            if v > 0 { cy = pinBottom - labelHeight / 2.0 }
-            if v == 0 { cy = (pinTop + pinBottom) / 2.0 }
+            // 横に置くときは、縦は本体の上端・指定の中心・下端に揃える。
+            cy = sideCenterY
+            if v < 0 { cy = body.minY + labelHeight / 2.0 }
+            if v > 0 { cy = body.maxY - labelHeight / 2.0 }
         } else {
-            // 中央列の top / bottom はピンと重ならないよう上下の外側に置く。
-            if v < 0 { cy = pinTop - gap - labelHeight / 2.0 }
-            if v > 0 { cy = pinBottom + gap + labelHeight / 2.0 }
+            // 中央列の top / bottom は本体と重ならないよう上下の外側に置く。
+            if v < 0 { cy = body.minY - gap - labelHeight / 2.0 }
+            if v > 0 { cy = body.maxY + gap + labelHeight / 2.0 }
         }
 
         let bitmapWidth: CGFloat

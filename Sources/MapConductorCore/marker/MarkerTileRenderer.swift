@@ -45,6 +45,15 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
     /// costs one extra pass on one tile, which is the very thing it avoids.
     private var observedHalfExtentPx: Double
 
+    /// ズームごとの、アイコンに掛かった倍率の最大（`iconScaleCallback` × `extraIconScale`）。
+    /// ``LabelledIconExtent`` の pt を px へ直すのに使う。
+    private let scaleLock = NSLock()
+    private var maxScaleByZoom: [Int: Double] = [:]
+    /// 倍率をまだ見ていないズームで `iconScaleCallback` に渡す見本。どこかのズームで描いた
+    /// マーカーを 1 つ覚えておく。一斉に描き直すとき、そのズームの最初のタイルたちは
+    /// 倍率を誰も記録していないので、これが無いと育っていない値で探すことになる。
+    private var sampleState: MarkerState?
+
     private let defaultIcon: BitmapIcon
 
     public init(
@@ -123,16 +132,26 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
             guard markerIds.contains(entity.state.id),
                   entity.state.clickable,
                   let markerPoint = project(entity.state.position) else { continue }
-            let icon = entity.state.icon?.toBitmapIcon() ?? defaultIcon
+            // ラベル込みの全体の矩形。分けて渡せるアイコンは、焼き込みを作らずに大きさが分かる。
+            let size: CGSize
+            let anchor: CGPoint
+            if let labelled = entity.state.icon as? TileLabelledIcon {
+                size = labelled.layoutSize
+                anchor = labelled.anchor
+            } else {
+                let icon = entity.state.icon?.toBitmapIcon() ?? defaultIcon
+                size = icon.size
+                anchor = icon.anchor
+            }
             let callbackScale = max(iconScaleCallback?(entity.state, zoom) ?? 1, 0)
             let scale = CGFloat(callbackScale * extraIconScale) / max(renderScaleToScreenScale, 1)
             states.append(entity.state)
             rects.append(
                 MarkerHitTest.ScreenRect(
                     anchorScreen: markerPoint,
-                    width: max(icon.size.width * scale, 1),
-                    height: max(icon.size.height * scale, 1),
-                    anchor: icon.anchor
+                    width: max(size.width * scale, 1),
+                    height: max(size.height * scale, 1),
+                    anchor: anchor
                 )
             )
         }
@@ -181,7 +200,7 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
             southWest: GeoPoint(latitude: se.latitude, longitude: nw.longitude),
             northEast: GeoPoint(latitude: nw.latitude, longitude: se.longitude)
         )
-        return queryByHalfExtentPx(observedHalfExtentPx, bounds: bounds, tilePx: Double(tileSize))
+        return queryByHalfExtentPx(queryHalfExtentPx(zoom: z), bounds: bounds, tilePx: Double(tileSize))
             .isEmpty
     }
 
@@ -221,7 +240,7 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         // Left fixed, the "conservative first pass" never pays off — real icons
         // are larger than the guess — and the query and prepare passes simply
         // run twice for every tile.
-        let assumedHalfExtentPx: Double = observedHalfExtentPx
+        let assumedHalfExtentPx: Double = queryHalfExtentPx(zoom: z)
         let phaseStart = Self.tracePhases ? Self.now() : 0
         var entities = queryByHalfExtentPx(assumedHalfExtentPx, bounds: bounds, tilePx: tilePx)
         var queryMs = Self.tracePhases ? Self.since(phaseStart) : 0
@@ -424,6 +443,15 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
             for (index, group) in groups.enumerated() {
                 guard let group else { continue }
                 if let current = lastAt[group] {
+                    // ラベル付きを先に残す。ラベルは利用者が「この木の名前を見せたい」と
+                    // 選んだもので、同じマス目の点のどれかと入れ替えてよいものではない。
+                    // マーカーの属性だけで決まるので、隣のタイルとも答えは食い違わない。
+                    let labelledA = prepared.markers[index].label != nil
+                    let labelledB = prepared.markers[current].label != nil
+                    if labelledA != labelledB {
+                        if labelledA { lastAt[group] = index }
+                        continue
+                    }
                     let a = worldKeys[index]
                     let b = worldKeys[current]
                     let iconA = UInt(bitPattern: placements[index]!.icon.hashValue)
@@ -444,17 +472,53 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         // 残すものだけ先に集める。GPU 経路はこれをそのままインスタンスにする。
         var kept: [(placement: MarkerPlacement, bitmap: CGImage)] = []
         kept.reserveCapacity(lastAt.count)
+        var keptLabels: [KeptLabel] = []
         for (index, placement) in placements.enumerated() {
             guard let placement, let group = groups[index], let bitmap = images[index] else { continue }
             guard lastAt[group] == index else { continue }
             kept.append((placement, bitmap))
+            let m = prepared.markers[index]
+            if let label = m.label {
+                keptLabels.append(KeptLabel(
+                    label: label,
+                    anchorX: m.centerNormX * tilePx + Double(paddingPx),
+                    anchorY: m.centerNormY * tilePx + Double(paddingPx),
+                    scale: m.drawScale
+                ))
+            }
+        }
+        let tileSide = self.tileSize
+        // 文字は本体をすべて描いたあと。ほかの点の下に字が隠れない。
+        let drawLabels: ((CGContext) -> Void)? = keptLabels.isEmpty ? nil : { context in
+            for kept in keptLabels {
+                kept.label.draw(
+                    in: context,
+                    centerX: CGFloat(kept.anchorX + Double(kept.label.centerOffset.x) * kept.scale),
+                    centerY: CGFloat(kept.anchorY + Double(kept.label.centerOffset.y) * kept.scale),
+                    scale: CGFloat(kept.scale)
+                )
+            }
         }
 
         // GPU で描けたらそれを使う。描けなければ下の CPU 経路へ落ちる --
         // Metal が無い端末、アトラスに収まらない絵、パイプラインを拒む環境。
         if !debugTileOverlay,
            let gpu = gpuRasterizer(),
-           let png = Self.renderOnGpu(gpu, kept: kept, paddingPx: paddingPx) {
+           let png = Self.renderOnGpu(gpu, kept: kept, paddingPx: paddingPx, overlay: drawLabels.map { draw in
+               { pixels in
+                   // CPU 経路と同じ向きの context を読み戻した画素に被せて、文字を足す。
+                   guard let context = CGContext(
+                       data: pixels, width: tileSide, height: tileSide,
+                       bitsPerComponent: 8, bytesPerRow: tileSide * 4,
+                       space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                   ) else { return }
+                   context.translateBy(x: 0, y: CGFloat(tileSide))
+                   context.scaleBy(x: 1, y: -1)
+                   context.translateBy(x: CGFloat(-paddingPx), y: CGFloat(-paddingPx))
+                   draw(context)
+               }
+           }) {
             if Self.tracePhases {
                 print(String(format: "MARKERTILE_PHASES z=%d markers=%d passes=%d query=%.1fms prepare=%.1fms gpuDraw=%.1fms",
                              z, prepared.markers.count, passes, queryMs, prepareMs, Self.since(drawStart)))
@@ -480,6 +544,7 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
                                             height: CGFloat(placement.height)))
             context.restoreGState()
         }
+        drawLabels?(context)
 
         let drawMs = Self.tracePhases ? Self.since(drawStart) : 0
         let encodeStart = Self.tracePhases ? Self.now() : 0
@@ -524,6 +589,18 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         let drawW: CGFloat
         let drawH: CGFloat
         let anchor: CGPoint
+        /// 本体とは別にタイルへ直接描くラベル。`TileLabelledIcon` のときだけ。
+        let label: MarkerTileLabel?
+        /// 本体の描画倍率。ラベルにも同じ倍率を掛ける。
+        let drawScale: Double
+    }
+
+    /// 残ったマーカーのラベル。本体をすべて描いたあとで描く。
+    private struct KeptLabel {
+        let label: MarkerTileLabel
+        let anchorX: Double
+        let anchorY: Double
+        let scale: Double
     }
 
     private struct PreparedResult {
@@ -565,7 +642,8 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
     private static func renderOnGpu(
         _ gpu: MetalMarkerRasterizer,
         kept: [(placement: MarkerPlacement, bitmap: CGImage)],
-        paddingPx: Int
+        paddingPx: Int,
+        overlay: ((UnsafeMutableRawPointer) -> Void)?
     ) -> Data? {
         guard !kept.isEmpty else { return nil }
         let atlasStart = tracePhases ? now() : 0
@@ -607,7 +685,7 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         // 削るかで打ち手が違う。
         let atlasMs = tracePhases ? since(atlasStart) : 0
         let drawStart = tracePhases ? now() : 0
-        let png = gpu.renderPng(instances: instances, atlas: atlas.texture, paddingPx: paddingPx)
+        let png = gpu.renderPng(instances: instances, atlas: atlas.texture, paddingPx: paddingPx, overlay: overlay)
         if tracePhases {
             print(String(format: "MARKERTILE_GPU kept=%d icons=%d atlas=%.1fms drawEncode=%.1fms",
                          kept.count, uniqueImages.count, atlasMs, since(drawStart)))
@@ -627,7 +705,11 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
         markers.reserveCapacity(entities.count)
 
         for entity in entities {
-            let icon = (entity.state.icon?.toBitmapIcon() ?? defaultIcon)
+            // 本体とラベルを分けて渡せるアイコンは、ラベルを焼き込んだ画像を作らせない。
+            // 本体だけをアトラスに入れ、文字はタイルに直接描く（`MarkerTileLabel`）。
+            let labelled = entity.state.icon as? TileLabelledIcon
+            let icon = labelled?.tileBody ?? (entity.state.icon?.toBitmapIcon() ?? defaultIcon)
+            let label = labelled?.tileLabel
             let pos = entity.state.position
             let tilePoint = geoToTilePoint(longitude: pos.longitude, latitude: pos.latitude, zoom: zoom)
             let centerNormX = tilePoint.x - tileX
@@ -637,13 +719,21 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
             // icon.size already includes MarkerIconProtocol.scale (baked into the
             // bitmap by toBitmapIcon), so it must not be applied again here.
             let scale = max(callbackScale, 0.0) * self.extraIconScale
+            noteScale(scale, zoom: zoom, state: entity.state)
             let drawW = max(Double(icon.size.width) * scale, 1.0)
             let drawH = max(Double(icon.size.height) * scale, 1.0)
 
             let anchorX = Double(icon.anchor.x)
             let anchorY = Double(icon.anchor.y)
-            let halfX = max(abs(drawW * anchorX), abs(drawW * (1.0 - anchorX)))
-            let halfY = max(abs(drawH * anchorY), abs(drawH * (1.0 - anchorY)))
+            var halfX = max(abs(drawW * anchorX), abs(drawW * (1.0 - anchorX)))
+            var halfY = max(abs(drawH * anchorY), abs(drawH * (1.0 - anchorY)))
+            if let label {
+                // ラベルもはみ出しに数える。境界をまたぐ文字を隣のタイルも描くため。
+                let dx = abs(Double(label.centerOffset.x)) + Double(label.size.width) / 2
+                let dy = abs(Double(label.centerOffset.y)) + Double(label.size.height) / 2
+                halfX = max(halfX, dx * scale)
+                halfY = max(halfY, dy * scale)
+            }
             maxHalfExtentPx = max(maxHalfExtentPx, max(halfX, halfY))
 
             markers.append(PreparedMarker(
@@ -652,11 +742,42 @@ public final class MarkerTileRenderer<ActualMarker>: TileProvider {
                 centerNormY: centerNormY,
                 drawW: CGFloat(drawW),
                 drawH: CGFloat(drawH),
-                anchor: icon.anchor
+                anchor: icon.anchor,
+                label: label,
+                drawScale: scale
             ))
         }
 
         return PreparedResult(markers: markers, maxHalfExtentPx: maxHalfExtentPx)
+    }
+
+    /// 探す範囲に使う、はみ出し量（px）。
+    ///
+    /// `observedHalfExtentPx` は「これまでに描いたタイルで見た最大」なので、ラベルを付けた
+    /// 直後に全タイルが一斉に描き直されると、まだ育っていない値で探すタイルが出る。
+    /// そのタイルに自分のマーカーが無ければ空として返し、2 回目の探索もしないので、
+    /// 隣から**はみ出してくるラベルが境目で切れる**（縦書きで縦に長くなって目立った）。
+    ///
+    /// ラベル付きのアイコンは作った時点ではみ出し量を ``LabelledIconExtent`` に記録して
+    /// いるので、それも使う。全マーカーを数え直す方法は、`@Published` の読み出しだけで
+    /// 14.4 万本に 0.6 秒以上かかり、ラベルの表示が目に見えて遅れたのでやめた。
+    private func queryHalfExtentPx(zoom: Int) -> Double {
+        scaleLock.lock()
+        var scale = maxScaleByZoom[zoom]
+        let sample = sampleState
+        scaleLock.unlock()
+        if scale == nil, let sample {
+            scale = max(iconScaleCallback?(sample, zoom) ?? 1.0, 0.0) * extraIconScale
+        }
+        guard let scale else { return observedHalfExtentPx }
+        return max(observedHalfExtentPx, LabelledIconExtent.maxPt * scale)
+    }
+
+    private func noteScale(_ scale: Double, zoom: Int, state: MarkerState) {
+        scaleLock.lock()
+        if scale > (maxScaleByZoom[zoom] ?? 0) { maxScaleByZoom[zoom] = scale }
+        if sampleState == nil { sampleState = state }
+        scaleLock.unlock()
     }
 
     private func queryByHalfExtentPx(
