@@ -214,9 +214,15 @@ public final class LocalTileServer: @unchecked Sendable {
         }
     }
 
-    @available(*, deprecated, message: "`version` is ignored. Use `urlTemplate(routeId:tileSize:)` instead.")
+    /// `version` は URL のパスに入れる。
+    ///
+    /// タイルは長期キャッシュで返すので、URL が変わらないと地図 SDK は描画済みの
+    /// タイルを取り直さない。以前はここで `version` を捨てていたため、MapLibre /
+    /// Mapbox / MapTiler / Mappls ではマーカーを変えても新しく見えたタイルにしか
+    /// 反映されず、境界をまたぐラベルは片側だけ古い絵のまま切れて見えた。
+    @available(*, deprecated, message: "Use `urlTemplate(routeId:tileSize:cacheKey:)` instead.")
     public func urlTemplate(routeId: String, version: Int64) -> String {
-        urlTemplate(routeId: routeId, tileSize: RasterLayerSource.defaultTileSize)
+        urlTemplate(routeId: routeId, tileSize: RasterLayerSource.defaultTileSize, cacheKey: "v\(version)")
     }
 
     public func stop() {

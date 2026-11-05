@@ -36,7 +36,7 @@ public enum InternalMapConductorApi {
   final public func urlTemplate(routeId: Swift::String, tileSize: Swift::Int) -> Swift::String
   final public func urlTemplate(routeId: Swift::String, tileSize: Swift::Int, cacheKey: Swift::String) -> Swift::String
   final public func renderLocalTile(url: Foundation::URL, isCancelled: @escaping @Sendable () -> Swift::Bool = { false }) -> Foundation::Data?
-  @available(*, deprecated, message: "`version` is ignored. Use `urlTemplate(routeId:tileSize:)` instead.")
+  @available(*, deprecated, message: "Use `urlTemplate(routeId:tileSize:cacheKey:)` instead.")
   final public func urlTemplate(routeId: Swift::String, version: Swift::Int64) -> Swift::String
   final public func stop()
   public static func startServer(forceNoStoreCache: Swift::Bool = false) -> MapConductorCore::LocalTileServer
