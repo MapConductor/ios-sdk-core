@@ -203,12 +203,25 @@ final class MetalMarkerRasterizer {
     }
 
     /// 描いて PNG にする。描けなければ nil で、呼び出し側は CPU へ落ちる。
-    func renderPng(instances: [Instance], atlas: MTLTexture, paddingPx: Int) -> Data? {
+    ///
+    /// `overlay` は読み戻した画素（乗算済み RGBA、上の行から）を PNG にする前に受け取る。
+    /// GPU では描けないもの -- タイルに直接描くラベルの文字 -- をそこで足す。
+    func renderPng(
+        instances: [Instance],
+        atlas: MTLTexture,
+        paddingPx: Int,
+        overlay: ((UnsafeMutableRawPointer) -> Void)? = nil
+    ) -> Data? {
         guard !instances.isEmpty else { return nil }
-        return queue.sync { draw(instances: instances, atlas: atlas, paddingPx: paddingPx) }
+        return queue.sync { draw(instances: instances, atlas: atlas, paddingPx: paddingPx, overlay: overlay) }
     }
 
-    private func draw(instances: [Instance], atlas: MTLTexture, paddingPx: Int) -> Data? {
+    private func draw(
+        instances: [Instance],
+        atlas: MTLTexture,
+        paddingPx: Int,
+        overlay: ((UnsafeMutableRawPointer) -> Void)?
+    ) -> Data? {
         let target: MTLTexture
         if let existing = self.target {
             target = existing
@@ -259,6 +272,7 @@ final class MetalMarkerRasterizer {
         }
         return readback.withUnsafeMutableBytes { raw -> Data? in
             guard let base = raw.baseAddress else { return nil }
+            overlay?(base)
             // ブレンドは乗算済みアルファのまま積むので、CPU 経路と同じ扱い。
             return TilePngEncoder.encode(rgba: base, width: tileSize, height: tileSize,
                                          premultiplied: true)
