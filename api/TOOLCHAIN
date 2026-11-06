@@ -23,6 +23,6 @@
 #
 # 差分は「コンパイラが変わった分」として 1 コミットに分け、API の変更と混ぜないこと。
 
-XCODE_VERSION=27.0
-XCODE_BUILD=27A266a
+XCODE_VERSION=27.2
+XCODE_BUILD=27B52
 SWIFT_VERSION=6.4
