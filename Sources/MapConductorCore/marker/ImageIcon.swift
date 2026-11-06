@@ -22,6 +22,16 @@ import UIKit
 ///
 /// 画像は使われたときに初めて作る。タイル描画は本体の画像と文字を別々に使うので、
 /// ラベル付きのアイコンをいくつ作っても、本体の画像は元の画像ごとに 1 枚で済む。
+///
+/// ## URL で渡す
+///
+/// `ImageIcon(imageUrl:)` は画像を自分で読み込む（``GroundImageState`` の `imageUrl` と同じ
+/// ローダーを使い、同じ URL は 1 度しか取りに行かない）。読み終えるまでは同じ大きさ・アンカーの
+/// 透明な画像を返し、読み終えたら、このアイコンを持っているマーカーが描き直される。
+/// 失敗したときは透明のまま（ログに URL ごと 1 度だけ出す）。
+///
+/// `hashCode()` は URL と読み込みの状態（読み込み中・完了・失敗）から作る。状態は 1 度だけ
+/// 変わり、そのときマーカーの描き直しの判定に掛かる。
 public final class ImageIcon: MarkerIconProtocol, TileLabelledIcon {
     public static let defaultIconSize: CGFloat = DefaultMarkerIcon.defaultIconSize
     public static let defaultAnchor: CGPoint = CGPoint(x: 0.5, y: 0.5)
@@ -41,7 +51,10 @@ public final class ImageIcon: MarkerIconProtocol, TileLabelledIcon {
     public let labelPosition: String
     public let labelWritingMode: String
 
-    private let image: UIImage
+    /// `ImageIcon(imageUrl:)` で作ったときの URL。`ImageIcon(image:)` なら nil。
+    public let imageUrl: URL?
+
+    private let source: Source
     private let requestedAnchor: CGPoint
     private let requestedInfoAnchor: CGPoint
     private let layout: DefaultIconLayout
@@ -50,10 +63,10 @@ public final class ImageIcon: MarkerIconProtocol, TileLabelledIcon {
     private let outlineStrokeWidth: CGFloat
     private let labelSize: CGSize
     private let vertical: Bool
-    private let body: LazyBox<BitmapIcon>
-    private let full: LazyBox<BitmapIcon>
+    private let body: ByReadiness<BitmapIcon>
+    private let full: ByReadiness<BitmapIcon>
 
-    public init(
+    public convenience init(
         image: UIImage,
         iconSize: CGFloat = defaultIconSize,
         scale: CGFloat = 1.0,
@@ -68,7 +81,67 @@ public final class ImageIcon: MarkerIconProtocol, TileLabelledIcon {
         labelPosition: String = ColorDefaultIcon.defaultLabelPosition,
         labelWritingMode: String = ColorDefaultIcon.defaultLabelWritingMode
     ) {
-        self.image = image
+        self.init(
+            source: .image(image), iconSize: iconSize, scale: scale, anchor: anchor, infoAnchor: infoAnchor,
+            debug: debug, label: label, labelTextColor: labelTextColor, labelTextSize: labelTextSize,
+            labelTypeFace: labelTypeFace, labelStrokeColor: labelStrokeColor, labelPosition: labelPosition,
+            labelWritingMode: labelWritingMode
+        )
+    }
+
+    /// 画像を URL で渡す。読み終えるまでは透明。読み終えたら、このアイコンを持つマーカーが
+    /// 描き直される。`file:` の URL も使える。
+    public convenience init(
+        imageUrl: URL,
+        iconSize: CGFloat = defaultIconSize,
+        scale: CGFloat = 1.0,
+        anchor: CGPoint = defaultAnchor,
+        infoAnchor: CGPoint = defaultInfoAnchor,
+        debug: Bool = false,
+        label: String? = nil,
+        labelTextColor: UIColor? = ColorDefaultIcon.defaultLabelTextColor,
+        labelTextSize: CGFloat = ColorDefaultIcon.defaultLabelTextSize,
+        labelTypeFace: UIFont = ColorDefaultIcon.defaultLabelTypeFace,
+        labelStrokeColor: UIColor = ColorDefaultIcon.defaultLabelStrokeColor,
+        labelPosition: String = ColorDefaultIcon.defaultLabelPosition,
+        labelWritingMode: String = ColorDefaultIcon.defaultLabelWritingMode
+    ) {
+        self.init(
+            source: .url(LoadedImage(url: imageUrl, loader: .shared)), iconSize: iconSize, scale: scale,
+            anchor: anchor, infoAnchor: infoAnchor, debug: debug, label: label, labelTextColor: labelTextColor,
+            labelTextSize: labelTextSize, labelTypeFace: labelTypeFace, labelStrokeColor: labelStrokeColor,
+            labelPosition: labelPosition, labelWritingMode: labelWritingMode
+        )
+    }
+
+    /// テスト用。ローダーを差し替える。
+    convenience init(imageUrl: URL, iconSize: CGFloat = defaultIconSize, loader: RemoteImageLoader) {
+        self.init(
+            source: .url(LoadedImage(url: imageUrl, loader: loader)), iconSize: iconSize, scale: 1.0,
+            anchor: ImageIcon.defaultAnchor, infoAnchor: ImageIcon.defaultInfoAnchor, debug: false, label: nil,
+            labelTextColor: ColorDefaultIcon.defaultLabelTextColor, labelTextSize: ColorDefaultIcon.defaultLabelTextSize,
+            labelTypeFace: ColorDefaultIcon.defaultLabelTypeFace, labelStrokeColor: ColorDefaultIcon.defaultLabelStrokeColor,
+            labelPosition: ColorDefaultIcon.defaultLabelPosition, labelWritingMode: ColorDefaultIcon.defaultLabelWritingMode
+        )
+    }
+
+    private init(
+        source: Source,
+        iconSize: CGFloat,
+        scale: CGFloat,
+        anchor: CGPoint,
+        infoAnchor: CGPoint,
+        debug: Bool,
+        label: String?,
+        labelTextColor: UIColor?,
+        labelTextSize: CGFloat,
+        labelTypeFace: UIFont,
+        labelStrokeColor: UIColor,
+        labelPosition: String,
+        labelWritingMode: String
+    ) {
+        self.source = source
+        if case let .url(loaded) = source { self.imageUrl = loaded.url } else { self.imageUrl = nil }
         self.iconSize = iconSize
         self.scale = scale
         self.debug = debug
@@ -119,9 +192,11 @@ public final class ImageIcon: MarkerIconProtocol, TileLabelledIcon {
         }
 
         let pixelScale = self.pixelScale
-        let body = LazyBox {
+        let body = ByReadiness<BitmapIcon> { state in
             BitmapIcon(
-                bitmap: ImageIcon.bodyImage(image, canvasSize: canvasSize, pixelScale: pixelScale, debug: debug),
+                bitmap: state.1.map {
+                    ImageIcon.bodyImage($0, canvasSize: canvasSize, pixelScale: pixelScale, debug: debug)
+                } ?? ImageIcon.blankBody(canvasSize: canvasSize, pixelScale: pixelScale, debug: debug),
                 anchor: anchor,
                 size: CGSize(width: canvasSize, height: canvasSize),
                 scale: scale,
@@ -134,8 +209,8 @@ public final class ImageIcon: MarkerIconProtocol, TileLabelledIcon {
         let publicAnchor = self.anchor
         let publicInfoAnchor = self.infoAnchor
         let textColor = labelTextColor ?? ColorDefaultIcon.defaultLabelTextColor
-        self.full = LazyBox {
-            let bodyIcon = body.get()
+        self.full = ByReadiness<BitmapIcon> { state in
+            let bodyIcon = body.get(state)
             guard let label, labelSize != .zero else { return bodyIcon }
             let size = CGSize(width: layout.bitmapWidth, height: layout.bitmapHeight)
             let format = UIGraphicsImageRendererFormat.default()
@@ -170,9 +245,18 @@ public final class ImageIcon: MarkerIconProtocol, TileLabelledIcon {
         }
     }
 
-    public func toBitmapIcon() -> BitmapIcon { full.get() }
+    public func toBitmapIcon() -> BitmapIcon { full.get(source.current()) }
 
-    var tileBody: BitmapIcon { body.get() }
+    var tileBody: BitmapIcon { body.get(source.current()) }
+
+    /// URL の画像を読み込み中なら、読み終えたとき（失敗も含む）にメインスレッドで 1 度だけ
+    /// `callback` を呼んで true を返す。読み込み中でなければ何もせず false。
+    ///
+    /// ``MarkerState`` がこれで描き直しのきっかけを受け取る。
+    func whenImageSettles(_ callback: @escaping () -> Void) -> Bool {
+        guard case let .url(loaded) = source, loaded.readiness == .pending else { return false }
+        return loaded.loader.whenSettled(loaded.url) { _ in callback() }
+    }
 
     var tileLabel: MarkerTileLabel? {
         guard let label, labelSize != .zero else { return nil }
@@ -194,7 +278,13 @@ public final class ImageIcon: MarkerIconProtocol, TileLabelledIcon {
     var layoutSize: CGSize { CGSize(width: layout.bitmapWidth, height: layout.bitmapHeight) }
 
     public func hashCode() -> Int {
-        var result = image.hashValue
+        var result: Int
+        switch source {
+        case let .image(image):
+            result = image.hashValue
+        case let .url(loaded):
+            result = loaded.url.hashValue &* 31 &+ loaded.readiness.rawValue
+        }
         result = result &* 31 &+ scale.hashValue
         result = result &* 31 &+ requestedAnchor.x.hashValue
         result = result &* 31 &+ requestedAnchor.y.hashValue
@@ -228,7 +318,7 @@ public final class ImageIcon: MarkerIconProtocol, TileLabelledIcon {
         labelWritingMode: String? = nil
     ) -> ImageIcon {
         ImageIcon(
-            image: image ?? self.image,
+            source: image.map { Source.image($0) } ?? source,
             iconSize: iconSize ?? self.iconSize,
             scale: scale ?? self.scale,
             anchor: anchor ?? self.requestedAnchor,
@@ -244,7 +334,105 @@ public final class ImageIcon: MarkerIconProtocol, TileLabelledIcon {
         )
     }
 
+    // MARK: - 画像の出どころ
+
+    enum Readiness: Int {
+        case pending = 0
+        case ready = 1
+        case failed = 2
+    }
+
+    private enum Source {
+        case image(UIImage)
+        case url(LoadedImage)
+
+        /// 今描く画像。読み込み中・失敗なら nil。
+        func current() -> (Readiness, UIImage?) {
+            switch self {
+            case let .image(image): return (.ready, image)
+            case let .url(loaded): return loaded.current()
+            }
+        }
+    }
+
+    /// URL の画像。読み終えたら自分で持つ（ローダーのキャッシュから追い出されても困らない）。
+    final class LoadedImage {
+        let url: URL
+        let loader: RemoteImageLoader
+        private let lock = NSLock()
+        private var image: UIImage?
+        private var failed = false
+
+        init(url: URL, loader: RemoteImageLoader) {
+            self.url = url
+            self.loader = loader
+            // マーカーより先に登録する。マーカーが知らせを受けたときには、もう画像を持っている。
+            loader.whenSettled(url) { [weak self] image in self?.settle(image) }
+        }
+
+        var readiness: Readiness { current().0 }
+
+        func current() -> (Readiness, UIImage?) {
+            lock.lock()
+            if let image { lock.unlock(); return (.ready, image) }
+            if failed { lock.unlock(); return (.failed, nil) }
+            lock.unlock()
+            switch loader.status(url) {
+            case .pending:
+                return (.pending, nil)
+            case let .ready(image):
+                settle(image)
+                return (.ready, image)
+            case .failed:
+                settle(nil)
+                return (.failed, nil)
+            }
+        }
+
+        private func settle(_ image: UIImage?) {
+            lock.lock()
+            defer { lock.unlock() }
+            if self.image != nil || failed { return }
+            if let image { self.image = image } else { failed = true }
+        }
+    }
+
+    /// 画像の状態ごとに 1 度だけ作って覚える。状態は読み込み中から完了・失敗へ 1 度だけ変わる。
+    final class ByReadiness<Value> {
+        private let lock = NSLock()
+        private var cached: (Readiness, Value)?
+        private let make: ((Readiness, UIImage?)) -> Value
+
+        init(_ make: @escaping ((Readiness, UIImage?)) -> Value) {
+            self.make = make
+        }
+
+        func get(_ state: (Readiness, UIImage?)) -> Value {
+            lock.lock()
+            defer { lock.unlock() }
+            if let cached, cached.0 == state.0 { return cached.1 }
+            let made = make(state)
+            cached = (state.0, made)
+            return made
+        }
+    }
+
     // MARK: - 本体の画像
+
+    /// 読み込み中・失敗の本体。同じ大きさの透明な画像。
+    private static func blankBody(canvasSize: CGFloat, pixelScale: CGFloat, debug: Bool) -> UIImage {
+        let size = CGSize(width: canvasSize, height: canvasSize)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = pixelScale
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            if debug {
+                context.cgContext.setStrokeColor(UIColor.black.cgColor)
+                context.cgContext.setLineWidth(1.0)
+                context.cgContext.stroke(CGRect(origin: .zero, size: size))
+            }
+        }
+    }
 
     /// 元の画像 -> 大きさごとの本体の画像。
     ///

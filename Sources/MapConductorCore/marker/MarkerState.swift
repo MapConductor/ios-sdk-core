@@ -27,7 +27,12 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
     /// subscribing to each state. See ``StateMutationSignal``.
     public let mutations = StateMutationSignal()
 
-    @Published public var icon: (any MarkerIconProtocol)? { didSet { mutations.notifyMutated() } }
+    @Published public var icon: (any MarkerIconProtocol)? {
+        didSet {
+            watchIconImage()
+            mutations.notifyMutated()
+        }
+    }
     @Published public var clickable: Bool { didSet { mutations.notifyMutated() } }
     @Published public var draggable: Bool { didSet { mutations.notifyMutated() } }
     @Published public var zIndex: Int? { didSet { mutations.notifyMutated() } }
@@ -80,6 +85,22 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         self.onAnimateEnd = onAnimateEnd
         self.internalAnimation = animation
         self.position = position
+        watchIconImage()
+    }
+
+    /// アイコンが URL の画像を読み込み中なら、読み終えたときに描き直させる
+    /// （``ImageIcon/init(imageUrl:iconSize:scale:anchor:infoAnchor:debug:label:labelTextColor:labelTextSize:labelTypeFace:labelStrokeColor:labelPosition:labelWritingMode:)``）。
+    ///
+    /// 同じアイコンを入れ直す。アイコンの `hashCode()` は読み込みの状態で変わるので、
+    /// `$icon` を見ているプロバイダも、``StateMutationSignal`` を聞いているコントローラも、
+    /// ふだんのアイコンの差し替えと同じ道筋で描き直す。その間に別のアイコンへ
+    /// 差し替えられていたら何もしない。
+    private func watchIconImage() {
+        guard let pending = icon as? ImageIcon else { return }
+        _ = pending.whenImageSettles { [weak self, weak pending] in
+            guard let self, let pending, let current = self.icon as? ImageIcon, current === pending else { return }
+            self.icon = pending
+        }
     }
 
     public convenience init(

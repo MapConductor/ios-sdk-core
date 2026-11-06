@@ -24,6 +24,18 @@ public struct GroundImageEvent {
 
 public typealias OnGroundImageEventHandler = (GroundImageEvent) -> Void
 
+/// 地表画像。
+///
+/// ## URL で渡す
+///
+/// `GroundImageState(bounds:imageUrl:)` は画像を自分で読み込む（``ImageIcon`` の `imageUrl` と
+/// 同じローダー）。読み終えるまで `image` は 1×1 の透明な画像で、読み終えたら `image` に入る
+/// （ふだんの `image` の差し替えと同じく描き直される）。
+///
+/// - `imageUrl` を別の URL にすると、読み終えるまでは今の画像のまま、読み終えたら差し替わる。
+///   読み終える前にもう一度変えたら、古い方の結果は捨てる。
+/// - `image` を自分で入れると `imageUrl` は nil に戻る（URL の読み込みより後の指定が勝つ）。
+/// - 失敗したときは画像を変えない（ログに URL ごと 1 度だけ出す）。
 public final class GroundImageState: ObservableObject, Identifiable, Equatable, Hashable {
     public let id: String
 
@@ -32,11 +44,25 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
     public let mutations = StateMutationSignal()
 
     @Published public var bounds: GeoRectBounds { didSet { mutations.notifyMutated() } }
-    @Published public var image: UIImage { didSet { mutations.notifyMutated() } }
+    @Published public var image: UIImage {
+        didSet {
+            if !applyingLoadedImage, imageUrl != nil { imageUrl = nil }
+            mutations.notifyMutated()
+        }
+    }
+    /// 画像を読み込む URL。nil なら `image` をそのまま使う。
+    @Published public var imageUrl: URL? {
+        didSet {
+            if imageUrl != oldValue { loadImageUrl() }
+        }
+    }
     @Published public var opacity: Double { didSet { mutations.notifyMutated() } }
     @Published public var tileSize: Int { didSet { mutations.notifyMutated() } }
     @Published public var extra: Any? { didSet { mutations.notifyMutated() } }
     @Published public var onClick: OnGroundImageEventHandler? { didSet { mutations.notifyMutated() } }
+
+    private var loader: RemoteImageLoader = .shared
+    private var applyingLoadedImage = false
 
     public init(
         bounds: GeoRectBounds,
@@ -49,7 +75,7 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
     ) {
         let resolvedId = id ?? GroundImageState.makeGroundImageId(
             bounds: bounds,
-            image: image,
+            imageHash: javaHash(image),
             opacity: opacity,
             tileSize: tileSize,
             extra: extra
@@ -63,6 +89,75 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         self.onClick = onClick
     }
 
+    /// 画像を URL で渡す。読み終えるまでは透明。`file:` の URL も使える。
+    public convenience init(
+        bounds: GeoRectBounds,
+        imageUrl: URL,
+        opacity: Double = 1.0,
+        tileSize: Int = 512,
+        id: String? = nil,
+        extra: Any? = nil,
+        onClick: OnGroundImageEventHandler? = nil
+    ) {
+        self.init(
+            bounds: bounds, imageUrl: imageUrl, opacity: opacity, tileSize: tileSize, id: id, extra: extra,
+            onClick: onClick, loader: .shared
+        )
+    }
+
+    /// テスト用。ローダーを差し替える。
+    convenience init(
+        bounds: GeoRectBounds,
+        imageUrl: URL,
+        opacity: Double = 1.0,
+        tileSize: Int = 512,
+        id: String? = nil,
+        extra: Any? = nil,
+        onClick: OnGroundImageEventHandler? = nil,
+        loader: RemoteImageLoader
+    ) {
+        // 決めた id が読み込みの前後で変わらないよう、画像ではなく URL から作る。
+        let resolvedId = id ?? GroundImageState.makeGroundImageId(
+            bounds: bounds,
+            imageHash: javaHash(imageUrl.absoluteString),
+            opacity: opacity,
+            tileSize: tileSize,
+            extra: extra
+        )
+        self.init(
+            bounds: bounds, image: GroundImageState.placeholder, opacity: opacity, tileSize: tileSize,
+            id: resolvedId, extra: extra, onClick: onClick
+        )
+        self.loader = loader
+        self.imageUrl = imageUrl
+    }
+
+    /// 読み込み中の画像。
+    private static let placeholder: UIImage = {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1), format: format).image { _ in }
+    }()
+
+    private func loadImageUrl() {
+        guard let url = imageUrl else { return }
+        let apply: (UIImage) -> Void = { [weak self] image in
+            guard let self, self.imageUrl == url else { return }
+            self.applyingLoadedImage = true
+            self.image = image
+            self.applyingLoadedImage = false
+        }
+        if case let .ready(image) = loader.status(url) {
+            apply(image)
+            return
+        }
+        loader.whenSettled(url) { image in
+            if let image { apply(image) }
+        }
+    }
+
+    /// `image` を変えなければ、`imageUrl` も引き継ぐ（読み込み中なら写しの方でも読み終えたら入る）。
     public func copy(
         bounds: GeoRectBounds? = nil,
         image: UIImage? = nil,
@@ -72,7 +167,7 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         extra: Any? = nil,
         onClick: OnGroundImageEventHandler? = nil
     ) -> GroundImageState {
-        GroundImageState(
+        let copied = GroundImageState(
             bounds: bounds ?? self.bounds,
             image: image ?? self.image,
             opacity: opacity ?? self.opacity,
@@ -81,6 +176,11 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
             extra: extra ?? self.extra,
             onClick: onClick ?? self.onClick
         )
+        if image == nil, let imageUrl {
+            copied.loader = loader
+            copied.imageUrl = imageUrl
+        }
+        return copied
     }
 
     public func fingerPrint() -> GroundImageFingerPrint {
@@ -141,14 +241,14 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
 
     private static func makeGroundImageId(
         bounds: GeoRectBounds,
-        image: UIImage,
+        imageHash: Int,
         opacity: Double,
         tileSize: Int,
         extra: Any?
     ) -> String {
         let hashCodes = [
             javaHash(bounds),
-            javaHash(image),
+            imageHash,
             javaHash(opacity),
             javaHash(tileSize),
             javaHash(extra)

@@ -35,6 +35,29 @@ public struct GroundImage: MapOverlayItemProtocol, Identifiable {
         self.id = state.id
     }
 
+    /// 画像を URL で渡す（``GroundImageState/init(bounds:imageUrl:opacity:tileSize:id:extra:onClick:)``）。
+    public init(
+        bounds: GeoRectBounds,
+        imageUrl: URL,
+        opacity: Double = 0.5,
+        tileSize: Int = 512,
+        id: String? = nil,
+        extra: Any? = nil,
+        onClick: OnGroundImageEventHandler? = nil
+    ) {
+        let state = GroundImageState(
+            bounds: bounds,
+            imageUrl: imageUrl,
+            opacity: opacity,
+            tileSize: tileSize,
+            id: id,
+            extra: extra,
+            onClick: onClick
+        )
+        self.state = state
+        self.id = state.id
+    }
+
     public func append(to content: inout MapViewContent) {
         content.groundImages.append(self)
     }

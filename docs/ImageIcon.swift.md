@@ -29,6 +29,29 @@ public final class ImageIcon: MarkerIconProtocol {
 }
 ```
 
+### Loading from a URL
+
+```swift
+public convenience init(
+    imageUrl: URL,
+    iconSize: CGFloat = defaultIconSize,
+    scale: CGFloat = 1.0,
+    anchor: CGPoint = defaultAnchor,
+    infoAnchor: CGPoint = defaultInfoAnchor,
+    debug: Bool = false
+    // label parameters as in init(image:)
+)
+
+public let imageUrl: URL?   // nil for init(image:)
+```
+
+The icon loads the image itself, through the same loader as `GroundImageState(imageUrl:)`, so each
+URL is fetched once however many icons or markers use it. `https:` and `file:` URLs work.
+
+- Until the image arrives, the icon is a transparent image of the same size and anchor.
+- When it arrives, every marker whose `icon` is still this icon is redrawn.
+- If loading fails, the icon stays transparent and the failure is logged once per URL.
+
 ## Constructor Parameters
 
 - `image`
@@ -77,7 +100,7 @@ public func copy(
 - `ImageIcon.defaultAnchor` is `(0.5, 0.5)` (center), whereas `DefaultMarkerIcon` and
   `BitmapIcon` default to `(0.5, 1.0)` (bottom-center).
 
-## Example
+## Examples
 
 ```swift
 let icon = ImageIcon(image: UIImage(named: "shop_icon")!)
@@ -85,4 +108,8 @@ let marker = MarkerState(
     position: GeoPoint(latitude: 35.6812, longitude: 139.7671),
     icon: icon
 )
+```
+
+```swift
+let icon = ImageIcon(imageUrl: URL(string: "https://example.com/shop.png")!, iconSize: 32)
 ```

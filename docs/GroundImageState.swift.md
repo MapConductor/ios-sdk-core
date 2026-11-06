@@ -12,6 +12,7 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
 
     @Published public var bounds: GeoRectBounds
     @Published public var image: UIImage
+    @Published public var imageUrl: URL?
     @Published public var opacity: Double
     @Published public var tileSize: Int
     @Published public var extra: Any?
@@ -26,8 +27,32 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         extra: Any? = nil,
         onClick: OnGroundImageEventHandler? = nil
     )
+
+    public convenience init(
+        bounds: GeoRectBounds,
+        imageUrl: URL,
+        opacity: Double = 1.0,
+        tileSize: Int = 512,
+        id: String? = nil,
+        extra: Any? = nil,
+        onClick: OnGroundImageEventHandler? = nil
+    )
 }
 ```
+
+### Loading from a URL
+
+`GroundImageState(bounds:imageUrl:)` loads the image itself, with the same loader as
+`ImageIcon(imageUrl:)`. `https:` and `file:` URLs work.
+
+- Until the image arrives, `image` is a 1×1 transparent image. When it arrives, it is assigned to
+  `image` and the overlay is redrawn.
+- Setting `imageUrl` to another URL keeps the current image until the new one arrives. If it
+  changes again before then, the older result is dropped.
+- Assigning `image` yourself sets `imageUrl` back to `nil`.
+- If loading fails, `image` is left as it is and the failure is logged once per URL.
+- `copy()` keeps `imageUrl` unless you pass `image`.
+- The generated `id` comes from the URL, so it does not change when the image arrives.
 
 ## Constructor Parameters
 
