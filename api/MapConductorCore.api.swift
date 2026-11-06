@@ -71,6 +71,7 @@ public struct GroundImage : MapConductorCore::MapOverlayItemProtocol, Swift::Ide
   public let state: MapConductorCore::GroundImageState
   public init(state: MapConductorCore::GroundImageState)
   public init(bounds: MapConductorCore::GeoRectBounds, image: UIKit::UIImage, opacity: Swift::Double = 0.5, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil)
+  public init(bounds: MapConductorCore::GeoRectBounds, imageUrl: Foundation::URL, opacity: Swift::Double = 0.5, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil)
   public func append(to content: inout MapConductorCore::MapViewContent)
   public typealias ID = Swift::String
 }
@@ -959,6 +960,16 @@ final public class GroundImageState : Combine::ObservableObject, Swift::Identifi
     @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
     set
   }
+  @Combine::Published<Foundation::URL?> @_projectedValueProperty($imageUrl) final public var imageUrl: Foundation::URL? {
+    get
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    set
+  }
+  final public var $imageUrl: Combine::Published<Foundation::URL?>.Combine::Publisher {
+    get
+    @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
+    set
+  }
   @Combine::Published<Swift::Double> @_projectedValueProperty($opacity) final public var opacity: Swift::Double {
     get
     @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
@@ -1000,6 +1011,7 @@ final public class GroundImageState : Combine::ObservableObject, Swift::Identifi
     set
   }
   public init(bounds: MapConductorCore::GeoRectBounds, image: UIKit::UIImage, opacity: Swift::Double = 1.0, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil)
+  convenience public init(bounds: MapConductorCore::GeoRectBounds, imageUrl: Foundation::URL, opacity: Swift::Double = 1.0, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil)
   final public func copy(bounds: MapConductorCore::GeoRectBounds? = nil, image: UIKit::UIImage? = nil, opacity: Swift::Double? = nil, tileSize: Swift::Int? = nil, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil) -> MapConductorCore::GroundImageState
   final public func fingerPrint() -> MapConductorCore::GroundImageFingerPrint
   final public func asFlow() -> Combine::AnyPublisher<MapConductorCore::GroundImageFingerPrint, Swift::Never>
@@ -1701,7 +1713,7 @@ final public class ImageDefaultIcon : MapConductorCore::MarkerIconProtocol {
   final public func copy(backgroundImage: UIKit::UIImage? = nil, strokeColor: UIKit::UIColor? = nil, strokeWidth: CoreFoundation::CGFloat? = nil, scale: CoreFoundation::CGFloat? = nil, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = nil, labelTextSize: CoreFoundation::CGFloat? = nil, labelTypeFace: UIKit::UIFont? = nil, labelStrokeColor: UIKit::UIColor? = nil, labelPosition: Swift::String? = nil, iconSize: CoreFoundation::CGFloat? = nil, debug: Swift::Bool? = nil) -> MapConductorCore::ImageDefaultIcon
   @objc deinit
 }
-final public class ImageIcon : MapConductorCore::MarkerIconProtocol {
+@_hasMissingDesignatedInitializers final public class ImageIcon : MapConductorCore::MarkerIconProtocol {
   public static let defaultIconSize: CoreFoundation::CGFloat
   public static let defaultAnchor: CoreFoundation::CGPoint
   public static let defaultInfoAnchor: CoreFoundation::CGPoint
@@ -1717,7 +1729,9 @@ final public class ImageIcon : MapConductorCore::MarkerIconProtocol {
   final public let labelStrokeColor: UIKit::UIColor
   final public let labelPosition: Swift::String
   final public let labelWritingMode: Swift::String
-  public init(image: UIKit::UIImage, iconSize: CoreFoundation::CGFloat = defaultIconSize, scale: CoreFoundation::CGFloat = 1.0, anchor: CoreFoundation::CGPoint = defaultAnchor, infoAnchor: CoreFoundation::CGPoint = defaultInfoAnchor, debug: Swift::Bool = false, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = ColorDefaultIcon.defaultLabelTextColor, labelTextSize: CoreFoundation::CGFloat = ColorDefaultIcon.defaultLabelTextSize, labelTypeFace: UIKit::UIFont = ColorDefaultIcon.defaultLabelTypeFace, labelStrokeColor: UIKit::UIColor = ColorDefaultIcon.defaultLabelStrokeColor, labelPosition: Swift::String = ColorDefaultIcon.defaultLabelPosition, labelWritingMode: Swift::String = ColorDefaultIcon.defaultLabelWritingMode)
+  final public let imageUrl: Foundation::URL?
+  convenience public init(image: UIKit::UIImage, iconSize: CoreFoundation::CGFloat = defaultIconSize, scale: CoreFoundation::CGFloat = 1.0, anchor: CoreFoundation::CGPoint = defaultAnchor, infoAnchor: CoreFoundation::CGPoint = defaultInfoAnchor, debug: Swift::Bool = false, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = ColorDefaultIcon.defaultLabelTextColor, labelTextSize: CoreFoundation::CGFloat = ColorDefaultIcon.defaultLabelTextSize, labelTypeFace: UIKit::UIFont = ColorDefaultIcon.defaultLabelTypeFace, labelStrokeColor: UIKit::UIColor = ColorDefaultIcon.defaultLabelStrokeColor, labelPosition: Swift::String = ColorDefaultIcon.defaultLabelPosition, labelWritingMode: Swift::String = ColorDefaultIcon.defaultLabelWritingMode)
+  convenience public init(imageUrl: Foundation::URL, iconSize: CoreFoundation::CGFloat = defaultIconSize, scale: CoreFoundation::CGFloat = 1.0, anchor: CoreFoundation::CGPoint = defaultAnchor, infoAnchor: CoreFoundation::CGPoint = defaultInfoAnchor, debug: Swift::Bool = false, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = ColorDefaultIcon.defaultLabelTextColor, labelTextSize: CoreFoundation::CGFloat = ColorDefaultIcon.defaultLabelTextSize, labelTypeFace: UIKit::UIFont = ColorDefaultIcon.defaultLabelTypeFace, labelStrokeColor: UIKit::UIColor = ColorDefaultIcon.defaultLabelStrokeColor, labelPosition: Swift::String = ColorDefaultIcon.defaultLabelPosition, labelWritingMode: Swift::String = ColorDefaultIcon.defaultLabelWritingMode)
   final public func toBitmapIcon() -> MapConductorCore::BitmapIcon
   final public func hashCode() -> Swift::Int
   final public func copy(image: UIKit::UIImage? = nil, iconSize: CoreFoundation::CGFloat? = nil, scale: CoreFoundation::CGFloat? = nil, anchor: CoreFoundation::CGPoint? = nil, infoAnchor: CoreFoundation::CGPoint? = nil, debug: Swift::Bool? = nil, label: Swift::String? = nil, labelTextColor: UIKit::UIColor? = nil, labelTextSize: CoreFoundation::CGFloat? = nil, labelTypeFace: UIKit::UIFont? = nil, labelStrokeColor: UIKit::UIColor? = nil, labelPosition: Swift::String? = nil, labelWritingMode: Swift::String? = nil) -> MapConductorCore::ImageIcon
