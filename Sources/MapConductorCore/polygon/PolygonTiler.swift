@@ -34,8 +34,14 @@ public final class PolygonTiler {
     public let options: PolygonTilingOptions
 
     let tileSet: PolygonTileSet
+    /// What is tiled. ``route(_:)`` runs wherever the polygon controller's
+    /// `add` runs (off the main thread), while ``refreshIfServerMoved()`` is
+    /// called from the map's content update on the main thread: everything below
+    /// is read and written under this lock.
+    private let lock = NSLock()
     private var tiled: Set<String> = []
     private var states: [PolygonState] = []
+    private var shownBaseUrl: String?
 
     public init(options: PolygonTilingOptions = .Default) {
         self.options = options
@@ -44,6 +50,12 @@ public final class PolygonTiler {
             guard let self else { return }
             Task { await self.onTemplate?(template, self.tileSet.tileSize) }
         }
+    }
+
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
     }
 
     /// Re-decides tiling for `data` and returns the ids drawn as tiles.
@@ -59,26 +71,35 @@ public final class PolygonTiler {
         let useTiles = options.shouldUseTiles(polygonCount: tileable.count, vertexCount: vertices)
         let template = useTiles ? await tileSet.setPolygons(tileable) : nil
         if let template {
-            tiled = Set(tileable.map(\.id))
-            states = tileable
+            let ids = Set(tileable.map(\.id))
+            let baseUrl = TileServerRegistry.get().baseUrl
+            withLock {
+                tiled = ids
+                states = tileable
+                shownBaseUrl = baseUrl
+            }
             await onTemplate?(template, tileSet.tileSize)
-        } else {
-            let hadTiles = !tiled.isEmpty
-            tileSet.dispose()
+            return ids
+        }
+        let hadTiles = withLock { () -> Bool in
+            let had = !tiled.isEmpty
             tiled = []
             states = []
-            if hadTiles { await onTemplate?(nil, tileSet.tileSize) }
+            shownBaseUrl = nil
+            return had
         }
-        return tiled
+        tileSet.dispose()
+        if hadTiles { await onTemplate?(nil, tileSet.tileSize) }
+        return []
     }
 
     /// The states drawn as tiles, as of the last ``route(_:)``.
     public func tiledStates() -> [PolygonState] {
-        states
+        withLock { states }
     }
 
     public func isTiled(_ id: String) -> Bool {
-        tiled.contains(id)
+        withLock { tiled.contains(id) }
     }
 
     /// An in-place change of a tiled polygon; only the tiles it touches are redrawn.
@@ -86,24 +107,46 @@ public final class PolygonTiler {
         tileSet.update(state)
     }
 
+    /// Shows the tiles again if the local tile server came back on another port
+    /// (it does after the app has been in the background). Cheap enough to call
+    /// on every content update, which is where the marker tiles check too.
+    public func refreshIfServerMoved() {
+        let current = TileServerRegistry.get().baseUrl
+        let moved = withLock { () -> Bool in
+            guard !tiled.isEmpty, let shown = shownBaseUrl, shown != current else { return false }
+            shownBaseUrl = current
+            return true
+        }
+        guard moved else { return }
+        let template = tileSet.template()
+        Task { await onTemplate?(template, tileSet.tileSize) }
+    }
+
     /// The current template, or nil when nothing is tiled. A provider whose map
     /// re-reads its layers (a style reload, a server that moved) asks here.
     public func currentTemplate() -> String? {
-        tiled.isEmpty ? nil : tileSet.template()
+        withLock { tiled.isEmpty } ? nil : tileSet.template()
     }
 
     /// Unregisters the tiles without telling the provider; for a map being torn down.
     public func dispose() {
+        withLock {
+            tiled = []
+            states = []
+            shownBaseUrl = nil
+        }
         tileSet.dispose()
-        tiled = []
-        states = []
     }
 
     public func clear() async {
-        let hadTiles = !tiled.isEmpty
+        let hadTiles = withLock { () -> Bool in
+            let had = !tiled.isEmpty
+            tiled = []
+            states = []
+            shownBaseUrl = nil
+            return had
+        }
         tileSet.dispose()
-        tiled = []
-        states = []
         if hadTiles { await onTemplate?(nil, tileSet.tileSize) }
     }
 }
