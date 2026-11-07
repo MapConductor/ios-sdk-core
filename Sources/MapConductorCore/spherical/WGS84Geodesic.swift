@@ -95,6 +95,9 @@ public enum WGS84Geodesic {
     /// `Spherical.computeSignedArea` — matching the ellipsoidal area to well under
     /// 0.01% for typical polygons. Edges are treated as authalic-sphere arcs; the
     /// higher-order geodesic-edge terms of Karney's exact method are omitted.
+    ///
+    /// The sign follows `Spherical.computeSignedArea`: positive for a clockwise
+    /// ring, negative for a counter-clockwise ring (as seen on a north-up map).
     public static func computeSignedArea(_ path: [GeoPointProtocol]) -> Double {
         guard path.count >= 3 else { return 0.0 }
         var area = 0.0
