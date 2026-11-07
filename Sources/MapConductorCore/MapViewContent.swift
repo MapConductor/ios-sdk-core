@@ -24,7 +24,22 @@ public struct MapViewContent {
     public var groundImages: [GroundImage] = []
     public var rasterLayers: [RasterLayer] = []
     public var views: [AnyView] = []
-    public var markerTilingOptions: MarkerTilingOptions = .Default
+    /// Marker tiling for this content. Reads ``MarkerTilingOptions/Default`` until something sets it.
+    ///
+    /// Whether it was set is tracked separately from its value, so that merging the pieces a
+    /// ``MapViewContentBuilder`` closure produces keeps an explicit choice — including
+    /// ``MarkerTilingOptions/Disabled`` — while pieces that never touched it leave it alone.
+    public var markerTilingOptions: MarkerTilingOptions {
+        get { explicitMarkerTilingOptions ?? .Default }
+        set { explicitMarkerTilingOptions = newValue }
+    }
+    /// `nil` until ``markerTilingOptions`` is assigned.
+    ///
+    /// `merge` used to carry the option over only when it was enabled, because a fresh
+    /// content's `.Default` and a deliberate `.Disabled` could not be told apart otherwise.
+    /// A single-expression builder closure always goes through `buildBlock`, which merges
+    /// into a fresh content, so `.Disabled` was silently replaced by the default (tiling on).
+    var explicitMarkerTilingOptions: MarkerTilingOptions?
     /// Handlers that manage a subset of polygons imperatively (e.g. cluster hull polygons).
     /// Map view coordinators call ``PolygonSyncHandler/bindPolygonSync(_:)`` on each handler
     /// to provide a direct polygon sync function, ensuring those polygons are committed before
@@ -47,8 +62,10 @@ public struct MapViewContent {
         rasterLayers.append(contentsOf: other.rasterLayers)
         views.append(contentsOf: other.views)
         polygonSyncHandlers.append(contentsOf: other.polygonSyncHandlers)
-        if other.markerTilingOptions.enabled {
-            markerTilingOptions = other.markerTilingOptions
+        // An explicit setting wins over an unset one, whether it enables tiling or not;
+        // between two explicit settings the later one wins.
+        if let tiling = other.explicitMarkerTilingOptions {
+            explicitMarkerTilingOptions = tiling
         }
     }
 }
