@@ -17,6 +17,7 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
     @Published public var tileSize: Int
     @Published public var extra: Any?
     @Published public var onClick: OnGroundImageEventHandler?
+    public var onAdded: OnGroundImageAddedHandler?
 
     public init(
         bounds: GeoRectBounds,
@@ -25,7 +26,8 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         tileSize: Int = 512,
         id: String? = nil,
         extra: Any? = nil,
-        onClick: OnGroundImageEventHandler? = nil
+        onClick: OnGroundImageEventHandler? = nil,
+        onAdded: OnGroundImageAddedHandler? = nil
     )
 
     public convenience init(
@@ -35,7 +37,8 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         tileSize: Int = 512,
         id: String? = nil,
         extra: Any? = nil,
-        onClick: OnGroundImageEventHandler? = nil
+        onClick: OnGroundImageEventHandler? = nil,
+        onAdded: OnGroundImageAddedHandler? = nil
     )
 }
 ```
@@ -82,6 +85,10 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
     - Type: `OnGroundImageEventHandler?`
     - Default: `nil`
     - Description: Called when the overlay is tapped. Receives a `GroundImageEvent`.
+- `onAdded`
+    - Type: `OnGroundImageAddedHandler?`
+    - Default: `nil`
+    - Description: Called with this state each time the ground image goes from not being on the map to being on it: for a natively drawn ground image, right after the provider has created its native object. It does not wait for tile images to load or for pixels to show. Not called for in-place changes, on clear, or when the map goes away; called again when the ground image is removed and later added again. Always on the main actor. Not part of the id, fingerprint, `==` or hash; replacing it does not redraw anything.
 
 ## Methods
 

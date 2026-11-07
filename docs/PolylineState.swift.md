@@ -15,6 +15,7 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
     @Published public var points: [GeoPointProtocol]
     @Published public var extra: Any?
     @Published public var onClick: OnPolylineEventHandler?
+    public var onAdded: OnPolylineAddedHandler?
 
     public init(
         points: [GeoPointProtocol],
@@ -23,7 +24,8 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
         strokeWidth: Double = 1.0,
         geodesic: Bool = false,
         extra: Any? = nil,
-        onClick: OnPolylineEventHandler? = nil
+        onClick: OnPolylineEventHandler? = nil,
+        onAdded: OnPolylineAddedHandler? = nil
     )
 }
 ```
@@ -57,6 +59,10 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
     - Type: `OnPolylineEventHandler?`
     - Default: `nil`
     - Description: Called when the polyline is tapped. Receives a `PolylineEvent`.
+- `onAdded`
+    - Type: `OnPolylineAddedHandler?`
+    - Default: `nil`
+    - Description: Called with this state each time the polyline goes from not being on the map to being on it: for a natively drawn polyline, right after the provider has created its native object. It does not wait for tile images to load or for pixels to show. Not called for in-place changes, on clear, or when the map goes away; called again when the polyline is removed and later added again. Always on the main actor. Not part of the id, fingerprint, `==` or hash; replacing it does not redraw anything.
 
 ## Methods
 

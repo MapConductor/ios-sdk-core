@@ -19,6 +19,7 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
     @Published public var zIndex: Int?
     @Published public var extra: Any?
     @Published public var onClick: OnCircleEventHandler?
+    public var onAdded: OnCircleAddedHandler?
 
     public init(
         center: GeoPointProtocol,
@@ -31,7 +32,8 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
         id: String? = nil,
         zIndex: Int? = nil,
         extra: Any? = nil,
-        onClick: OnCircleEventHandler? = nil
+        onClick: OnCircleEventHandler? = nil,
+        onAdded: OnCircleAddedHandler? = nil
     )
 }
 ```
@@ -80,6 +82,10 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
     - Type: `OnCircleEventHandler?`
     - Default: `nil`
     - Description: Called when the circle is tapped. Receives a `CircleEvent`.
+- `onAdded`
+    - Type: `OnCircleAddedHandler?`
+    - Default: `nil`
+    - Description: Called with this state each time the circle goes from not being on the map to being on it: for a natively drawn circle, right after the provider has created its native object. It does not wait for tile images to load or for pixels to show. Not called for in-place changes, on clear, or when the map goes away; called again when the circle is removed and later added again. Always on the main actor. Not part of the id, fingerprint, `==` or hash; replacing it does not redraw anything.
 
 ## Methods
 
