@@ -192,10 +192,8 @@ public struct Circle: MapOverlayItemProtocol, Identifiable {
         geodesic: Bool = true,
         clickable: Bool = true,
         strokeColor: UIColor = .red,
-        // android-sdk の `Circle` コンポーザブル（strokeWidth = 2.dp）と同じ既定値。
-        // `CircleState` 側の既定は 3 者とも 1 で、コンポーネントだけ 2 という
-        // 差はプラットフォーム共通（Polygon も同じ構図）。
-        strokeWidth: Double = 2.0,
+        // `CircleState` と同じ既定値（3 プラットフォームとも 1）。
+        strokeWidth: Double = 1.0,
         fillColor: UIColor = UIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.5),
         id: String? = nil,
         zIndex: Int? = nil,

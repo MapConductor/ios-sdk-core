@@ -70,8 +70,8 @@ public struct GroundImage : MapConductorCore::MapOverlayItemProtocol, Swift::Ide
   public let id: Swift::String
   public let state: MapConductorCore::GroundImageState
   public init(state: MapConductorCore::GroundImageState)
-  public init(bounds: MapConductorCore::GeoRectBounds, image: UIKit::UIImage, opacity: Swift::Double = 0.5, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil)
-  public init(bounds: MapConductorCore::GeoRectBounds, imageUrl: Foundation::URL, opacity: Swift::Double = 0.5, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil)
+  public init(bounds: MapConductorCore::GeoRectBounds, image: UIKit::UIImage, opacity: Swift::Double = 1.0, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil)
+  public init(bounds: MapConductorCore::GeoRectBounds, imageUrl: Foundation::URL, opacity: Swift::Double = 1.0, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil)
   public func append(to content: inout MapConductorCore::MapViewContent)
   public typealias ID = Swift::String
 }
@@ -139,7 +139,7 @@ public struct Circle : MapConductorCore::MapOverlayItemProtocol, Swift::Identifi
   public let id: Swift::String
   public let state: MapConductorCore::CircleState
   public init(state: MapConductorCore::CircleState)
-  public init(center: any MapConductorCore::GeoPointProtocol, radiusMeters: Swift::Double, geodesic: Swift::Bool = true, clickable: Swift::Bool = true, strokeColor: UIKit::UIColor = .red, strokeWidth: Swift::Double = 2.0, fillColor: UIKit::UIColor = UIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.5), id: Swift::String? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnCircleEventHandler? = nil)
+  public init(center: any MapConductorCore::GeoPointProtocol, radiusMeters: Swift::Double, geodesic: Swift::Bool = true, clickable: Swift::Bool = true, strokeColor: UIKit::UIColor = .red, strokeWidth: Swift::Double = 1.0, fillColor: UIKit::UIColor = UIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.5), id: Swift::String? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnCircleEventHandler? = nil)
   public func append(to content: inout MapConductorCore::MapViewContent)
   public typealias ID = Swift::String
 }
@@ -2445,7 +2445,7 @@ final public class PolygonState : Combine::ObservableObject, Swift::Identifiable
     @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
     set
   }
-  public init(points: [any MapConductorCore::GeoPointProtocol], holes: [[any MapConductorCore::GeoPointProtocol]] = [], id: Swift::String? = nil, strokeColor: UIKit::UIColor = .black, strokeWidth: Swift::Double = 2.0, fillColor: UIKit::UIColor = .clear, geodesic: Swift::Bool = false, zIndex: Swift::Int = 0, extra: Any? = nil, onClick: MapConductorCore::OnPolygonEventHandler? = nil)
+  public init(points: [any MapConductorCore::GeoPointProtocol], holes: [[any MapConductorCore::GeoPointProtocol]] = [], id: Swift::String? = nil, strokeColor: UIKit::UIColor = .black, strokeWidth: Swift::Double = 1.0, fillColor: UIKit::UIColor = .clear, geodesic: Swift::Bool = false, zIndex: Swift::Int = 0, extra: Any? = nil, onClick: MapConductorCore::OnPolygonEventHandler? = nil)
   final public func copy(points: [any MapConductorCore::GeoPointProtocol]? = nil, holes: [[any MapConductorCore::GeoPointProtocol]]? = nil, id: Swift::String? = nil, strokeColor: UIKit::UIColor? = nil, strokeWidth: Swift::Double? = nil, fillColor: UIKit::UIColor? = nil, geodesic: Swift::Bool? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnPolygonEventHandler? = nil) -> MapConductorCore::PolygonState
   final public func fingerPrint() -> MapConductorCore::PolygonFingerPrint
   final public func asFlow() -> Combine::AnyPublisher<MapConductorCore::PolygonFingerPrint, Swift::Never>
