@@ -120,7 +120,7 @@ where Renderer.ActualPolygon == ActualPolygon {
             }
             if !tiled.isEmpty, let tiler {
                 for state in tiler.tiledStates() {
-                    polygonManager.registerEntity(PolygonEntity(tiledState: state))
+                    polygonManager.registerEntity(PolygonEntity(polygon: nil, state: state))
                 }
             }
 
@@ -133,7 +133,7 @@ where Renderer.ActualPolygon == ActualPolygon {
         await semaphore.withPermit {
             guard let prevEntity = polygonManager.getEntity(state.id) else { return }
             if tiledIds.contains(state.id) {
-                polygonManager.registerEntity(PolygonEntity(tiledState: state))
+                polygonManager.registerEntity(PolygonEntity(polygon: nil, state: state))
                 tiler?.update(state)
                 return
             }

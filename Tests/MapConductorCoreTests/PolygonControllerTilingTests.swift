@@ -113,7 +113,7 @@ final class PolygonControllerTilingTests: XCTestCase {
         // 10 万件のうち 1 件を引くのに、全件の state を読まない。
         let manager = PolygonManager<String>()
         let all = states(10_000)
-        for state in all { manager.registerEntity(PolygonEntity(tiledState: state)) }
+        for state in all { manager.registerEntity(PolygonEntity(polygon: nil, state: state)) }
         let start = DispatchTime.now().uptimeNanoseconds
         for _ in 0..<20 {
             XCTAssertEqual(manager.find(position: GeoPoint(latitude: 42.30525, longitude: -71.09475))?.state.id, "p505")

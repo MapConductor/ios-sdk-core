@@ -20,18 +20,6 @@ public final class PolygonEntity<ActualPolygon>: PolygonEntityProtocol {
         self.fingerPrint = state.fingerPrint()
         self.hitBounds = PolygonHitBounds(state)
     }
-
-    /// A polygon drawn in tiles: kept for taps, never diffed against a renderer,
-    /// so its fingerprint (a hash of every vertex) is not worth computing.
-    init(tiledState state: PolygonState) {
-        self.polygon = nil
-        self.state = state
-        self.fingerPrint = PolygonFingerPrint(
-            id: 0, strokeColor: 0, strokeWidth: 0, fillColor: 0, geodesic: 0,
-            zIndex: 0, points: 0, holes: 0, extra: 0
-        )
-        self.hitBounds = PolygonHitBounds(state)
-    }
 }
 
 /// Where a tap can possibly hit a polygon, for skipping the rest cheaply.
