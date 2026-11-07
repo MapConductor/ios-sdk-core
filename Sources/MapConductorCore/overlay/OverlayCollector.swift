@@ -84,6 +84,12 @@ public final class OverlayCollector<S: OverlayCollectableState> {
 
     /// Diff the full union list against the current contents and apply changes.
     public func sync(_ states: [S]) {
+        // SwiftUI re-evaluates the map's content on every camera frame and hands
+        // back the very same list. Diffing it costs a set, a dictionary and a
+        // listener per state: 260 ms a frame for 100,000 parcels on an iPad Pro,
+        // which made every pan run at 5 fps. The same instances in the same order
+        // cannot have changed membership, and their listeners are already in place.
+        if isSameList(states) { return }
         let newIds = Set(states.map { $0.id })
         let oldIds = Set(statesById.keys)
         var membershipChanged = newIds != oldIds
@@ -120,6 +126,12 @@ public final class OverlayCollector<S: OverlayCollectableState> {
                 self.scheduleUpdate(state)
             }
         }
+    }
+
+    private func isSameList(_ states: [S]) -> Bool {
+        guard states.count == latest.count, !states.isEmpty else { return false }
+        for i in states.indices where states[i] !== latest[i] { return false }
+        return true
     }
 
     /// membership 配信を 5ms の無入力窓にためる。窓の中で `sync(_:)` が続く限り窓を延長し、
