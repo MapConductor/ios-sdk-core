@@ -249,7 +249,10 @@ public struct MapViewContent {
   public var groundImages: [MapConductorCore::GroundImage]
   public var rasterLayers: [MapConductorCore::RasterLayer]
   public var views: [SwiftUICore::AnyView]
-  public var markerTilingOptions: MapConductorCore::MarkerTilingOptions
+  public var markerTilingOptions: MapConductorCore::MarkerTilingOptions {
+    get
+    set
+  }
   public var polygonSyncHandlers: [any MapConductorCore::PolygonSyncHandler]
   public init()
 }
