@@ -89,8 +89,13 @@ public final class PolygonManager<ActualPolygon>: PolygonManagerProtocol {
         let testX = normalizeLng(position.longitude)
         let testY = position.latitude
 
-        let sorted = allEntities().sorted { $0.state.zIndex > $1.state.zIndex }
-        for entity in sorted {
+        // Only the polygons whose bounds hold the point are tested, in zIndex
+        // order. Reading every state's zIndex and points per tap is what this
+        // avoids: with 100,000 tiled parcels that was most of a second.
+        let candidates = allEntities()
+            .filter { $0.hitBounds.mayContain(latitude: testY, longitude: testX) }
+            .sorted { $0.state.zIndex > $1.state.zIndex }
+        for entity in candidates {
             let state = entity.state
             let basePoints = state.points
             if basePoints.count < 3 { continue }
