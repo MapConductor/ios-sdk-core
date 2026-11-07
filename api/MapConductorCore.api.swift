@@ -2465,6 +2465,16 @@ final public class PolygonState : Combine::ObservableObject, Swift::Identifiable
 public protocol PolygonSyncHandler : AnyObject {
   func bindPolygonSync(_ polygonSync: @escaping @_Concurrency::MainActor ([MapConductorCore::PolygonState]) async -> Swift::Void)
 }
+public struct PolygonTilingOptions : Swift::Equatable {
+  public let enabled: Swift::Bool
+  public let minPolygonCount: Swift::Int
+  public let minVertexCount: Swift::Int
+  public static let Default: MapConductorCore::PolygonTilingOptions
+  public static let Disabled: MapConductorCore::PolygonTilingOptions
+  public init(enabled: Swift::Bool = true, minPolygonCount: Swift::Int = 2000, minVertexCount: Swift::Int = 50_000)
+  public func shouldUseTiles(polygonCount: Swift::Int, vertexCount: Swift::Int) -> Swift::Bool
+  public static func == (a: MapConductorCore::PolygonTilingOptions, b: MapConductorCore::PolygonTilingOptions) -> Swift::Bool
+}
 extension MapConductorCore::PolygonState {
   final public func unionHoles() -> MapConductorCore::PolygonState
   final public func unionHolesInBackground() async -> MapConductorCore::PolygonState
