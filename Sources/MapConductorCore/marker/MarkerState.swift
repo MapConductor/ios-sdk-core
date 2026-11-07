@@ -43,6 +43,21 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
     @Published public var onAnimateStart: OnMarkerEventHandler? { didSet { mutations.notifyMutated() } }
     @Published public var onAnimateEnd: OnMarkerEventHandler? { didSet { mutations.notifyMutated() } }
     @Published public var position: GeoPoint { didSet { mutations.notifyMutated() } }
+    /// Called with this state each time the marker goes from not being on the
+    /// map to being on it.
+    ///
+    /// - A natively drawn marker: after the provider has created its native marker.
+    /// - A marker drawn into tiles: after the tile layer's URL template has been
+    ///   handed to the map. The tile images may still be loading; this does not
+    ///   wait for pixels.
+    ///
+    /// Not called for in-place changes, for a move between native drawing and
+    /// tiles, on `clear`, or when the map goes away. Called again when the marker
+    /// is removed and later added again. Always on the main actor.
+    ///
+    /// Like `onClick` it is not part of the id, the fingerprint, `==` or the
+    /// hash, and replacing it does not redraw anything.
+    public var onAdded: OnMarkerEventHandler?
 
     @Published private var internalAnimation: MarkerAnimation? { didSet { mutations.notifyMutated() } }
 
@@ -60,7 +75,8 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         onDrag: OnMarkerEventHandler? = nil,
         onDragEnd: OnMarkerEventHandler? = nil,
         onAnimateStart: OnMarkerEventHandler? = nil,
-        onAnimateEnd: OnMarkerEventHandler? = nil
+        onAnimateEnd: OnMarkerEventHandler? = nil,
+        onAdded: OnMarkerEventHandler? = nil
     ) {
         let resolvedId = id ?? MarkerState.makeMarkerId(
             position: position,
@@ -83,6 +99,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         self.onDragEnd = onDragEnd
         self.onAnimateStart = onAnimateStart
         self.onAnimateEnd = onAnimateEnd
+        self.onAdded = onAdded
         self.internalAnimation = animation
         self.position = position
         watchIconImage()
@@ -117,7 +134,8 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         onDrag: OnMarkerEventHandler? = nil,
         onDragEnd: OnMarkerEventHandler? = nil,
         onAnimateStart: OnMarkerEventHandler? = nil,
-        onAnimateEnd: OnMarkerEventHandler? = nil
+        onAnimateEnd: OnMarkerEventHandler? = nil,
+        onAdded: OnMarkerEventHandler? = nil
     ) {
         let resolvedIcon: (any MarkerIconProtocol)? = icon
         self.init(
@@ -134,7 +152,8 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
             onDrag: onDrag,
             onDragEnd: onDragEnd,
             onAnimateStart: onAnimateStart,
-            onAnimateEnd: onAnimateEnd
+            onAnimateEnd: onAnimateEnd,
+            onAdded: onAdded
         )
     }
 
@@ -170,7 +189,8 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         onDrag: OnMarkerEventHandler? = nil,
         onDragEnd: OnMarkerEventHandler? = nil,
         onAnimateStart: OnMarkerEventHandler? = nil,
-        onAnimateEnd: OnMarkerEventHandler? = nil
+        onAnimateEnd: OnMarkerEventHandler? = nil,
+        onAdded: OnMarkerEventHandler? = nil
     ) -> MarkerState {
         // 各プロパティを個別の変数に展開する
         // これによりコンパイラの型推論の負荷を分散させます
@@ -188,6 +208,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         let finalOnDragEnd = onDragEnd ?? self.onDragEnd
         let finalOnAnimateStart = onAnimateStart ?? self.onAnimateStart
         let finalOnAnimateEnd = onAnimateEnd ?? self.onAnimateEnd
+        let finalOnAdded = onAdded ?? self.onAdded
 
         // 最終的にそれらを使ってインスタンスを生成
         return MarkerState(
@@ -204,7 +225,8 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
             onDrag: finalOnDrag,
             onDragEnd: finalOnDragEnd,
             onAnimateStart: finalOnAnimateStart,
-            onAnimateEnd: finalOnAnimateEnd
+            onAnimateEnd: finalOnAnimateEnd,
+            onAdded: finalOnAdded
         )
     }
 

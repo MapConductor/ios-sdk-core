@@ -27,6 +27,9 @@ public struct PolygonEvent {
 
 public typealias OnPolygonEventHandler = (PolygonEvent) -> Void
 
+/// The type of ``PolygonState/onAdded``: called with the state that reached the map.
+public typealias OnPolygonAddedHandler = (PolygonState) -> Void
+
 public final class PolygonState: ObservableObject, Identifiable, Equatable, Hashable {
     public let id: String
 
@@ -43,6 +46,21 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
     @Published public var holes: [[GeoPointProtocol]] { didSet { mutations.notifyMutated() } }
     @Published public var extra: Any? { didSet { mutations.notifyMutated() } }
     @Published public var onClick: OnPolygonEventHandler? { didSet { mutations.notifyMutated() } }
+    /// Called with this state each time the polygon goes from not being on the
+    /// map to being on it.
+    ///
+    /// - Drawn natively: after the provider has created its native polygon.
+    /// - Drawn into tiles: after the tile layer's URL template has been handed
+    ///   to the map. The tile images may still be loading; this does not wait
+    ///   for pixels.
+    ///
+    /// Not called for in-place changes or for a move between native drawing and tiles, on `clear`, or when the map goes
+    /// away. Called again when the polygon is removed and later added again.
+    /// Always on the main actor.
+    ///
+    /// Like `onClick` it is not part of the id, the fingerprint, `==` or the
+    /// hash, and replacing it does not redraw anything.
+    public var onAdded: OnPolygonAddedHandler?
 
     /// android-sdk の `Polygon(state)` コンポーザブルは `LaunchedEffect(state)` の中で
     /// `unionHolesInPlace()` を呼ぶため、穴のユニオンは「1 つの state インスタンスにつき 1 回」
@@ -64,7 +82,8 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         geodesic: Bool = false,
         zIndex: Int = 0,
         extra: Any? = nil,
-        onClick: OnPolygonEventHandler? = nil
+        onClick: OnPolygonEventHandler? = nil,
+        onAdded: OnPolygonAddedHandler? = nil
     ) {
         let resolvedId = id ?? PolygonState.makePolygonId(
             points: points,
@@ -85,6 +104,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         self.holes = holes
         self.extra = extra
         self.onClick = onClick
+        self.onAdded = onAdded
     }
 
     public func copy(
@@ -97,7 +117,8 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         geodesic: Bool? = nil,
         zIndex: Int? = nil,
         extra: Any? = nil,
-        onClick: OnPolygonEventHandler? = nil
+        onClick: OnPolygonEventHandler? = nil,
+        onAdded: OnPolygonAddedHandler? = nil
     ) -> PolygonState {
         PolygonState(
             points: points ?? self.points,
@@ -109,7 +130,8 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
             geodesic: geodesic ?? self.geodesic,
             zIndex: zIndex ?? self.zIndex,
             extra: extra ?? self.extra,
-            onClick: onClick ?? self.onClick
+            onClick: onClick ?? self.onClick,
+            onAdded: onAdded ?? self.onAdded
         )
     }
 

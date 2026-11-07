@@ -11,6 +11,10 @@ where Renderer.ActualPolyline == ActualPolyline {
 
     public let zIndex: Int = 5
     private let semaphore = AsyncSemaphore(1)
+
+    /// Which overlays have reached the map, for their `onAdded`.
+    @_spi(MapConductorDriver)
+    public let addedTracker = OverlayAddedTracker()
     /// Written from the map's camera callbacks on the main thread and from
     /// `onCameraChanged`, which the overlay registry runs in a detached task.
     /// Two unguarded writes of a class reference release the old camera twice:
@@ -44,8 +48,11 @@ where Renderer.ActualPolyline == ActualPolyline {
 
     open func add(data: [PolylineState]) async {
         if polylineManager.isDestroyed { return }
-        await semaphore.withPermit {
-            if polylineManager.isDestroyed { return }
+        let landed: [PolylineState] = await semaphore.withPermit {
+            if polylineManager.isDestroyed { return [] }
+            // The app's list: anything it no longer has can be added again later.
+            addedTracker.retain(Set(data.map(\.id)))
+            var landed: [PolylineState] = []
             var previous = Set(polylineManager.allEntities().map { $0.state.id })
             var added: [PolylineOverlayAddParams] = []
             var updated: [PolylineOverlayChangeParams<ActualPolyline>] = []
@@ -80,22 +87,23 @@ where Renderer.ActualPolyline == ActualPolyline {
 
             if !removed.isEmpty {
                 await renderer.onRemove(data: removed)
-                if polylineManager.isDestroyed { return }
+                if polylineManager.isDestroyed { return [] }
             }
 
             if !added.isEmpty {
                 let actualPolylines = await renderer.onAdd(data: added)
-                if polylineManager.isDestroyed { return }
+                if polylineManager.isDestroyed { return [] }
                 for (index, polyline) in actualPolylines.enumerated() {
                     guard let polyline else { continue }
                     let entity = PolylineEntity(polyline: polyline, state: added[index].state)
                     polylineManager.registerEntity(entity)
+                    landed.append(added[index].state)
                 }
             }
 
             if !updated.isEmpty {
                 let actualPolylines = await renderer.onChange(data: updated)
-                if polylineManager.isDestroyed { return }
+                if polylineManager.isDestroyed { return [] }
                 for (index, polyline) in actualPolylines.enumerated() {
                     guard let polyline else { continue }
                     let params = updated[index]
@@ -104,9 +112,12 @@ where Renderer.ActualPolyline == ActualPolyline {
                 }
             }
 
-            if polylineManager.isDestroyed { return }
+            if polylineManager.isDestroyed { return [] }
             await renderer.onPostProcess()
+            return addedTracker.admit(landed)
         }
+        // After the renderer returned: the native objects exist on the map.
+        await OverlayAddedTracker.notify(landed)
     }
 
     open func update(state: PolylineState) async {
@@ -135,6 +146,7 @@ where Renderer.ActualPolyline == ActualPolyline {
     open func clear() async {
         if polylineManager.isDestroyed { return }
         await semaphore.withPermit {
+            addedTracker.reset()
             let entities = polylineManager.allEntities()
             await renderer.onRemove(data: entities)
             if polylineManager.isDestroyed { return }

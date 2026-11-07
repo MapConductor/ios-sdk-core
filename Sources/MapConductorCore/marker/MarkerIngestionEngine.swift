@@ -11,6 +11,17 @@ public enum MarkerIngestionEngine {
     public struct Result {
         public let tiledDataChanged: Bool
         public let hasTiledMarkers: Bool
+        /// Markers new to this controller that went into the tiles. They are not on
+        /// the map until the provider has handed it the tile layer: once it has, it
+        /// passes these to `addedTracker.admitAndNotify(_:)` for their `onAdded`.
+        /// Natively drawn markers were already notified by `ingest`.
+        public let tiledAdded: [MarkerState]
+
+        public init(tiledDataChanged: Bool, hasTiledMarkers: Bool, tiledAdded: [MarkerState] = []) {
+            self.tiledDataChanged = tiledDataChanged
+            self.hasTiledMarkers = hasTiledMarkers
+            self.tiledAdded = tiledAdded
+        }
     }
 
     @MainActor
@@ -23,7 +34,51 @@ public enum MarkerIngestionEngine {
         tiledMarkerIds: inout Set<String>,
         shouldTile: (MarkerState) -> Bool
     ) async -> Result where Renderer.ActualMarker == ActualMarker {
+        await ingestImpl(
+            data: data, markerManager: markerManager, renderer: renderer,
+            defaultMarkerIcon: defaultMarkerIcon, tilingEnabled: tilingEnabled,
+            tiledMarkerIds: &tiledMarkerIds, addedTracker: nil, shouldTile: shouldTile
+        )
+    }
+
+    /// ``ingest(data:markerManager:renderer:defaultMarkerIcon:tilingEnabled:tiledMarkerIds:shouldTile:)``
+    /// that also calls `onAdded` of the natively drawn markers it added, and
+    /// returns the tiled ones in ``Result/tiledAdded`` for the provider to admit
+    /// once its tile layer is on the map.
+    @_spi(MapConductorDriver)
+    @MainActor
+    public static func ingest<ActualMarker, Renderer: MarkerOverlayRendererProtocol>(
+        data: [MarkerState],
+        markerManager: MarkerManager<ActualMarker>,
+        renderer: Renderer,
+        defaultMarkerIcon: BitmapIcon,
+        tilingEnabled: Bool,
+        tiledMarkerIds: inout Set<String>,
+        addedTracker: OverlayAddedTracker,
+        shouldTile: (MarkerState) -> Bool
+    ) async -> Result where Renderer.ActualMarker == ActualMarker {
+        await ingestImpl(
+            data: data, markerManager: markerManager, renderer: renderer,
+            defaultMarkerIcon: defaultMarkerIcon, tilingEnabled: tilingEnabled,
+            tiledMarkerIds: &tiledMarkerIds, addedTracker: addedTracker, shouldTile: shouldTile
+        )
+    }
+
+    @MainActor
+    private static func ingestImpl<ActualMarker, Renderer: MarkerOverlayRendererProtocol>(
+        data: [MarkerState],
+        markerManager: MarkerManager<ActualMarker>,
+        renderer: Renderer,
+        defaultMarkerIcon: BitmapIcon,
+        tilingEnabled: Bool,
+        tiledMarkerIds: inout Set<String>,
+        addedTracker: OverlayAddedTracker?,
+        shouldTile: (MarkerState) -> Bool
+    ) async -> Result where Renderer.ActualMarker == ActualMarker {
+        addedTracker?.retain(Set(data.map(\.id)))
         var previousIds = Set(markerManager.allEntities().map { $0.state.id })
+        var nativeAdded: [MarkerState] = []
+        var tiledAdded: [MarkerState] = []
         var animatedEntities: [MarkerEntity<ActualMarker>] = []
 
         var added: [MarkerOverlayAddParams] = []
@@ -78,6 +133,7 @@ public enum MarkerIngestionEngine {
             } else {
                 if wantsTiled {
                     tiledMarkerIds.insert(state.id)
+                    tiledAdded.append(state)
                     markerManager.registerEntity(MarkerEntity(
                         marker: nil,
                         state: state,
@@ -118,6 +174,7 @@ public enum MarkerIngestionEngine {
                     isRendered: true
                 )
                 markerManager.registerEntity(entity)
+                nativeAdded.append(state)
                 if state.getAnimation() != nil {
                     animatedEntities.append(entity)
                 }
@@ -148,9 +205,14 @@ public enum MarkerIngestionEngine {
 
         await renderer.onPostProcess()
 
+        if let addedTracker {
+            await addedTracker.admitAndNotify(nativeAdded)
+        }
+
         return Result(
             tiledDataChanged: tiledDataChanged,
-            hasTiledMarkers: !tiledMarkerIds.isEmpty
+            hasTiledMarkers: !tiledMarkerIds.isEmpty,
+            tiledAdded: tiledAdded
         )
     }
 }

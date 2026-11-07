@@ -12,6 +12,10 @@ where Renderer.ActualGroundImage == ActualGroundImage {
     public let zIndex: Int = 2
     private let semaphore = AsyncSemaphore(1)
 
+    /// Which overlays have reached the map, for their `onAdded`.
+    @_spi(MapConductorDriver)
+    public let addedTracker = OverlayAddedTracker()
+
     public var clickListener: ((GroundImageEvent) -> Void)?
 
     public init(
@@ -32,8 +36,11 @@ where Renderer.ActualGroundImage == ActualGroundImage {
 
     open func add(data: [GroundImageState]) async {
         if groundImageManager.isDestroyed { return }
-        await semaphore.withPermit {
-            if groundImageManager.isDestroyed { return }
+        let landed: [GroundImageState] = await semaphore.withPermit {
+            if groundImageManager.isDestroyed { return [] }
+            // The app's list: anything it no longer has can be added again later.
+            addedTracker.retain(Set(data.map(\.id)))
+            var landed: [GroundImageState] = []
             var previous = Set(groundImageManager.allEntities().map { $0.state.id })
             var added: [GroundImageOverlayAddParams] = []
             var updated: [GroundImageOverlayChangeParams<ActualGroundImage>] = []
@@ -76,6 +83,7 @@ where Renderer.ActualGroundImage == ActualGroundImage {
                     guard let groundImage else { continue }
                     let entity = GroundImageEntity(groundImage: groundImage, state: added[index].state)
                     groundImageManager.registerEntity(entity)
+                    landed.append(added[index].state)
                 }
             }
 
@@ -90,7 +98,10 @@ where Renderer.ActualGroundImage == ActualGroundImage {
             }
 
             await renderer.onPostProcess()
+            return addedTracker.admit(landed)
         }
+        // After the renderer returned: the native objects exist on the map.
+        await OverlayAddedTracker.notify(landed)
     }
 
     open func update(state: GroundImageState) async {
@@ -116,6 +127,7 @@ where Renderer.ActualGroundImage == ActualGroundImage {
     open func clear() async {
         if groundImageManager.isDestroyed { return }
         await semaphore.withPermit {
+            addedTracker.reset()
             let entities = groundImageManager.allEntities()
             await renderer.onRemove(data: entities)
             // android-sdk / react-sdk と同じく clear() でも onPostProcess を呼ぶ。

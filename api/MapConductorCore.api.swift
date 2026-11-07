@@ -411,6 +411,7 @@ public struct CircleEvent {
   public init(state: MapConductorCore::CircleState, clicked: any MapConductorCore::GeoPointProtocol)
 }
 public typealias OnCircleEventHandler = (MapConductorCore::CircleEvent) -> Swift::Void
+public typealias OnCircleAddedHandler = (MapConductorCore::CircleState) -> Swift::Void
 final public class CircleState : Combine::ObservableObject, Swift::Identifiable, Swift::Equatable, Swift::Hashable {
   final public let id: Swift::String
   final public let mutations: MapConductorCore::StateMutationSignal
@@ -514,8 +515,9 @@ final public class CircleState : Combine::ObservableObject, Swift::Identifiable,
     @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
     set
   }
-  public init(center: any MapConductorCore::GeoPointProtocol, radiusMeters: Swift::Double, geodesic: Swift::Bool = true, clickable: Swift::Bool = true, strokeColor: UIKit::UIColor = .red, strokeWidth: Swift::Double = 1.0, fillColor: UIKit::UIColor = UIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.5), id: Swift::String? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnCircleEventHandler? = nil)
-  final public func copy(center: (any MapConductorCore::GeoPointProtocol)? = nil, radiusMeters: Swift::Double? = nil, geodesic: Swift::Bool? = nil, clickable: Swift::Bool? = nil, strokeColor: UIKit::UIColor? = nil, strokeWidth: Swift::Double? = nil, fillColor: UIKit::UIColor? = nil, id: Swift::String? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnCircleEventHandler? = nil) -> MapConductorCore::CircleState
+  final public var onAdded: MapConductorCore::OnCircleAddedHandler?
+  public init(center: any MapConductorCore::GeoPointProtocol, radiusMeters: Swift::Double, geodesic: Swift::Bool = true, clickable: Swift::Bool = true, strokeColor: UIKit::UIColor = .red, strokeWidth: Swift::Double = 1.0, fillColor: UIKit::UIColor = UIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 0.5), id: Swift::String? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnCircleEventHandler? = nil, onAdded: MapConductorCore::OnCircleAddedHandler? = nil)
+  final public func copy(center: (any MapConductorCore::GeoPointProtocol)? = nil, radiusMeters: Swift::Double? = nil, geodesic: Swift::Bool? = nil, clickable: Swift::Bool? = nil, strokeColor: UIKit::UIColor? = nil, strokeWidth: Swift::Double? = nil, fillColor: UIKit::UIColor? = nil, id: Swift::String? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnCircleEventHandler? = nil, onAdded: MapConductorCore::OnCircleAddedHandler? = nil) -> MapConductorCore::CircleState
   final public func fingerPrint() -> MapConductorCore::CircleFingerPrint
   final public func asFlow() -> Combine::AnyPublisher<MapConductorCore::CircleFingerPrint, Swift::Never>
   public static func == (lhs: MapConductorCore::CircleState, rhs: MapConductorCore::CircleState) -> Swift::Bool
@@ -940,6 +942,7 @@ public struct GroundImageEvent {
   public init(state: MapConductorCore::GroundImageState, clicked: (any MapConductorCore::GeoPointProtocol)?)
 }
 public typealias OnGroundImageEventHandler = (MapConductorCore::GroundImageEvent) -> Swift::Void
+public typealias OnGroundImageAddedHandler = (MapConductorCore::GroundImageState) -> Swift::Void
 final public class GroundImageState : Combine::ObservableObject, Swift::Identifiable, Swift::Equatable, Swift::Hashable {
   final public let id: Swift::String
   final public let mutations: MapConductorCore::StateMutationSignal
@@ -1013,9 +1016,10 @@ final public class GroundImageState : Combine::ObservableObject, Swift::Identifi
     @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
     set
   }
-  public init(bounds: MapConductorCore::GeoRectBounds, image: UIKit::UIImage, opacity: Swift::Double = 1.0, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil)
-  convenience public init(bounds: MapConductorCore::GeoRectBounds, imageUrl: Foundation::URL, opacity: Swift::Double = 1.0, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil)
-  final public func copy(bounds: MapConductorCore::GeoRectBounds? = nil, image: UIKit::UIImage? = nil, opacity: Swift::Double? = nil, tileSize: Swift::Int? = nil, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil) -> MapConductorCore::GroundImageState
+  final public var onAdded: MapConductorCore::OnGroundImageAddedHandler?
+  public init(bounds: MapConductorCore::GeoRectBounds, image: UIKit::UIImage, opacity: Swift::Double = 1.0, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil, onAdded: MapConductorCore::OnGroundImageAddedHandler? = nil)
+  convenience public init(bounds: MapConductorCore::GeoRectBounds, imageUrl: Foundation::URL, opacity: Swift::Double = 1.0, tileSize: Swift::Int = 512, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil, onAdded: MapConductorCore::OnGroundImageAddedHandler? = nil)
+  final public func copy(bounds: MapConductorCore::GeoRectBounds? = nil, image: UIKit::UIImage? = nil, opacity: Swift::Double? = nil, tileSize: Swift::Int? = nil, id: Swift::String? = nil, extra: Any? = nil, onClick: MapConductorCore::OnGroundImageEventHandler? = nil, onAdded: MapConductorCore::OnGroundImageAddedHandler? = nil) -> MapConductorCore::GroundImageState
   final public func fingerPrint() -> MapConductorCore::GroundImageFingerPrint
   final public func asFlow() -> Combine::AnyPublisher<MapConductorCore::GroundImageFingerPrint, Swift::Never>
   public static func == (lhs: MapConductorCore::GroundImageState, rhs: MapConductorCore::GroundImageState) -> Swift::Bool
@@ -1821,6 +1825,8 @@ public enum MarkerIngestionEngine {
   public struct Result {
     public let tiledDataChanged: Swift::Bool
     public let hasTiledMarkers: Swift::Bool
+    public let tiledAdded: [MapConductorCore::MarkerState]
+    public init(tiledDataChanged: Swift::Bool, hasTiledMarkers: Swift::Bool, tiledAdded: [MapConductorCore::MarkerState] = [])
   }
   @_Concurrency::MainActor public static func ingest<ActualMarker, Renderer>(data: [MapConductorCore::MarkerState], markerManager: MapConductorCore::MarkerManager<ActualMarker>, renderer: Renderer, defaultMarkerIcon: MapConductorCore::BitmapIcon, tilingEnabled: Swift::Bool, tiledMarkerIds: inout Swift::Set<Swift::String>, shouldTile: (MapConductorCore::MarkerState) -> Swift::Bool) async -> MapConductorCore::MarkerIngestionEngine.MapConductorCore::Result where ActualMarker == Renderer.ActualMarker, Renderer : MapConductorCore::MarkerOverlayRendererProtocol
 }
@@ -2078,11 +2084,12 @@ final public class MarkerState : Combine::ObservableObject, Swift::Identifiable,
     @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
     set
   }
-  public init(position: MapConductorCore::GeoPoint, id: Swift::String? = nil, extra: Any? = nil, icon: (any MapConductorCore::MarkerIconProtocol)? = nil, animation: MapConductorCore::MarkerAnimation? = nil, clickable: Swift::Bool = true, draggable: Swift::Bool = false, zIndex: Swift::Int? = nil, onClick: MapConductorCore::OnMarkerEventHandler? = nil, onDragStart: MapConductorCore::OnMarkerEventHandler? = nil, onDrag: MapConductorCore::OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore::OnMarkerEventHandler? = nil)
-  convenience public init(position: MapConductorCore::GeoPoint, id: Swift::String? = nil, extra: Any? = nil, icon: MapConductorCore::DefaultMarkerIcon, animation: MapConductorCore::MarkerAnimation? = nil, clickable: Swift::Bool = true, draggable: Swift::Bool = false, zIndex: Swift::Int? = nil, onClick: MapConductorCore::OnMarkerEventHandler? = nil, onDragStart: MapConductorCore::OnMarkerEventHandler? = nil, onDrag: MapConductorCore::OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore::OnMarkerEventHandler? = nil)
+  final public var onAdded: MapConductorCore::OnMarkerEventHandler?
+  public init(position: MapConductorCore::GeoPoint, id: Swift::String? = nil, extra: Any? = nil, icon: (any MapConductorCore::MarkerIconProtocol)? = nil, animation: MapConductorCore::MarkerAnimation? = nil, clickable: Swift::Bool = true, draggable: Swift::Bool = false, zIndex: Swift::Int? = nil, onClick: MapConductorCore::OnMarkerEventHandler? = nil, onDragStart: MapConductorCore::OnMarkerEventHandler? = nil, onDrag: MapConductorCore::OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore::OnMarkerEventHandler? = nil, onAdded: MapConductorCore::OnMarkerEventHandler? = nil)
+  convenience public init(position: MapConductorCore::GeoPoint, id: Swift::String? = nil, extra: Any? = nil, icon: MapConductorCore::DefaultMarkerIcon, animation: MapConductorCore::MarkerAnimation? = nil, clickable: Swift::Bool = true, draggable: Swift::Bool = false, zIndex: Swift::Int? = nil, onClick: MapConductorCore::OnMarkerEventHandler? = nil, onDragStart: MapConductorCore::OnMarkerEventHandler? = nil, onDrag: MapConductorCore::OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore::OnMarkerEventHandler? = nil, onAdded: MapConductorCore::OnMarkerEventHandler? = nil)
   final public func animate(_ animation: MapConductorCore::MarkerAnimation?)
   final public func getAnimation() -> MapConductorCore::MarkerAnimation?
-  final public func copy(id: Swift::String? = nil, position: MapConductorCore::GeoPoint? = nil, extra: Any? = nil, icon: (any MapConductorCore::MarkerIconProtocol)? = nil, animation: MapConductorCore::MarkerAnimation?? = nil, clickable: Swift::Bool? = nil, draggable: Swift::Bool? = nil, zIndex: Swift::Int?? = nil, onClick: MapConductorCore::OnMarkerEventHandler? = nil, onDragStart: MapConductorCore::OnMarkerEventHandler? = nil, onDrag: MapConductorCore::OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore::OnMarkerEventHandler? = nil) -> MapConductorCore::MarkerState
+  final public func copy(id: Swift::String? = nil, position: MapConductorCore::GeoPoint? = nil, extra: Any? = nil, icon: (any MapConductorCore::MarkerIconProtocol)? = nil, animation: MapConductorCore::MarkerAnimation?? = nil, clickable: Swift::Bool? = nil, draggable: Swift::Bool? = nil, zIndex: Swift::Int?? = nil, onClick: MapConductorCore::OnMarkerEventHandler? = nil, onDragStart: MapConductorCore::OnMarkerEventHandler? = nil, onDrag: MapConductorCore::OnMarkerEventHandler? = nil, onDragEnd: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateStart: MapConductorCore::OnMarkerEventHandler? = nil, onAnimateEnd: MapConductorCore::OnMarkerEventHandler? = nil, onAdded: MapConductorCore::OnMarkerEventHandler? = nil) -> MapConductorCore::MarkerState
   public static func == (lhs: MapConductorCore::MarkerState, rhs: MapConductorCore::MarkerState) -> Swift::Bool
   final public func hash(into hasher: inout Swift::Hasher)
   final public func hashCode() -> Swift::Int
@@ -2355,6 +2362,7 @@ public struct PolygonEvent {
   public init(state: MapConductorCore::PolygonState, clicked: any MapConductorCore::GeoPointProtocol)
 }
 public typealias OnPolygonEventHandler = (MapConductorCore::PolygonEvent) -> Swift::Void
+public typealias OnPolygonAddedHandler = (MapConductorCore::PolygonState) -> Swift::Void
 final public class PolygonState : Combine::ObservableObject, Swift::Identifiable, Swift::Equatable, Swift::Hashable {
   final public let id: Swift::String
   final public let mutations: MapConductorCore::StateMutationSignal
@@ -2448,8 +2456,9 @@ final public class PolygonState : Combine::ObservableObject, Swift::Identifiable
     @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
     set
   }
-  public init(points: [any MapConductorCore::GeoPointProtocol], holes: [[any MapConductorCore::GeoPointProtocol]] = [], id: Swift::String? = nil, strokeColor: UIKit::UIColor = .black, strokeWidth: Swift::Double = 1.0, fillColor: UIKit::UIColor = .clear, geodesic: Swift::Bool = false, zIndex: Swift::Int = 0, extra: Any? = nil, onClick: MapConductorCore::OnPolygonEventHandler? = nil)
-  final public func copy(points: [any MapConductorCore::GeoPointProtocol]? = nil, holes: [[any MapConductorCore::GeoPointProtocol]]? = nil, id: Swift::String? = nil, strokeColor: UIKit::UIColor? = nil, strokeWidth: Swift::Double? = nil, fillColor: UIKit::UIColor? = nil, geodesic: Swift::Bool? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnPolygonEventHandler? = nil) -> MapConductorCore::PolygonState
+  final public var onAdded: MapConductorCore::OnPolygonAddedHandler?
+  public init(points: [any MapConductorCore::GeoPointProtocol], holes: [[any MapConductorCore::GeoPointProtocol]] = [], id: Swift::String? = nil, strokeColor: UIKit::UIColor = .black, strokeWidth: Swift::Double = 1.0, fillColor: UIKit::UIColor = .clear, geodesic: Swift::Bool = false, zIndex: Swift::Int = 0, extra: Any? = nil, onClick: MapConductorCore::OnPolygonEventHandler? = nil, onAdded: MapConductorCore::OnPolygonAddedHandler? = nil)
+  final public func copy(points: [any MapConductorCore::GeoPointProtocol]? = nil, holes: [[any MapConductorCore::GeoPointProtocol]]? = nil, id: Swift::String? = nil, strokeColor: UIKit::UIColor? = nil, strokeWidth: Swift::Double? = nil, fillColor: UIKit::UIColor? = nil, geodesic: Swift::Bool? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnPolygonEventHandler? = nil, onAdded: MapConductorCore::OnPolygonAddedHandler? = nil) -> MapConductorCore::PolygonState
   final public func fingerPrint() -> MapConductorCore::PolygonFingerPrint
   final public func asFlow() -> Combine::AnyPublisher<MapConductorCore::PolygonFingerPrint, Swift::Never>
   public static func == (lhs: MapConductorCore::PolygonState, rhs: MapConductorCore::PolygonState) -> Swift::Bool
@@ -2598,6 +2607,7 @@ public struct PolylineEvent {
   public init(state: MapConductorCore::PolylineState, clicked: any MapConductorCore::GeoPointProtocol)
 }
 public typealias OnPolylineEventHandler = (MapConductorCore::PolylineEvent) -> Swift::Void
+public typealias OnPolylineAddedHandler = (MapConductorCore::PolylineState) -> Swift::Void
 final public class PolylineState : Combine::ObservableObject, Swift::Identifiable, Swift::Equatable, Swift::Hashable {
   final public let id: Swift::String
   final public let mutations: MapConductorCore::StateMutationSignal
@@ -2671,8 +2681,9 @@ final public class PolylineState : Combine::ObservableObject, Swift::Identifiabl
     @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
     set
   }
-  public init(points: [any MapConductorCore::GeoPointProtocol], id: Swift::String? = nil, strokeColor: UIKit::UIColor = .black, strokeWidth: Swift::Double = 1.0, geodesic: Swift::Bool = false, zIndex: Swift::Int = 0, extra: Any? = nil, onClick: MapConductorCore::OnPolylineEventHandler? = nil)
-  final public func copy(points: [any MapConductorCore::GeoPointProtocol]? = nil, id: Swift::String? = nil, strokeColor: UIKit::UIColor? = nil, strokeWidth: Swift::Double? = nil, geodesic: Swift::Bool? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnPolylineEventHandler? = nil) -> MapConductorCore::PolylineState
+  final public var onAdded: MapConductorCore::OnPolylineAddedHandler?
+  public init(points: [any MapConductorCore::GeoPointProtocol], id: Swift::String? = nil, strokeColor: UIKit::UIColor = .black, strokeWidth: Swift::Double = 1.0, geodesic: Swift::Bool = false, zIndex: Swift::Int = 0, extra: Any? = nil, onClick: MapConductorCore::OnPolylineEventHandler? = nil, onAdded: MapConductorCore::OnPolylineAddedHandler? = nil)
+  final public func copy(points: [any MapConductorCore::GeoPointProtocol]? = nil, id: Swift::String? = nil, strokeColor: UIKit::UIColor? = nil, strokeWidth: Swift::Double? = nil, geodesic: Swift::Bool? = nil, zIndex: Swift::Int? = nil, extra: Any? = nil, onClick: MapConductorCore::OnPolylineEventHandler? = nil, onAdded: MapConductorCore::OnPolylineAddedHandler? = nil) -> MapConductorCore::PolylineState
   final public func fingerPrint() -> MapConductorCore::PolylineFingerPrint
   final public func asFlow() -> Combine::AnyPublisher<MapConductorCore::PolylineFingerPrint, Swift::Never>
   public static func == (lhs: MapConductorCore::PolylineState, rhs: MapConductorCore::PolylineState) -> Swift::Bool
@@ -2840,6 +2851,7 @@ public struct RasterLayerEvent {
   public init(state: MapConductorCore::RasterLayerState)
 }
 public typealias OnRasterLayerEventHandler = (MapConductorCore::RasterLayerEvent) -> Swift::Void
+public typealias OnRasterLayerAddedHandler = (MapConductorCore::RasterLayerState) -> Swift::Void
 final public class RasterLayerState : Combine::ObservableObject, Swift::Identifiable, Swift::Equatable, Swift::Hashable {
   public static let defaultUserAgent: Swift::String
   final public let id: Swift::String
@@ -2914,8 +2926,9 @@ final public class RasterLayerState : Combine::ObservableObject, Swift::Identifi
     @available(macOS 11.0, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
     set
   }
-  public init(source: MapConductorCore::RasterLayerSource, opacity: Swift::Double = 1.0, visible: Swift::Bool = true, zIndex: Swift::Int = 0, debug: Swift::Bool = false, userAgent: Swift::String = RasterLayerState.defaultUserAgent, extraHeaders: [Swift::String : Swift::String]? = nil, id: Swift::String? = nil)
-  final public func copy(source: MapConductorCore::RasterLayerSource? = nil, opacity: Swift::Double? = nil, visible: Swift::Bool? = nil, zIndex: Swift::Int? = nil, debug: Swift::Bool? = nil, userAgent: Swift::String? = nil, extraHeaders: [Swift::String : Swift::String]? = nil, id: Swift::String? = nil) -> MapConductorCore::RasterLayerState
+  final public var onAdded: MapConductorCore::OnRasterLayerAddedHandler?
+  public init(source: MapConductorCore::RasterLayerSource, opacity: Swift::Double = 1.0, visible: Swift::Bool = true, zIndex: Swift::Int = 0, debug: Swift::Bool = false, userAgent: Swift::String = RasterLayerState.defaultUserAgent, extraHeaders: [Swift::String : Swift::String]? = nil, id: Swift::String? = nil, onAdded: MapConductorCore::OnRasterLayerAddedHandler? = nil)
+  final public func copy(source: MapConductorCore::RasterLayerSource? = nil, opacity: Swift::Double? = nil, visible: Swift::Bool? = nil, zIndex: Swift::Int? = nil, debug: Swift::Bool? = nil, userAgent: Swift::String? = nil, extraHeaders: [Swift::String : Swift::String]? = nil, id: Swift::String? = nil, onAdded: MapConductorCore::OnRasterLayerAddedHandler? = nil) -> MapConductorCore::RasterLayerState
   final public func fingerPrint() -> MapConductorCore::RasterLayerFingerPrint
   final public func asFlow() -> Combine::AnyPublisher<MapConductorCore::RasterLayerFingerPrint, Swift::Never>
   public static func == (lhs: MapConductorCore::RasterLayerState, rhs: MapConductorCore::RasterLayerState) -> Swift::Bool

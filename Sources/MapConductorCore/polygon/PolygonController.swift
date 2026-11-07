@@ -12,6 +12,10 @@ where Renderer.ActualPolygon == ActualPolygon {
     public let zIndex: Int = 3
     private let semaphore = AsyncSemaphore(1)
 
+    /// Which polygons have reached the map, natively or in tiles, for their `onAdded`.
+    @_spi(MapConductorDriver)
+    public let addedTracker = OverlayAddedTracker()
+
     public var clickListener: ((PolygonEvent) -> Void)?
 
     /// Set by a provider that can show polygon tiles (see ``PolygonTiler``).
@@ -39,9 +43,14 @@ where Renderer.ActualPolygon == ActualPolygon {
 
     open func add(data: [PolygonState]) async {
         if polygonManager.isDestroyed { return }
-        await semaphore.withPermit {
-            if polygonManager.isDestroyed { return }
+        let landed: [PolygonState] = await semaphore.withPermit {
+            if polygonManager.isDestroyed { return [] }
+            // The app's list: anything it no longer has can be added again later.
+            addedTracker.retain(Set(data.map(\.id)))
+            var landed: [PolygonState] = []
             let wasTiled = tiledIds
+            // `route` returns once the tile layer's URL template has been handed
+            // to the map (the provider's `onTemplate` awaits its raster upsert).
             let tiled = await tiler?.route(data) ?? []
             tiledIds = tiled
             let data = tiled.isEmpty ? data : data.filter { !tiled.contains($0.id) }
@@ -96,6 +105,7 @@ where Renderer.ActualPolygon == ActualPolygon {
                     guard let polygon else { continue }
                     let entity = PolygonEntity(polygon: polygon, state: added[index].state)
                     polygonManager.registerEntity(entity)
+                    landed.append(added[index].state)
                 }
             }
 
@@ -119,13 +129,19 @@ where Renderer.ActualPolygon == ActualPolygon {
                 }
             }
             if !tiled.isEmpty, let tiler {
-                for state in tiler.tiledStates() {
+                let tiledStates = tiler.tiledStates()
+                for state in tiledStates {
                     polygonManager.registerEntity(PolygonEntity(polygon: nil, state: state))
                 }
+                landed.append(contentsOf: tiledStates)
             }
 
             await renderer.onPostProcess()
+            // A polygon that only moved between native drawing and the tiles is
+            // still on the map: `admit` drops it.
+            return addedTracker.admit(landed)
         }
+        await OverlayAddedTracker.notify(landed)
     }
 
     open func update(state: PolygonState) async {
@@ -156,6 +172,7 @@ where Renderer.ActualPolygon == ActualPolygon {
     open func clear() async {
         if polygonManager.isDestroyed { return }
         await semaphore.withPermit {
+            addedTracker.reset()
             let tiled = tiledIds
             tiledIds = []
             await tiler?.clear()
