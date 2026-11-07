@@ -11,7 +11,18 @@ where Renderer.ActualPolyline == ActualPolyline {
 
     public let zIndex: Int = 5
     private let semaphore = AsyncSemaphore(1)
-    private var currentCameraPosition: MapCameraPosition?
+    /// Written from the map's camera callbacks on the main thread and from
+    /// `onCameraChanged`, which the overlay registry runs in a detached task.
+    /// Two unguarded writes of a class reference release the old camera twice:
+    /// with 100,000 polygons in tiles a pan ran fast enough to hit it, and the app
+    /// crashed in the camera's release a few pans in.
+    private let cameraLock = NSLock()
+    private var cameraPositionValue: MapCameraPosition?
+    private var currentCameraPosition: MapCameraPosition? {
+        cameraLock.lock()
+        defer { cameraLock.unlock() }
+        return cameraPositionValue
+    }
 
     public var clickListener: ((PolylineEvent) -> Void)?
 
@@ -142,7 +153,12 @@ where Renderer.ActualPolyline == ActualPolyline {
     }
 
     public func setCurrentCameraPosition(_ cameraPosition: MapCameraPosition?) {
-        currentCameraPosition = cameraPosition
+        cameraLock.lock()
+        let previous = cameraPositionValue
+        cameraPositionValue = cameraPosition
+        cameraLock.unlock()
+        // Released outside the lock.
+        _ = previous
     }
 
     open func onCameraChanged(mapCameraPosition: MapCameraPosition) async {
