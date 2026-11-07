@@ -53,19 +53,33 @@ public struct MapViewContent {
     }
 
     mutating func merge(_ other: MapViewContent) {
-        markers.append(contentsOf: other.markers)
-        infoBubbles.append(contentsOf: other.infoBubbles)
-        polylines.append(contentsOf: other.polylines)
-        polygons.append(contentsOf: other.polygons)
-        circles.append(contentsOf: other.circles)
-        groundImages.append(contentsOf: other.groundImages)
-        rasterLayers.append(contentsOf: other.rasterLayers)
-        views.append(contentsOf: other.views)
+        // Into an empty list the other list is taken as it is (one shared buffer)
+        // rather than copied element by element: the content is rebuilt on every
+        // camera frame, and a copy of 100,000 overlays is a retain and a release
+        // of each.
+        Self.append(other.markers, to: &markers)
+        Self.append(other.infoBubbles, to: &infoBubbles)
+        Self.append(other.polylines, to: &polylines)
+        Self.append(other.polygons, to: &polygons)
+        Self.append(other.circles, to: &circles)
+        Self.append(other.groundImages, to: &groundImages)
+        Self.append(other.rasterLayers, to: &rasterLayers)
+        Self.append(other.views, to: &views)
         polygonSyncHandlers.append(contentsOf: other.polygonSyncHandlers)
         // An explicit setting wins over an unset one, whether it enables tiling or not;
         // between two explicit settings the later one wins.
         if let tiling = other.explicitMarkerTilingOptions {
             explicitMarkerTilingOptions = tiling
+        }
+    }
+}
+
+extension MapViewContent {
+    fileprivate static func append<T>(_ items: [T], to list: inout [T]) {
+        if list.isEmpty {
+            list = items
+        } else {
+            list.append(contentsOf: items)
         }
     }
 }
@@ -77,6 +91,7 @@ public enum MapViewContentBuilder {
     }
 
     public static func buildBlock(_ components: MapViewContent...) -> MapViewContent {
+        if components.count == 1 { return components[0] }
         var content = MapViewContent()
         for component in components {
             content.merge(component)
