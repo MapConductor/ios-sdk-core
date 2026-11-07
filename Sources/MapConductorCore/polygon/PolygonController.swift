@@ -53,6 +53,12 @@ where Renderer.ActualPolygon == ActualPolygon {
             // to the map (the provider's `onTemplate` awaits its raster upsert).
             let tiled = await tiler?.route(data) ?? []
             tiledIds = tiled
+            if !tiled.isEmpty, let tiler {
+                // Tiled polygons are on the map now. Report them before the
+                // bookkeeping below: registering 100,000 entities for taps takes
+                // about a second, and the tiles are already showing by then.
+                await OverlayAddedTracker.notify(addedTracker.admit(tiler.tiledStates()))
+            }
             let data = tiled.isEmpty ? data : data.filter { !tiled.contains($0.id) }
             // Only natively drawn polygons are diffed against the renderer.
             var previous = Set(
@@ -129,15 +135,13 @@ where Renderer.ActualPolygon == ActualPolygon {
                 }
             }
             if !tiled.isEmpty, let tiler {
-                let tiledStates = tiler.tiledStates()
-                for state in tiledStates {
+                for state in tiler.tiledStates() {
                     polygonManager.registerEntity(PolygonEntity(polygon: nil, state: state))
                 }
-                landed.append(contentsOf: tiledStates)
             }
 
             await renderer.onPostProcess()
-            // A polygon that only moved between native drawing and the tiles is
+            // A polygon that only moved from the tiles to native drawing is
             // still on the map: `admit` drops it.
             return addedTracker.admit(landed)
         }
