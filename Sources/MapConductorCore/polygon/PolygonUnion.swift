@@ -84,8 +84,12 @@ func unionHoleRings(_ holes: [[GeoPointProtocol]]) -> [[GeoPoint]]? {
 
     let rings = holes.compactMap { toRing($0, origin: origin) }
     guard rings.count > 1 else { return nil }
-
-    let merged = unionRings(rings)
+    // Holes that neither cross, touch nor contain one another are already their
+    // own union. Checking that is linear; the union is quadratic in the hole
+    // edges, which a street-network parcel with 80 holes and 8,000 hole
+    // vertices turns into seconds. js-sdk-core and android-sdk take the same
+    // shortcut. The rings come back as the union would return them: clockwise.
+    let merged = holesAreDisjoint(rings) ? rings : unionRings(rings)
     guard !merged.isEmpty else { return nil }
 
     return merged.map { ring -> [GeoPoint] in
@@ -288,6 +292,71 @@ private func intersectionPoints(_ seg: Edge, _ other: Edge) -> [Vec] {
     let u = cross(qp, r) / rxs
     if t < -unionEps || t > 1 + unionEps || u < -unionEps || u > 1 + unionEps { return [] }
     return [add2(seg.a, scale(r, clamp01(t)))]
+}
+
+/// True when no two rings cross, touch or nest. Edges are binned into a uniform
+/// grid and only pairs sharing a cell are tested, so the cost grows with the
+/// edge count rather than its square.
+private func holesAreDisjoint(_ rings: [[Vec]]) -> Bool {
+    let boxes = rings.map(ringBox)
+    // A ring inside another: one of its vertices is inside it.
+    for i in rings.indices {
+        let p = rings[i][0]
+        for j in rings.indices where i != j {
+            let b = boxes[j]
+            if p.x >= b.minX && p.x <= b.maxX && p.y >= b.minY && p.y <= b.maxY && pointInRing(p, rings[j]) {
+                return false
+            }
+        }
+    }
+
+    var edges: [(edge: Edge, ring: Int)] = []
+    for (r, ring) in rings.enumerated() {
+        for i in ring.indices {
+            edges.append((Edge(a: ring[i], b: ring[(i + 1) % ring.count]), r))
+        }
+    }
+    var minX = Double.infinity, minY = Double.infinity, maxX = -Double.infinity, maxY = -Double.infinity
+    for b in boxes {
+        minX = min(minX, b.minX); minY = min(minY, b.minY)
+        maxX = max(maxX, b.maxX); maxY = max(maxY, b.maxY)
+    }
+    let side = max(1, min(1024, Int(Double(edges.count).squareRoot().rounded(.up))))
+    let cellW = (maxX - minX) / Double(side) > 0 ? (maxX - minX) / Double(side) : 1
+    let cellH = (maxY - minY) / Double(side) > 0 ? (maxY - minY) / Double(side) : 1
+    func cellOf(_ v: Double, _ lo: Double, _ size: Double) -> Int {
+        max(0, min(side - 1, Int(floor((v - lo) / size))))
+    }
+    // Padded by the tolerance so an edge lying on a cell border is in both cells.
+    var cells: [Int: [Int]] = [:]
+    for (e, item) in edges.enumerated() {
+        let a = item.edge.a, b = item.edge.b
+        let x0 = cellOf(min(a.x, b.x) - unionEps, minX, cellW), x1 = cellOf(max(a.x, b.x) + unionEps, minX, cellW)
+        let y0 = cellOf(min(a.y, b.y) - unionEps, minY, cellH), y1 = cellOf(max(a.y, b.y) + unionEps, minY, cellH)
+        for cx in x0...x1 {
+            for cy in y0...y1 {
+                cells[cx * side + cy, default: []].append(e)
+            }
+        }
+    }
+    for bucket in cells.values {
+        for i in bucket.indices {
+            for j in (i + 1)..<bucket.count {
+                let p = edges[bucket[i]], q = edges[bucket[j]]
+                if p.ring != q.ring && !intersectionPoints(p.edge, q.edge).isEmpty { return false }
+            }
+        }
+    }
+    return true
+}
+
+private func ringBox(_ ring: [Vec]) -> (minX: Double, minY: Double, maxX: Double, maxY: Double) {
+    var minX = Double.infinity, minY = Double.infinity, maxX = -Double.infinity, maxY = -Double.infinity
+    for p in ring {
+        minX = min(minX, p.x); maxX = max(maxX, p.x)
+        minY = min(minY, p.y); maxY = max(maxY, p.y)
+    }
+    return (minX, minY, maxX, maxY)
 }
 
 /// How many rings' interiors contain the point.
