@@ -23,7 +23,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         points: [GeoPointProtocol],
         id: String? = nil,
         strokeColor: UIColor = .black,
-        strokeWidth: Double = 2.0,
+        strokeWidth: Double = 1.0,
         fillColor: UIColor = .clear,
         geodesic: Bool = false,
         zIndex: Int = 0,
@@ -49,7 +49,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
     - Description: Color of the polygon border.
 - `strokeWidth`
     - Type: `Double`
-    - Default: `2.0`
+    - Default: `1.0`
     - Description: Border width in points.
 - `fillColor`
     - Type: `UIColor`

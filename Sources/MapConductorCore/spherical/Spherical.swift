@@ -92,6 +92,9 @@ public enum Spherical {
         abs(computeSignedArea(path))
     }
 
+    /// Signed area of a closed path in square meters.
+    /// Positive for a clockwise ring, negative for a counter-clockwise ring
+    /// (as seen on a north-up map, e.g. SW -> NW -> NE -> SE is clockwise and positive).
     public static func computeSignedArea(_ path: [GeoPointProtocol]) -> Double {
         guard path.count >= 3 else { return 0.0 }
         var area = 0.0

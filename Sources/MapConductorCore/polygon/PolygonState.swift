@@ -59,7 +59,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         holes: [[GeoPointProtocol]] = [],
         id: String? = nil,
         strokeColor: UIColor = .black,
-        strokeWidth: Double = 2.0,
+        strokeWidth: Double = 1.0,
         fillColor: UIColor = .clear,
         geodesic: Bool = false,
         zIndex: Int = 0,

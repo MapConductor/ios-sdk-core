@@ -14,9 +14,8 @@ public struct GroundImage: MapOverlayItemProtocol, Identifiable {
     public init(
         bounds: GeoRectBounds,
         image: UIImage,
-        // android-sdk の `GroundImage` コンポーザブル（opacity = 0.5f）と同じ既定値。
-        // `GroundImageState` 側の既定は 3 者とも 1.0 で、コンポーネントだけ 0.5。
-        opacity: Double = 0.5,
+        // `GroundImageState` と同じ既定値（3 プラットフォームとも 1.0）。
+        opacity: Double = 1.0,
         tileSize: Int = 512,
         id: String? = nil,
         extra: Any? = nil,
@@ -39,7 +38,7 @@ public struct GroundImage: MapOverlayItemProtocol, Identifiable {
     public init(
         bounds: GeoRectBounds,
         imageUrl: URL,
-        opacity: Double = 0.5,
+        opacity: Double = 1.0,
         tileSize: Int = 512,
         id: String? = nil,
         extra: Any? = nil,
