@@ -33,6 +33,7 @@ public final class PolygonTileSet {
     private var version = 0
     private var registered = false
     private var pending: [String: PolygonState] = [:]
+    private var pendingRemovals: [Int] = []
     private var flushScheduled = false
 
     public init(pixelRatio: Int = max(1, Int(UIScreen.main.scale.rounded()))) {
@@ -118,6 +119,25 @@ public final class PolygonTileSet {
             return
         }
         pending[state.id] = state
+        scheduleFlushLocked()
+    }
+
+    /// Takes one polygon out of the tiles. Its slot in the renderer's list is
+    /// left empty, so the others keep their indices and only the tiles it was
+    /// in are drawn again.
+    public func remove(_ id: String) {
+        lock.lock()
+        guard let index = indexById.removeValue(forKey: id) else {
+            lock.unlock()
+            return
+        }
+        pending[id] = nil
+        pendingRemovals.append(index)
+        scheduleFlushLocked()
+    }
+
+    /// Called with ``lock`` held; releases it.
+    private func scheduleFlushLocked() {
         let schedule = !flushScheduled
         flushScheduled = true
         lock.unlock()
@@ -154,11 +174,15 @@ public final class PolygonTileSet {
         let updates = pending.values.compactMap { state -> (Int, PolygonState)? in
             indexById[state.id].map { ($0, state) }
         }
+        let removals = pendingRemovals
         pending.removeAll()
+        pendingRemovals.removeAll()
         let live = registered
         lock.unlock()
-        guard live, !updates.isEmpty else { return }
-        renderer.update(updates.map { (index: $0.0, shape: PolygonTileShape(state: $0.1)) })
+        guard live, !updates.isEmpty || !removals.isEmpty else { return }
+        var changes: [(index: Int, shape: PolygonTileShape?)] = updates.map { (index: $0.0, shape: PolygonTileShape(state: $0.1)) }
+        for index in removals { changes.append((index: index, shape: nil)) }
+        renderer.update(changes)
         lock.lock()
         version += 1
         lock.unlock()
@@ -168,6 +192,7 @@ public final class PolygonTileSet {
     private func cancelPending() {
         lock.lock()
         pending.removeAll()
+        pendingRemovals.removeAll()
         lock.unlock()
     }
 }

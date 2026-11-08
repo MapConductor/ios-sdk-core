@@ -10,7 +10,8 @@ import Foundation
     ids now in tiles; the controller keeps those in its `PolygonManager` (taps
     are resolved there, against the original shapes) but gives the map SDK
     nothing for them, and removes any native polygon it had drawn for one.
- 2. ``update(_:)`` for an in-place change of a tiled polygon.
+ 2. ``update(_:)`` for an in-place change of a tiled polygon, or ``remove(_:)``
+    when the change means it can no longer be tiled.
  3. ``onTemplate`` is how the tiles reach the map: a URL template to show as a
     raster layer, or nil to remove it. A provider with a raster layer controller
     hands ``rasterLayerState(template:tileSize:)`` to its `upsert(state:)` and
@@ -105,6 +106,18 @@ public final class PolygonTiler {
     /// An in-place change of a tiled polygon; only the tiles it touches are redrawn.
     public func update(_ state: PolygonState) {
         tileSet.update(state)
+    }
+
+    /// Takes one polygon out of the tiles, for a change that left it no longer
+    /// ``PolygonTileSet/canTile(_:)``; only the tiles it was in are redrawn. The
+    /// controller then hands it to the map SDK.
+    public func remove(_ id: String) {
+        let removed = withLock { () -> Bool in
+            guard tiled.remove(id) != nil else { return false }
+            states.removeAll { $0.id == id }
+            return true
+        }
+        if removed { tileSet.remove(id) }
     }
 
     /// Shows the tiles again if the local tile server came back on another port
