@@ -828,6 +828,7 @@ public struct PolygonRings {
   public init(outerRings: [[any MapConductorCore::GeoPointProtocol]], holeRings: [[any MapConductorCore::GeoPointProtocol]])
 }
 public func densifyAndNormalize(_ points: [any MapConductorCore::GeoPointProtocol], geodesic: Swift::Bool, maxSegmentLength: Swift::Double = 10_000.0) -> [any MapConductorCore::GeoPointProtocol]
+public func densifyPolygonRing(_ ring: [any MapConductorCore::GeoPointProtocol], geodesic: Swift::Bool, maxSegmentLength: Swift::Double = 10_000.0) -> [any MapConductorCore::GeoPointProtocol]
 public func buildPolylineSegments(_ points: [any MapConductorCore::GeoPointProtocol], geodesic: Swift::Bool) -> [[any MapConductorCore::GeoPointProtocol]]
 public func buildPolygonRings(points: [any MapConductorCore::GeoPointProtocol], holes: [[any MapConductorCore::GeoPointProtocol]], geodesic: Swift::Bool) -> MapConductorCore::PolygonRings
 public func buildUnwrappedPolylinePath(_ points: [any MapConductorCore::GeoPointProtocol], geodesic: Swift::Bool, maxSegmentLength: Swift::Double = 10_000.0) -> [any MapConductorCore::GeoPointProtocol]

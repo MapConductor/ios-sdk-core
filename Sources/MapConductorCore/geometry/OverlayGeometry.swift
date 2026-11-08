@@ -32,6 +32,46 @@ public func densifyAndNormalize(
     return interpolated.map { $0.normalize() }
 }
 
+/// ポリゴンのリング（外周・穴）を、閉じる辺（末尾 → 先頭）も含めて密度化する。
+///
+/// geodesic なら大圏（`WGS84Geodesic`）、そうでなければ緯度経度の線形補間（`Planar`）。
+/// どちらの `createInterpolatePoints` も隣り合う点の間しか補間しないため、開いたリング
+/// （末尾 ≠ 先頭）をそのまま渡すと閉じる辺だけが補間されず、描画側で閉じたときに直線の弦に
+/// なる。ポリゴンの輪郭はリングを閉じてからポリラインとして密度化するので、塗りと輪郭で
+/// 閉じる辺の形が食い違う（geodesic=false でも、線形補間の辺はメルカトル上でわずかに曲がる）。
+/// ここでは閉じる辺も他の辺と同じ方式で補間する。
+///
+/// 入力が開いたリングなら開いたまま（末尾に先頭の重複点を付けない）、閉じたリングなら閉じた
+/// まま返す。正規化はしない。頂点 2 未満の入力はそのまま `createInterpolatePoints` に渡す。
+public func densifyPolygonRing(
+    _ ring: [GeoPointProtocol],
+    geodesic: Bool,
+    maxSegmentLength: Double = 10_000.0
+) -> [GeoPointProtocol] {
+    func densify(_ points: [GeoPointProtocol]) -> [GeoPointProtocol] {
+        geodesic
+            ? WGS84Geodesic.createInterpolatePoints(points, maxSegmentLength: maxSegmentLength)
+            : Planar.createInterpolatePoints(points, maxSegmentLength: maxSegmentLength)
+    }
+    guard ring.count >= 2, let first = ring.first, let last = ring.last,
+          !(first.latitude == last.latitude && first.longitude == last.longitude)
+    else {
+        return densify(ring)
+    }
+    return Array(densify(ring + [first]).dropLast())
+}
+
+/// リング用の `densifyAndNormalize`。閉じる辺も補間する（`densifyPolygonRing`）。
+/// `densifyAndNormalize` と同じく、`maxSegmentLength` は geodesic のときだけ使う（線形補間は 10 km）。
+private func densifyRingAndNormalize(
+    _ ring: [GeoPointProtocol],
+    geodesic: Bool,
+    maxSegmentLength: Double = 10_000.0
+) -> [GeoPointProtocol] {
+    densifyPolygonRing(ring, geodesic: geodesic, maxSegmentLength: geodesic ? maxSegmentLength : 10_000.0)
+        .map { $0.normalize() }
+}
+
 // ─── 分割版パイプライン（経度 ±180 に制約のある SDK 向け） ─────────────────────
 //
 // 経度 ±180 を超える座標を受け付けない SDK（ネイティブオーバーレイ系）は、密度化・正規化後に
@@ -61,14 +101,14 @@ public func buildPolygonRings(
 ) -> PolygonRings {
     guard points.count >= 3 else { return PolygonRings(outerRings: [], holeRings: []) }
     let outerRings = splitRingByMeridian(
-        densifyAndNormalize(points, geodesic: geodesic),
+        densifyRingAndNormalize(points, geodesic: geodesic),
         geodesic: geodesic
     ).filter { $0.count >= 3 }
     let includeHoles = !holes.isEmpty && outerRings.count == 1
     let holeRings = includeHoles
         ? holes
             .filter { $0.count >= 3 }
-            .map { densifyAndNormalize($0, geodesic: geodesic) }
+            .map { densifyRingAndNormalize($0, geodesic: geodesic) }
             .filter { $0.count >= 3 }
         : []
     return PolygonRings(outerRings: outerRings, holeRings: holeRings)
@@ -122,14 +162,14 @@ public func buildUnwrappedPolygonRings(
 ) -> PolygonRings {
     guard points.count >= 3 else { return PolygonRings(outerRings: [], holeRings: []) }
     let outer = unwrapContinuous(
-        densifyAndNormalize(points, geodesic: geodesic, maxSegmentLength: maxSegmentLength)
+        densifyRingAndNormalize(points, geodesic: geodesic, maxSegmentLength: maxSegmentLength)
     )
     let anchor = outer[0].longitude
     let holeRings = holes
         .filter { $0.count >= 3 }
         .map { hole in
             unwrapContinuous(
-                densifyAndNormalize(hole, geodesic: geodesic, maxSegmentLength: maxSegmentLength),
+                densifyRingAndNormalize(hole, geodesic: geodesic, maxSegmentLength: maxSegmentLength),
                 anchorLng: anchor
             )
         }

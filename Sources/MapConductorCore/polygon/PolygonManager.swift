@@ -97,7 +97,8 @@ public final class PolygonManager<ActualPolygon>: PolygonManagerProtocol {
 
             let ring: [GeoPointProtocol]
             if state.geodesic {
-                ring = WGS84Geodesic.createInterpolatePoints(basePoints)
+                // 閉じる辺（末尾 → 先頭）も大圏で補間する（描画と同じ形で判定する）。
+                ring = densifyPolygonRing(basePoints, geodesic: true)
             } else {
                 ring = basePoints
             }
@@ -112,10 +113,12 @@ public final class PolygonManager<ActualPolygon>: PolygonManagerProtocol {
             var insideHole = false
             for holePoints in state.holes {
                 if holePoints.count < 3 { continue }
-                guard let holeFirst = holePoints.first else { continue }
-                let holeLast = holePoints.last
+                // 穴も外周と同じく geodesic なら大圏で補間する（android-sdk / js-sdk-core と同じ）。
+                let holeRing = state.geodesic ? densifyPolygonRing(holePoints, geodesic: true) : holePoints
+                guard let holeFirst = holeRing.first else { continue }
+                let holeLast = holeRing.last
                 let holeIsClosed = holeLast.map { GeoPoint.from(position: holeFirst) == GeoPoint.from(position: $0) } ?? false
-                let closedHole = holeIsClosed ? holePoints : (holePoints + [holeFirst])
+                let closedHole = holeIsClosed ? holeRing : (holeRing + [holeFirst])
                 if pointInPolygonWindingNumber(testX: testX, testY: testY, ring: closedHole) {
                     insideHole = true
                     break
