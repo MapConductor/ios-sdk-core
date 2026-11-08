@@ -3,7 +3,8 @@ import XCTest
 
 @testable import MapConductorCore
 
-/// geodesic ポリゴンの閉じる辺（末尾 → 先頭）も大圏で補間すること。
+/// ポリゴンの閉じる辺（末尾 → 先頭）も他の辺と同じ方式で補間すること。geodesic は大圏、
+/// geodesic=false は緯度経度の線形補間。どちらも塗り・穴・輪郭が同じ点列になる。
 ///
 /// js-sdk-core の `GeodesicPolygonRing.test.mjs`、android-sdk の `GeodesicPolygonRingTest` と 1 対 1 で対応する。
 ///
@@ -53,8 +54,8 @@ final class GeodesicPolygonRingTests: XCTestCase {
         XCTAssertEqual(chordLat, 51.6, accuracy: 0.05)
     }
 
-    func testDensifyGeodesicRingInterpolatesClosingEdgeAndKeepsRingOpen() {
-        let ring = densifyGeodesicRing(triangle)
+    func testDensifyPolygonRingInterpolatesClosingEdgeAndKeepsRingOpen() {
+        let ring = densifyPolygonRing(triangle, geodesic: true)
         XCTAssertTrue(same(boston, ring[0]))
         // 先頭の重複点を末尾に付けない（閉じて補間した結果から末尾の 1 点だけを除いた長さ）。
         // createInterpolatePoints は分割比を足し込むため、末尾の手前に終点とほぼ同じ点が残ることがある。
@@ -63,9 +64,18 @@ final class GeodesicPolygonRingTests: XCTestCase {
         assertSamePoints(Array(expected.dropFirst().dropLast()), Array(ring.suffix(expected.count - 2)))
     }
 
-    func testDensifyGeodesicRingKeepsClosedRingClosed() {
+    func testDensifyPolygonRingKeepsClosedRingClosed() {
         let closed = triangle + [boston]
-        assertSamePoints(WGS84Geodesic.createInterpolatePoints(closed), densifyGeodesicRing(closed))
+        assertSamePoints(WGS84Geodesic.createInterpolatePoints(closed), densifyPolygonRing(closed, geodesic: true))
+        assertSamePoints(Planar.createInterpolatePoints(closed), densifyPolygonRing(closed, geodesic: false))
+    }
+
+    func testDensifyPolygonRingNonGeodesicInterpolatesClosingEdgeLinearly() {
+        let ring = densifyPolygonRing(triangle, geodesic: false)
+        XCTAssertTrue(same(boston, ring[0]))
+        XCTAssertEqual(Planar.createInterpolatePoints(triangle + [boston]).count - 1, ring.count)
+        let expected = Planar.createInterpolatePoints([iceland, boston])
+        assertSamePoints(Array(expected.dropFirst().dropLast()), Array(ring.suffix(expected.count - 2)))
     }
 
     func testUnwrappedGeodesicFillMatchesOutline() {
@@ -82,12 +92,22 @@ final class GeodesicPolygonRingTests: XCTestCase {
         assertSamePoints(outlineOf(triangle, geodesic: true), rings[0])
     }
 
-    func testNonGeodesicFillIsUnchanged() {
-        let legacy = Planar.createInterpolatePoints(triangle).map { $0.normalize() }
-        let fill = buildUnwrappedPolygonRings(points: triangle, holes: [], geodesic: false).outerRings[0]
-        assertSamePoints(legacy, fill)
-        XCTAssertTrue(same(iceland, fill[fill.count - 1]))
-        assertSamePoints(legacy, buildPolygonRings(points: triangle, holes: [], geodesic: false).outerRings[0])
+    /// geodesic=false の輪郭は閉じる辺も緯度経度で線形補間する（メルカトルではわずかに曲がる）。
+    /// 塗りも同じ点列であること。以前は閉じる辺だけ補間されず、メルカトル上の直線（弦）だった。
+    func testNonGeodesicFillMatchesOutlineIncludingClosingEdge() {
+        let unwrapped = buildUnwrappedPolygonRings(points: triangle, holes: [], geodesic: false).outerRings[0]
+        assertSamePoints(outlineOf(triangle, geodesic: false), unwrapped)
+        assertSamePoints(
+            outlineOf(triangle, geodesic: false),
+            buildPolygonRings(points: triangle, holes: [], geodesic: false).outerRings[0]
+        )
+        // 閉じる辺（アイスランド → ボストン）の緯度経度の中点が点列に含まれる（弦の上ではない）。
+        let mid = GeoPoint(
+            latitude: (iceland.latitude + boston.latitude) / 2,
+            longitude: (iceland.longitude + boston.longitude) / 2
+        )
+        let nearest = unwrapped.map { hypot($0.latitude - mid.latitude, $0.longitude - mid.longitude) }.min() ?? .infinity
+        XCTAssertLessThan(nearest, 0.1)
     }
 
     func testGeodesicHolesInterpolateClosingEdge() {
@@ -105,9 +125,22 @@ final class GeodesicPolygonRingTests: XCTestCase {
             outlineOf(hole, geodesic: true),
             buildPolygonRings(points: outer, holes: [hole], geodesic: true).holeRings[0]
         )
+    }
+
+    func testNonGeodesicHolesInterpolateClosingEdge() {
+        let outer: [GeoPointProtocol] = [
+            GeoPoint(latitude: 30.0, longitude: -80.0),
+            GeoPoint(latitude: 30.0, longitude: 10.0),
+            GeoPoint(latitude: 70.0, longitude: 10.0),
+            GeoPoint(latitude: 70.0, longitude: -80.0),
+        ]
+        let hole = triangle
+        let unwrapped = buildUnwrappedPolygonRings(points: outer, holes: [hole], geodesic: false)
+        assertSamePoints(outlineOf(hole, geodesic: false), unwrapped.holeRings[0])
+        assertSamePoints(outlineOf(outer, geodesic: false), unwrapped.outerRings[0])
         assertSamePoints(
-            Planar.createInterpolatePoints(hole).map { $0.normalize() },
-            buildUnwrappedPolygonRings(points: outer, holes: [hole], geodesic: false).holeRings[0]
+            outlineOf(hole, geodesic: false),
+            buildPolygonRings(points: outer, holes: [hole], geodesic: false).holeRings[0]
         )
     }
 
@@ -125,5 +158,23 @@ final class GeodesicPolygonRingTests: XCTestCase {
 
         state.geodesic = false
         XCTAssertNil(manager.find(position: bulge))
+    }
+
+    /// geodesic=false のタップ判定は生の頂点を緯度経度平面で判定する。閉じる辺は緯度経度の直線
+    /// （= 線形補間した塗り・輪郭と同じ線）になり、メルカトルの弦ではない。
+    func testNonGeodesicHitTestFollowsLinearClosingEdge() {
+        let midLng = (iceland.longitude + boston.longitude) / 2
+        let linearLat = (iceland.latitude + boston.latitude) / 2
+        func merc(_ lat: Double) -> Double { log(tan(Double.pi / 4 + lat * Double.pi / 360)) }
+        let chordLat = (2 * atan(exp((merc(iceland.latitude) + merc(boston.latitude)) / 2)) - Double.pi / 2) * 180 / Double.pi
+        // メルカトルの弦は緯度経度の直線より北を通る。その間は塗りの外。
+        XCTAssertGreaterThan(chordLat, linearLat + 0.5)
+        let between = GeoPoint(latitude: (chordLat + linearLat) / 2, longitude: midLng)
+        let inside = GeoPoint(latitude: linearLat - 0.5, longitude: midLng)
+
+        let manager = PolygonManager<Int>()
+        manager.registerEntity(PolygonEntity(polygon: 0, state: PolygonState(points: triangle, id: "p", geodesic: false)))
+        XCTAssertNil(manager.find(position: between))
+        XCTAssertEqual(manager.find(position: inside)?.state.id, "p")
     }
 }

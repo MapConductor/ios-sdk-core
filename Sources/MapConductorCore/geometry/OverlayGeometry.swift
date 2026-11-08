@@ -32,40 +32,44 @@ public func densifyAndNormalize(
     return interpolated.map { $0.normalize() }
 }
 
-/// ポリゴンのリング（外周・穴）を測地線（大圏）で密度化する。
+/// ポリゴンのリング（外周・穴）を、閉じる辺（末尾 → 先頭）も含めて密度化する。
 ///
-/// `WGS84Geodesic.createInterpolatePoints` は隣り合う点の間しか補間しないため、開いたリング
-/// （末尾 ≠ 先頭）を渡すと閉じる辺（末尾 → 先頭）が補間されず、描画側で閉じたときに直線の弦に
+/// geodesic なら大圏（`WGS84Geodesic`）、そうでなければ緯度経度の線形補間（`Planar`）。
+/// どちらの `createInterpolatePoints` も隣り合う点の間しか補間しないため、開いたリング
+/// （末尾 ≠ 先頭）をそのまま渡すと閉じる辺だけが補間されず、描画側で閉じたときに直線の弦に
 /// なる。ポリゴンの輪郭はリングを閉じてからポリラインとして密度化するので、塗りと輪郭で
-/// 閉じる辺の形が食い違う。ここでは閉じる辺も含めて補間する。
+/// 閉じる辺の形が食い違う（geodesic=false でも、線形補間の辺はメルカトル上でわずかに曲がる）。
+/// ここでは閉じる辺も他の辺と同じ方式で補間する。
 ///
 /// 入力が開いたリングなら開いたまま（末尾に先頭の重複点を付けない）、閉じたリングなら閉じた
 /// まま返す。正規化はしない。頂点 2 未満の入力はそのまま `createInterpolatePoints` に渡す。
-public func densifyGeodesicRing(
+public func densifyPolygonRing(
     _ ring: [GeoPointProtocol],
+    geodesic: Bool,
     maxSegmentLength: Double = 10_000.0
 ) -> [GeoPointProtocol] {
+    func densify(_ points: [GeoPointProtocol]) -> [GeoPointProtocol] {
+        geodesic
+            ? WGS84Geodesic.createInterpolatePoints(points, maxSegmentLength: maxSegmentLength)
+            : Planar.createInterpolatePoints(points, maxSegmentLength: maxSegmentLength)
+    }
     guard ring.count >= 2, let first = ring.first, let last = ring.last,
           !(first.latitude == last.latitude && first.longitude == last.longitude)
     else {
-        return WGS84Geodesic.createInterpolatePoints(ring, maxSegmentLength: maxSegmentLength)
+        return densify(ring)
     }
-    return Array(
-        WGS84Geodesic.createInterpolatePoints(ring + [first], maxSegmentLength: maxSegmentLength).dropLast()
-    )
+    return Array(densify(ring + [first]).dropLast())
 }
 
-/// リング用の `densifyAndNormalize`。geodesic のときは閉じる辺も補間する（`densifyGeodesicRing`）。
-/// geodesic=false は従来どおり `densifyAndNormalize` と同じ。
+/// リング用の `densifyAndNormalize`。閉じる辺も補間する（`densifyPolygonRing`）。
+/// `densifyAndNormalize` と同じく、`maxSegmentLength` は geodesic のときだけ使う（線形補間は 10 km）。
 private func densifyRingAndNormalize(
     _ ring: [GeoPointProtocol],
     geodesic: Bool,
     maxSegmentLength: Double = 10_000.0
 ) -> [GeoPointProtocol] {
-    guard geodesic else {
-        return densifyAndNormalize(ring, geodesic: false, maxSegmentLength: maxSegmentLength)
-    }
-    return densifyGeodesicRing(ring, maxSegmentLength: maxSegmentLength).map { $0.normalize() }
+    densifyPolygonRing(ring, geodesic: geodesic, maxSegmentLength: geodesic ? maxSegmentLength : 10_000.0)
+        .map { $0.normalize() }
 }
 
 // ─── 分割版パイプライン（経度 ±180 に制約のある SDK 向け） ─────────────────────
