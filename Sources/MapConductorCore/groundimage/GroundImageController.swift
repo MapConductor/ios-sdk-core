@@ -118,9 +118,10 @@ where Renderer.ActualGroundImage == ActualGroundImage {
         await semaphore.withPermit {
             let entities = groundImageManager.allEntities()
             await renderer.onRemove(data: entities)
-            // android-sdk / react-sdk と同じく clear() でも onPostProcess を呼ぶ。
-            await renderer.onPostProcess()
+            // manager を空にしてから onPostProcess を呼ぶ。GL 系の描画担当は remove では何もせず、
+            // onPostProcess で manager の全部を描き直すので、逆の順だと clear() 後も地図に残る。
             groundImageManager.clear()
+            await renderer.onPostProcess()
         }
     }
 
