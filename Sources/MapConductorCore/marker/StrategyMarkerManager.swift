@@ -73,6 +73,7 @@ where Renderer.ActualMarker == ActualMarker {
             subscriptions.values.forEach { $0.cancel() }
             subscriptions.removeAll()
             statesById = [:]
+            clearedUntilListChanges = false
             if let initialCamera = currentCamera() {
                 Task { [weak self] in
                     await self?.controller?.onCameraChanged(mapCameraPosition: initialCamera)
@@ -107,10 +108,31 @@ where Renderer.ActualMarker == ActualMarker {
 
     /// style ロード後など、shouldAddMarkers が true になったタイミングで未送信マーカーを再送する。
     public func flush() {
-        guard !latestMarkers.isEmpty, let controller, shouldAddMarkers() else { return }
+        guard !clearedUntilListChanges, !latestMarkers.isEmpty, let controller, shouldAddMarkers() else { return }
         let markers = latestMarkers
         Task { await controller.add(data: markers) }
     }
+
+    /// ``MarkerRenderingSupport`` の実装。`clearOverlays()` から呼ばれる。
+    ///
+    /// strategy は接続したまま、描いたマーカーだけを消す（``StrategyMarkerController/clear()``:
+    /// onRemove → strategy.clear() → onPostProcess）。
+    ///
+    /// 消した後は、他のオーバーレイのコレクタと同じく「同じインスタンスの一覧が送られ続ける間は
+    /// 描かない。顔ぶれが変わるか作り直された state が来たら全部を描き直す」。SwiftUI は
+    /// clear の直後にも body を評価し直して同じ一覧を送ってくるので、そこで描き直すと
+    /// 消したはずのマーカーがすぐ戻る。
+    public func clearMarkers() async {
+        clearedUntilListChanges = true
+        if !latestMarkers.isEmpty {
+            latestMarkers = []
+            onMarkersChanged?([])
+        }
+        await controller?.clear()
+    }
+
+    /// ``clearMarkers()`` の後、一覧が変わるまで描かない印。
+    private var clearedUntilListChanges = false
 
     /// strategy を解除してリソースを解放する。
     public func clear() {
@@ -144,6 +166,11 @@ where Renderer.ActualMarker == ActualMarker {
             newStatesById[state.id] = state
         }
         statesById = newStatesById
+        if clearedUntilListChanges {
+            // clearMarkers() の後、同じ一覧が送られている間は描かない（コレクタと同じ）。
+            guard shouldSyncList else { return }
+            clearedUntilListChanges = false
+        }
         let markersChanged = latestMarkers.count != markers.count || shouldSyncList
         latestMarkers = markers
         if markersChanged { onMarkersChanged?(markers) }
