@@ -133,8 +133,24 @@ where Renderer.ActualPolygon == ActualPolygon {
         await semaphore.withPermit {
             guard let prevEntity = polygonManager.getEntity(state.id) else { return }
             if tiledIds.contains(state.id) {
-                polygonManager.registerEntity(PolygonEntity(polygon: nil, state: state))
-                tiler?.update(state)
+                if PolygonTileSet.canTile(state) {
+                    polygonManager.registerEntity(PolygonEntity(polygon: nil, state: state))
+                    tiler?.update(state)
+                    return
+                }
+                // No longer drawable in a tile (geodesic, half the world wide, or
+                // under 3 points): the map SDK draws it from now on. Still on the
+                // map, so this is not an add. Whether the rest stay in tiles is
+                // left to the next add, which decides tiling for the whole list.
+                tiledIds.remove(state.id)
+                tiler?.remove(state.id)
+                let polygons = await renderer.onAdd(data: [PolygonOverlayAddParams(state: state)])
+                if polygons.count == 1, let actualPolygon = polygons[0] {
+                    polygonManager.registerEntity(PolygonEntity(polygon: actualPolygon, state: state))
+                } else {
+                    _ = polygonManager.removeEntity(state.id)
+                }
+                await renderer.onPostProcess()
                 return
             }
             let currentFinger = state.fingerPrint()

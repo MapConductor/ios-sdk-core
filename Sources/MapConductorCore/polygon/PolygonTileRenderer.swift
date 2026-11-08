@@ -206,11 +206,12 @@ final class PolygonTileRenderer: TileProvider {
         lock.unlock()
     }
 
-    /// Replaces the polygons at the given positions (as passed to ``setPolygons(_:)``).
+    /// Replaces the polygons at the given positions (as passed to ``setPolygons(_:)``);
+    /// a nil shape empties the slot (a polygon taken out of the tiles).
     /// Only the cached tiles those polygons overlap, before or after, are dropped.
-    func update(_ changes: [(index: Int, shape: PolygonTileShape)]) {
+    func update(_ changes: [(index: Int, shape: PolygonTileShape?)]) {
         guard !changes.isEmpty else { return }
-        let decoded = changes.map { (index: $0.index, polygon: Polygon($0.shape)) }
+        let decoded = changes.map { (index: $0.index, polygon: $0.shape.flatMap { Polygon($0) }) }
         lock.lock()
         defer { lock.unlock() }
         var next = data
