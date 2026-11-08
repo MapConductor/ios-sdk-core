@@ -151,4 +151,44 @@ final class OverlayClearOrderTests: XCTestCase {
 
         XCTAssertEqual(renderer.drawn, [])
     }
+
+    // MARK: - Marker
+
+    /// MapLibre / Mapbox / Mappls / MapTiler のマーカーの描画担当と同じ作り: onRemove は
+    /// アニメーションやアイコンの記録を捨てるだけで、地図のソースは onPostProcess が描き直す。
+    @MainActor
+    private final class MarkerGL: MarkerOverlayRendererProtocol {
+        typealias ActualMarker = String
+        let manager: MarkerManager<String>
+        var drawn: [String] = []
+        var animateStartListener: OnMarkerEventHandler?
+        var animateEndListener: OnMarkerEventHandler?
+        init(_ manager: MarkerManager<String>) { self.manager = manager }
+        func onAdd(data: [MarkerOverlayAddParams]) async -> [String?] { data.map { $0.state.id } }
+        func onChange(data: [MarkerOverlayChangeParams<String>]) async -> [String?] { data.map { $0.current.state.id } }
+        func onRemove(data: [MarkerEntity<String>]) async {}
+        func onAnimate(entity: MarkerEntity<String>) async {}
+        func onPostProcess() async { drawn = manager.allEntities().map { $0.state.id }.sorted() }
+    }
+
+    /// `find(position:)` が `fatalError` なので具象サブクラスを用意する。
+    private final class MarkerControllerGL: AbstractMarkerController<String, MarkerGL> {
+        override func find(position: GeoPointProtocol) -> MarkerEntity<String>? { nil }
+    }
+
+    @MainActor
+    func testMarkerClearLeavesNothingDrawn() async {
+        let manager = MarkerManager<String>()
+        let renderer = MarkerGL(manager)
+        let controller = MarkerControllerGL(markerManager: manager, renderer: renderer)
+        await controller.add(data: [
+            MarkerState(position: a, id: "m1"),
+            MarkerState(position: b, id: "m2"),
+        ])
+        XCTAssertEqual(renderer.drawn, ["m1", "m2"])
+
+        await controller.clear()
+
+        XCTAssertEqual(renderer.drawn, [])
+    }
 }
