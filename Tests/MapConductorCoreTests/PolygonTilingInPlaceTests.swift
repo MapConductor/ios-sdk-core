@@ -210,4 +210,22 @@ final class PolygonTilingInPlaceTests: XCTestCase {
         XCTAssertTrue(isGreen(try pixel(tiler, lat + 0.001, lng + 0.001, z: 16)))
         await controller.clear()
     }
+    func testMovingFromTilesToNativeDrawingCallsNoOnAdded() async throws {
+        let (controller, renderer, _) = setup()
+        let list = tokyo()
+        var added: [String] = []
+        for state in list { state.onAdded = { added.append($0.id) } }
+        await controller.add(data: list)
+        XCTAssertEqual(added.sorted(), ["a", "b", "c", "osaka"], "once each, in tiles")
+        added.removeAll()
+
+        list[0].geodesic = true
+        await controller.update(state: list[0])
+        await settle()
+        XCTAssertEqual(renderer.added, ["a"])
+        // The same list again: still on the map, natively now.
+        await controller.add(data: list)
+        XCTAssertEqual(added, [])
+        await controller.clear()
+    }
 }
