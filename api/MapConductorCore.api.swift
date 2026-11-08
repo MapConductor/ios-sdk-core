@@ -1934,11 +1934,15 @@ open class AbstractMarkerRenderingStrategy<ActualMarker> : MapConductorCore::Mar
   @_Concurrency::MainActor func connect(strategy: Any, markers: [MapConductorCore::MarkerState]) -> Swift::Bool
   @_Concurrency::MainActor func syncMarkers(_ markers: [MapConductorCore::MarkerState])
   @_Concurrency::MainActor func disconnect()
+  @_Concurrency::MainActor func clearMarkers() async
   @_Concurrency::MainActor func beginContentPass()
   @_Concurrency::MainActor func endContentPass()
 }
 public enum MarkerRenderingSupportKey : MapConductorCore::MapServiceKey {
   public typealias Value = any MapConductorCore::MarkerRenderingSupport
+}
+extension MapConductorCore::MapServiceRegistry {
+  @_Concurrency::MainActor public func clearMarkerRendering() async
 }
 public enum MarkerAnimation {
   case Drop
@@ -2179,6 +2183,7 @@ final public class StrategyMarkerController<ActualMarker, Strategy, Renderer> : 
   @_Concurrency::MainActor final public func endContentPass()
   @_Concurrency::MainActor final public func onCameraChanged(_ position: MapConductorCore::MapCameraPosition) async
   @_Concurrency::MainActor final public func flush()
+  @_Concurrency::MainActor final public func clearMarkers() async
   @_Concurrency::MainActor final public func clear()
   @_Concurrency::MainActor final public func syncMarkers(_ markers: [MapConductorCore::MarkerState])
   @objc deinit
