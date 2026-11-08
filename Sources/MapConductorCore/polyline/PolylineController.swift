@@ -127,9 +127,10 @@ where Renderer.ActualPolyline == ActualPolyline {
             let entities = polylineManager.allEntities()
             await renderer.onRemove(data: entities)
             if polylineManager.isDestroyed { return }
-            await renderer.onPostProcess()
-            if polylineManager.isDestroyed { return }
+            // manager を空にしてから onPostProcess を呼ぶ。GL 系の描画担当は remove では何もせず、
+            // onPostProcess で manager の全部を描き直すので、逆の順だと clear() 後も地図に残る。
             polylineManager.clear()
+            await renderer.onPostProcess()
         }
     }
 
