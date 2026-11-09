@@ -138,8 +138,27 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
         }
     }
 
+    /// 他の 5 種類・``AbstractMarkerController`` の clear() と同じく
+    /// 「onRemove(全部) → 空にする → onPostProcess」の順に呼ぶ。
+    ///
+    /// 以前は `strategy.clear()` で manager を空にするだけだった。GL 系の描画担当は
+    /// onRemove では地図に触らず onPostProcess で manager から描き直すので、呼ばないと
+    /// clear() の後もマーカーが地図に残る。空にするのは `strategy.clear()` のままにして、
+    /// ストラテジ固有の後片付け（クラスタの状態など）を保つ。
+    ///
+    /// **permit の中で行う。** `pendingStates` を触るため（上の ★ を参照）と、
+    /// add / カメラ変更のストラテジ処理と交錯させないため。
     public func clear() async {
-        strategy.clear()
+        await semaphore.withPermit {
+            let entities = markerManager.allEntities()
+            if !entities.isEmpty {
+                await renderer.onRemove(data: entities)
+            }
+            strategy.clear()
+            // 最初のカメラ待ちで保留していたものも消す。残すと次のカメラで描かれてしまう。
+            pendingStates = nil
+            await renderer.onPostProcess()
+        }
     }
 
     public func find(position: GeoPointProtocol) -> MarkerEntity<ActualMarker>? {

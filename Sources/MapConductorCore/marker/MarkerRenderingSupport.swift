@@ -30,6 +30,20 @@ public protocol MarkerRenderingSupport: AnyObject {
     /// Releases the renderer and controller built for the connected strategy.
     func disconnect()
 
+    /// Removes every marker the connected strategy has drawn, keeping the strategy connected.
+    ///
+    /// Called from each provider's `clearOverlays()` (through
+    /// ``MapServiceRegistry/clearMarkerRendering()``) so markers drawn by a strategy, such as
+    /// clustering, are cleared together with the provider's own overlays. Implementations call
+    /// the strategy controller's `clear()` (onRemove → strategy.clear() → onPostProcess) and
+    /// forget what they last sent, so the next ``syncMarkers(_:)`` sends the markers again,
+    /// the same way the overlay collectors re-add content after a clear.
+    ///
+    /// Required, with no default: a default no-op would compile and silently leave the
+    /// strategy's markers on the map for a provider that keeps its own strategy controller
+    /// (HERE, ArcGIS 3D).
+    func clearMarkers() async
+
     /// Called by the provider immediately before it evaluates its content closure.
     func beginContentPass()
 
@@ -47,4 +61,14 @@ public protocol MarkerRenderingSupport: AnyObject {
 /// Counterpart of Android's `MarkerRenderingSupportKey`.
 public enum MarkerRenderingSupportKey: MapServiceKey {
     public typealias Value = any MarkerRenderingSupport
+}
+
+public extension MapServiceRegistry {
+    /// Clears the markers drawn through ``MarkerRenderingSupport`` (strategy-driven markers such
+    /// as clusters). Every provider's `clearOverlays()` calls this once, after clearing its own
+    /// overlay controllers. Does nothing when no marker rendering support is registered.
+    @MainActor
+    func clearMarkerRendering() async {
+        await get(MarkerRenderingSupportKey.self)?.clearMarkers()
+    }
 }

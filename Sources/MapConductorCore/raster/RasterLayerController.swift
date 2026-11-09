@@ -163,8 +163,10 @@ where Renderer.ActualLayer == ActualLayer {
             upsertedIds.removeAll()
             let entities = rasterLayerManager.allEntities()
             await renderer.onRemove(data: entities)
-            await renderer.onPostProcess()
+            // manager を空にしてから onPostProcess を呼ぶ。GL 系の描画担当は remove では何もせず、
+            // onPostProcess で manager の全部を描き直すので、逆の順だと clear() 後も地図に残る。
             rasterLayerManager.clear()
+            await renderer.onPostProcess()
         }
     }
 
