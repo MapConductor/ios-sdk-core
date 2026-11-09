@@ -14,6 +14,13 @@ where Renderer.ActualPolygon == ActualPolygon {
 
     public var clickListener: ((PolygonEvent) -> Void)?
 
+    /// Set by a provider that can show polygon tiles (see ``PolygonTiler``).
+    /// Polygons it tiles stay in ``polygonManager``, for taps, with no native
+    /// overlay: their entity's `polygon` is nil and the renderer never sees them.
+    @_spi(MapConductorDriver)
+    public var tiler: PolygonTiler?
+    private var tiledIds: Set<String> = []
+
     public init(
         polygonManager: PolygonManager<ActualPolygon>,
         renderer: Renderer,
@@ -34,7 +41,16 @@ where Renderer.ActualPolygon == ActualPolygon {
         if polygonManager.isDestroyed { return }
         await semaphore.withPermit {
             if polygonManager.isDestroyed { return }
-            var previous = Set(polygonManager.allEntities().map { $0.state.id })
+            let wasTiled = tiledIds
+            let tiled = await tiler?.route(data) ?? []
+            tiledIds = tiled
+            let data = tiled.isEmpty ? data : data.filter { !tiled.contains($0.id) }
+            // Only natively drawn polygons are diffed against the renderer.
+            var previous = Set(
+                polygonManager.allEntities()
+                    .map { $0.state.id }
+                    .filter { !wasTiled.contains($0) }
+            )
             var added: [PolygonOverlayAddParams] = []
             var updated: [PolygonOverlayChangeParams<ActualPolygon>] = []
             var removed: [PolygonEntity<ActualPolygon>] = []
@@ -93,6 +109,21 @@ where Renderer.ActualPolygon == ActualPolygon {
                 }
             }
 
+            // Tiled polygons: kept for taps, nothing native. Those that left the
+            // tiles and the list are forgotten; those that left the tiles for
+            // native drawing were added above.
+            if !wasTiled.isEmpty {
+                let nativeIds = Set(data.map(\.id))
+                for id in wasTiled where !tiled.contains(id) && !nativeIds.contains(id) {
+                    _ = polygonManager.removeEntity(id)
+                }
+            }
+            if !tiled.isEmpty, let tiler {
+                for state in tiler.tiledStates() {
+                    polygonManager.registerEntity(PolygonEntity(polygon: nil, state: state))
+                }
+            }
+
             await renderer.onPostProcess()
         }
     }
@@ -101,6 +132,27 @@ where Renderer.ActualPolygon == ActualPolygon {
         if polygonManager.isDestroyed { return }
         await semaphore.withPermit {
             guard let prevEntity = polygonManager.getEntity(state.id) else { return }
+            if tiledIds.contains(state.id) {
+                if PolygonTileSet.canTile(state) {
+                    polygonManager.registerEntity(PolygonEntity(polygon: nil, state: state))
+                    tiler?.update(state)
+                    return
+                }
+                // No longer drawable in a tile (geodesic, half the world wide, or
+                // under 3 points): the map SDK draws it from now on. Still on the
+                // map, so this is not an add. Whether the rest stay in tiles is
+                // left to the next add, which decides tiling for the whole list.
+                tiledIds.remove(state.id)
+                tiler?.remove(state.id)
+                let polygons = await renderer.onAdd(data: [PolygonOverlayAddParams(state: state)])
+                if polygons.count == 1, let actualPolygon = polygons[0] {
+                    polygonManager.registerEntity(PolygonEntity(polygon: actualPolygon, state: state))
+                } else {
+                    _ = polygonManager.removeEntity(state.id)
+                }
+                await renderer.onPostProcess()
+                return
+            }
             let currentFinger = state.fingerPrint()
             let prevFinger = prevEntity.fingerPrint
             if currentFinger == prevFinger { return }
@@ -120,7 +172,10 @@ where Renderer.ActualPolygon == ActualPolygon {
     open func clear() async {
         if polygonManager.isDestroyed { return }
         await semaphore.withPermit {
-            let entities = polygonManager.allEntities()
+            let tiled = tiledIds
+            tiledIds = []
+            await tiler?.clear()
+            let entities = polygonManager.allEntities().filter { !tiled.contains($0.state.id) }
             await renderer.onRemove(data: entities)
             // manager を空にしてから onPostProcess を呼ぶ。GL 系の描画担当は remove では何もせず、
             // onPostProcess で manager の全部を描き直すので、逆の順だと clear() 後も地図に残る。
@@ -136,6 +191,7 @@ where Renderer.ActualPolygon == ActualPolygon {
     open func onCameraChanged(mapCameraPosition: MapCameraPosition) async {}
 
     open func destroy() {
+        tiler?.dispose()
         polygonManager.destroy()
     }
     // ── SlottedOverlayController ────────────────────────────────────────

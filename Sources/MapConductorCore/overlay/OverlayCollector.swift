@@ -84,6 +84,12 @@ public final class OverlayCollector<S: OverlayCollectableState> {
 
     /// Diff the full union list against the current contents and apply changes.
     public func sync(_ states: [S]) {
+        // SwiftUI re-evaluates the map's content on every camera frame and hands
+        // back the very same list. Diffing it costs a set, a dictionary and a
+        // listener per state: 260 ms a frame for 100,000 parcels on an iPad Pro,
+        // which made every pan run at 5 fps. The same instances in the same order
+        // cannot have changed membership, and their listeners are already in place.
+        if isSameList(states) { return }
         let newIds = Set(states.map { $0.id })
         let oldIds = Set(statesById.keys)
         var membershipChanged = newIds != oldIds
@@ -115,9 +121,28 @@ public final class OverlayCollector<S: OverlayCollectableState> {
         }
         listening = next
         for state in states {
-            state.mutations.listen { [weak self, weak state] in
-                guard let self, let state, self.statesById[state.id] === state else { return }
-                self.scheduleUpdate(state)
+            // The state is found again by id rather than held weakly. A weak
+            // reference gives the object a side table, and from then on every
+            // retain and release of it takes the slow path: with 100,000 polygons
+            // rebuilt into the map content on every camera frame, that was a
+            // third of a pan's main-thread time on the iPad.
+            let id = state.id
+            let identity = ObjectIdentifier(state)
+            state.mutations.listen { [weak self] in
+                guard let self, let current = self.statesById[id], ObjectIdentifier(current) == identity else { return }
+                self.scheduleUpdate(current)
+            }
+        }
+    }
+
+    /// The same instances in the same order. `S` is a class, so each element is
+    /// one reference and the two buffers can be compared as bytes: element by
+    /// element, through the generic, it cost 14 ms for 100,000 states on the iPad.
+    private func isSameList(_ states: [S]) -> Bool {
+        guard states.count == latest.count, !states.isEmpty else { return false }
+        return states.withUnsafeBytes { a in
+            latest.withUnsafeBytes { b in
+                a.count == b.count && memcmp(a.baseAddress!, b.baseAddress!, a.count) == 0
             }
         }
     }

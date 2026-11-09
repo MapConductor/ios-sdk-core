@@ -13,7 +13,8 @@ public struct Markers: MapOverlayItemProtocol {
     }
 
     public func append(to content: inout MapViewContent) {
-        content.markers.append(contentsOf: states.map { Marker(state: $0) })
+        let items = states.map { Marker(state: $0) }
+        if content.markers.isEmpty { content.markers = items } else { content.markers.append(contentsOf: items) }
     }
 }
 
@@ -25,7 +26,8 @@ public struct Circles: MapOverlayItemProtocol {
     }
 
     public func append(to content: inout MapViewContent) {
-        content.circles.append(contentsOf: states.map { Circle(state: $0) })
+        let items = states.map { Circle(state: $0) }
+        if content.circles.isEmpty { content.circles = items } else { content.circles.append(contentsOf: items) }
     }
 }
 
@@ -37,7 +39,8 @@ public struct Polylines: MapOverlayItemProtocol {
     }
 
     public func append(to content: inout MapViewContent) {
-        content.polylines.append(contentsOf: states.map { Polyline(state: $0) })
+        let items = states.map { Polyline(state: $0) }
+        if content.polylines.isEmpty { content.polylines = items } else { content.polylines.append(contentsOf: items) }
     }
 }
 
@@ -49,7 +52,8 @@ public struct Polygons: MapOverlayItemProtocol {
     }
 
     public func append(to content: inout MapViewContent) {
-        content.polygons.append(contentsOf: states.map { Polygon(state: $0) })
+        let items = states.map { Polygon(state: $0) }
+        if content.polygons.isEmpty { content.polygons = items } else { content.polygons.append(contentsOf: items) }
     }
 }
 
@@ -61,7 +65,8 @@ public struct GroundImages: MapOverlayItemProtocol {
     }
 
     public func append(to content: inout MapViewContent) {
-        content.groundImages.append(contentsOf: states.map { GroundImage(state: $0) })
+        let items = states.map { GroundImage(state: $0) }
+        if content.groundImages.isEmpty { content.groundImages = items } else { content.groundImages.append(contentsOf: items) }
     }
 }
 

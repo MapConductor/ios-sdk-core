@@ -84,8 +84,12 @@ func unionHoleRings(_ holes: [[GeoPointProtocol]]) -> [[GeoPoint]]? {
 
     let rings = holes.compactMap { toRing($0, origin: origin) }
     guard rings.count > 1 else { return nil }
-
-    let merged = unionRings(rings)
+    // Holes that neither cross, touch nor contain one another are already their
+    // own union. Checking that is linear; the union is quadratic in the hole
+    // edges, which a street-network parcel with 80 holes and 8,000 hole
+    // vertices turns into seconds. js-sdk-core and android-sdk take the same
+    // shortcut. The rings come back as the union would return them: clockwise.
+    let merged = holesAreDisjoint(rings) ? rings : unionRings(rings)
     guard !merged.isEmpty else { return nil }
 
     return merged.map { ring -> [GeoPoint] in
@@ -412,6 +416,47 @@ private func intersectionPoints(_ seg: Edge, _ other: Edge) -> [Vec] {
     let u = cross(qp, r) / rxs
     if t < -unionEps || t > 1 + unionEps || u < -unionEps || u > 1 + unionEps { return [] }
     return [add2(seg.a, scale(r, clamp01(t)))]
+}
+
+/// True when no two rings cross, touch or nest. The edges go into the same
+/// EdgeGrid the union uses, and each edge is tested only against the edges filed
+/// near its box, so the cost grows with the edge count rather than its square.
+private func holesAreDisjoint(_ rings: [[Vec]]) -> Bool {
+    let bounds = rings.map(ringBounds)
+    // A ring inside another: one of its vertices is inside it.
+    for i in rings.indices {
+        let p = rings[i][0]
+        for j in rings.indices where i != j {
+            let b = bounds[j]
+            if p.x >= b.minX && p.x <= b.maxX && p.y >= b.minY && p.y <= b.maxY && pointInRing(p, rings[j]) {
+                return false
+            }
+        }
+    }
+
+    var edges: [Edge] = []
+    var ringOf: [Int] = []
+    for (r, ring) in rings.enumerated() {
+        for i in ring.indices {
+            edges.append(Edge(a: ring[i], b: ring[(i + 1) % ring.count]))
+            ringOf.append(r)
+        }
+    }
+    // Only an edge whose box comes within meetPad of this one's can meet it.
+    var grid = EdgeGrid(edges, pad: meetPad)
+    var near: [Int] = []
+    for i in edges.indices {
+        let seg = edges[i]
+        grid.near(
+            min(seg.a.x, seg.b.x) - meetPad, min(seg.a.y, seg.b.y) - meetPad,
+            max(seg.a.x, seg.b.x) + meetPad, max(seg.a.y, seg.b.y) + meetPad,
+            into: &near
+        )
+        for j in near where j > i && ringOf[j] != ringOf[i] {
+            if !intersectionPoints(seg, edges[j]).isEmpty { return false }
+        }
+    }
+    return true
 }
 
 /// How many rings' interiors contain the point. A ring whose latitudes do not

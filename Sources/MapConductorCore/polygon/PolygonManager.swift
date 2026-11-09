@@ -89,8 +89,13 @@ public final class PolygonManager<ActualPolygon>: PolygonManagerProtocol {
         let testX = normalizeLng(position.longitude)
         let testY = position.latitude
 
-        let sorted = allEntities().sorted { $0.state.zIndex > $1.state.zIndex }
-        for entity in sorted {
+        // Only the polygons whose bounds hold the point are tested, in zIndex
+        // order. Reading every state's zIndex and points per tap is what this
+        // avoids: with 100,000 tiled parcels that was most of a second.
+        let candidates = allEntities()
+            .filter { $0.hitBounds.mayContain(latitude: testY, longitude: testX) }
+            .sorted { $0.state.zIndex > $1.state.zIndex }
+        for entity in candidates {
             let state = entity.state
             let basePoints = state.points
             if basePoints.count < 3 { continue }
@@ -200,13 +205,17 @@ public final class PolygonManager<ActualPolygon>: PolygonManagerProtocol {
         by: Double,
         eps: Double
     ) -> Bool {
+        // 線分までの距離が eps（度）以内なら辺上とみなす。
+        // 以前は外積と内積を eps と直接比べていた。内積は度の 2 乗なので、
+        // `(p-a)·(p-b) <= 1e-6` は「辺の中点から約 0.001°（~100 m）以内」を意味し、
+        // 短い辺を持つ建物ほど、離れたタップを辺上として拾っていた。
         let dx = bx - ax
         let dy = by - ay
-        let cross = dx * (py - ay) - dy * (px - ax)
-        let segLen = sqrt(dx * dx + dy * dy)
-        if abs(cross) > eps * max(1.0, segLen) { return false }
-        let dot = (px - ax) * (px - bx) + (py - ay) * (py - by)
-        return dot <= eps * max(1.0, segLen)
+        let lenSq = dx * dx + dy * dy
+        let t = lenSq > 0 ? min(1.0, max(0.0, ((px - ax) * dx + (py - ay) * dy) / lenSq)) : 0
+        let ex = px - (ax + t * dx)
+        let ey = py - (ay + t * dy)
+        return ex * ex + ey * ey <= eps * eps
     }
 
     private func unwrapLongitudesAround(points: [GeoPointProtocol], refLng: Double) -> [(Double, Double)] {
