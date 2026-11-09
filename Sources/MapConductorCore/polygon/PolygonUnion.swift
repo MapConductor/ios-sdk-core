@@ -123,6 +123,8 @@ private struct DirectedEdgeKey: Hashable {
 private let gridQ = 1e-9
 // Tolerance for parallel/collinear/on-segment tests in feature-scale coords.
 private let unionEps = 1e-12
+// A sub-edge this close to a mid-point passes through it (degrees, far below gridQ).
+private let unionOnEdge = 1e-12
 
 private func unionRings(_ rings: [[Vec]]) -> [[Vec]] {
     // Directed edges of every ring (closed).
@@ -185,11 +187,15 @@ private func classifyBoundary(_ subEdges: [Edge], rings: [[Vec]]) -> [Edge] {
 
         let mid = add2(seg.a, scale(dir, 0.5))
         // Unit left normal. Sample coverage just off each side of the mid-point;
-        // after splitting, no other edge crosses this sub-edge's interior, so a
-        // small offset stays within the two cells this edge separates.
+        // after splitting, no other edge crosses this sub-edge's interior, so an
+        // offset shorter than the distance to the nearest other edge stays within
+        // the two cells this edge separates. A fixed offset does not: where
+        // another hole runs closer than it (two holes 1e-5 degree apart), the
+        // sample lands inside that hole, the edge looks interior on both sides
+        // and is dropped, and the traced ring cuts across a hole.
         let nx = -dir.y / len
         let ny = dir.x / len
-        let off = min(len * 0.25, 1e-5)
+        let off = min(len * 0.25, 0.5 * clearance(mid, cap: 2e-5, subEdges))
         let leftInside = coverage(Vec(x: mid.x + nx * off, y: mid.y + ny * off), rings) > 0
         let rightInside = coverage(Vec(x: mid.x - nx * off, y: mid.y - ny * off), rings) > 0
         if leftInside == rightInside { continue } // interior on both/neither side
@@ -202,6 +208,30 @@ private func classifyBoundary(_ subEdges: [Edge], rings: [[Vec]]) -> [Edge] {
         out.append(Edge(a: a, b: b))
     }
     return out
+}
+
+/// Distance from `point` (the mid-point of a sub-edge) to the nearest sub-edge
+/// that does not pass through it, or `cap` when none is closer. The sub-edge
+/// itself and its duplicates from other rings pass through it and are skipped.
+private func clearance(_ point: Vec, cap: Double, _ subEdges: [Edge]) -> Double {
+    var best = cap
+    for e in subEdges {
+        if min(e.a.x, e.b.x) > point.x + best || max(e.a.x, e.b.x) < point.x - best
+            || min(e.a.y, e.b.y) > point.y + best || max(e.a.y, e.b.y) < point.y - best {
+            continue
+        }
+        let d = distanceToSegment(point, e)
+        if d > unionOnEdge && d < best { best = d }
+    }
+    return best
+}
+
+private func distanceToSegment(_ p: Vec, _ e: Edge) -> Double {
+    let d = sub(e.b, e.a)
+    let lenSq = dot(d, d)
+    let t = lenSq > 0 ? clamp01(dot(sub(p, e.a), d) / lenSq) : 0
+    let q = add2(e.a, scale(d, t))
+    return ((p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y)).squareRoot()
 }
 
 /// Chain directed boundary edges into closed rings.
