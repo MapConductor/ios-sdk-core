@@ -13,7 +13,8 @@ import UIKit
  again), reported to ``onTemplateChanged``. Tiles the change did not touch are
  still cached by the renderer and come back without being redrawn.
 
- The iOS counterpart of js-sdk-core's `PolygonTileSet`. There the polygons cross
+ The iOS counterpart of js-sdk-core's `PolygonTileSet`. The route, version,
+ coalescing and teardown are ``ShapeTileSet``'s, shared with ``PolylineTileSet``. There the polygons cross
  to a service worker as Encoded Polylines; here the renderer is in the same
  process and takes them as they are.
  */
@@ -22,26 +23,25 @@ public final class PolygonTileSet {
     /// In-place changes arriving within this window become one new template.
     static let updateCoalesceMs = 16
 
-    public let routeId = "polygons-\(UUID().uuidString.prefix(8).lowercased())"
-    public let tileSize = 256
+    public var routeId: String { core.routeId }
+    public var tileSize: Int { core.tileSize }
     /// Called on the main thread with the template after a batch of in-place changes.
-    public var onTemplateChanged: ((String) -> Void)?
-
-    let renderer: PolygonTileRenderer
-    private let lock = NSLock()
-    private var indexById: [String: Int] = [:]
-    private var version = 0
-    private var registered = false
-    private var pending: [String: PolygonState] = [:]
-    private var pendingRemovals: [Int] = []
-    private var flushScheduled = false
-
-    public init(pixelRatio: Int = max(1, Int(UIScreen.main.scale.rounded()))) {
-        renderer = PolygonTileRenderer(tileSize: 256, pixelRatio: pixelRatio)
+    public var onTemplateChanged: ((String) -> Void)? {
+        get { core.onTemplateChanged }
+        set { core.onTemplateChanged = newValue }
     }
 
-    deinit {
-        if registered { TileServerRegistry.get().unregister(routeId: routeId) }
+    let core: ShapeTileSet<PolygonState>
+    var renderer: PolygonTileRenderer { core.renderer }
+
+    public init(pixelRatio: Int = max(1, Int(UIScreen.main.scale.rounded()))) {
+        core = ShapeTileSet(
+            routePrefix: "polygons",
+            pixelRatio: pixelRatio,
+            id: { $0.id },
+            zIndex: { $0.zIndex },
+            shape: { ShapeTileRenderer.Shape(PolygonTileShape(state: $0)) }
+        )
     }
 
     /// Whether a polygon can be drawn in a tile. Geodesic edges are curves the
@@ -51,12 +51,16 @@ public final class PolygonTileSet {
         if state.geodesic { return false }
         let points = state.points
         if points.count < 3 { return false }
+        return longitudeSpan(points) < 180
+    }
+
+    static func longitudeSpan(_ points: [GeoPointProtocol]) -> Double {
         var minLng = Double.infinity, maxLng = -Double.infinity
         for p in points {
             minLng = min(minLng, p.longitude)
             maxLng = max(maxLng, p.longitude)
         }
-        return maxLng - minLng < 180
+        return maxLng - minLng
     }
 
     public static func vertexCount(_ states: [PolygonState]) -> Int {
@@ -72,127 +76,33 @@ public final class PolygonTileSet {
     /// template of their tiles. The geometry is read and projected off the
     /// calling thread.
     public func setPolygons(_ states: [PolygonState]) async -> String? {
-        cancelPending()
-        let renderer = self.renderer
-        let indexById = await Task.detached(priority: .userInitiated) { () -> [String: Int] in
-            // Draw order is list order: zIndex, then the order given. Each zIndex
-            // is read once: a state's properties are not free to read, and a
-            // sort reads them n log n times.
-            let zIndex = states.map(\.zIndex)
-            let ordered = states.indices
-                .sorted { zIndex[$0] != zIndex[$1] ? zIndex[$0] < zIndex[$1] : $0 < $1 }
-                .map { states[$0] }
-            var indexById: [String: Int] = [:]
-            indexById.reserveCapacity(ordered.count)
-            var shapes: [PolygonTileShape] = []
-            shapes.reserveCapacity(ordered.count)
-            for (i, state) in ordered.enumerated() {
-                indexById[state.id] = i
-                shapes.append(PolygonTileShape(state: state))
-            }
-            renderer.setPolygons(shapes)
-            return indexById
-        }.value
-
-        let server = TileServerRegistry.get()
-        server.register(routeId: routeId, provider: renderer)
-        lock.lock()
-        self.indexById = indexById
-        registered = true
-        version += 1
-        lock.unlock()
-        return template()
+        await core.setStates(states)
     }
 
     public func has(_ id: String) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return indexById[id] != nil
+        core.has(id)
     }
 
     /// One polygon changed in place. A change of zIndex reorders the list and
     /// needs ``setPolygons(_:)`` instead; everything else is applied here.
     public func update(_ state: PolygonState) {
-        lock.lock()
-        guard indexById[state.id] != nil else {
-            lock.unlock()
-            return
-        }
-        pending[state.id] = state
-        scheduleFlushLocked()
+        core.update(state)
     }
 
     /// Takes one polygon out of the tiles. Its slot in the renderer's list is
     /// left empty, so the others keep their indices and only the tiles it was
     /// in are drawn again.
     public func remove(_ id: String) {
-        lock.lock()
-        guard let index = indexById.removeValue(forKey: id) else {
-            lock.unlock()
-            return
-        }
-        pending[id] = nil
-        pendingRemovals.append(index)
-        scheduleFlushLocked()
-    }
-
-    /// Called with ``lock`` held; releases it.
-    private func scheduleFlushLocked() {
-        let schedule = !flushScheduled
-        flushScheduled = true
-        lock.unlock()
-        if schedule {
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Self.updateCoalesceMs)) { [weak self] in
-                self?.flush()
-            }
-        }
+        core.remove(id)
     }
 
     /// The URL template of the tiles as they are now. Read from the server each
     /// time: it moves to a new port when the app comes back from the background.
     public func template() -> String {
-        lock.lock()
-        let version = self.version
-        lock.unlock()
-        return TileServerRegistry.get().urlTemplate(routeId: routeId, tileSize: tileSize, cacheKey: "v\(version)")
+        core.template()
     }
 
     public func dispose() {
-        cancelPending()
-        lock.lock()
-        let wasRegistered = registered
-        registered = false
-        indexById.removeAll()
-        lock.unlock()
-        if wasRegistered { TileServerRegistry.get().unregister(routeId: routeId) }
-        renderer.clear()
-    }
-
-    private func flush() {
-        lock.lock()
-        flushScheduled = false
-        let updates = pending.values.compactMap { state -> (Int, PolygonState)? in
-            indexById[state.id].map { ($0, state) }
-        }
-        let removals = pendingRemovals
-        pending.removeAll()
-        pendingRemovals.removeAll()
-        let live = registered
-        lock.unlock()
-        guard live, !updates.isEmpty || !removals.isEmpty else { return }
-        var changes: [(index: Int, shape: PolygonTileShape?)] = updates.map { (index: $0.0, shape: PolygonTileShape(state: $0.1)) }
-        for index in removals { changes.append((index: index, shape: nil)) }
-        renderer.update(changes)
-        lock.lock()
-        version += 1
-        lock.unlock()
-        onTemplateChanged?(template())
-    }
-
-    private func cancelPending() {
-        lock.lock()
-        pending.removeAll()
-        pendingRemovals.removeAll()
-        lock.unlock()
+        core.dispose()
     }
 }

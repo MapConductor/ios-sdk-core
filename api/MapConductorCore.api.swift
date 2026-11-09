@@ -54,6 +54,10 @@ public struct Polylines : MapConductorCore::MapOverlayItemProtocol {
   public init(_ states: [MapConductorCore::PolylineState])
   public func append(to content: inout MapConductorCore::MapViewContent)
 }
+public struct PolylineTiling : MapConductorCore::MapOverlayItemProtocol {
+  public init(_ options: MapConductorCore::PolylineTilingOptions)
+  public func append(to content: inout MapConductorCore::MapViewContent)
+}
 public struct Polygons : MapConductorCore::MapOverlayItemProtocol {
   public init(_ states: [MapConductorCore::PolygonState])
   public func append(to content: inout MapConductorCore::MapViewContent)
@@ -250,6 +254,10 @@ public struct MapViewContent {
   public var rasterLayers: [MapConductorCore::RasterLayer]
   public var views: [SwiftUICore::AnyView]
   public var markerTilingOptions: MapConductorCore::MarkerTilingOptions {
+    get
+    set
+  }
+  public var polylineTilingOptions: MapConductorCore::PolylineTilingOptions {
     get
     set
   }
@@ -2701,6 +2709,16 @@ final public class PolylineState : Combine::ObservableObject, Swift::Identifiabl
   final public var hashValue: Swift::Int {
     get
   }
+}
+public struct PolylineTilingOptions : Swift::Equatable {
+  public let enabled: Swift::Bool
+  public let minPolylineCount: Swift::Int
+  public let minVertexCount: Swift::Int
+  public static let Default: MapConductorCore::PolylineTilingOptions
+  public static let Disabled: MapConductorCore::PolylineTilingOptions
+  public init(enabled: Swift::Bool = true, minPolylineCount: Swift::Int = 2000, minVertexCount: Swift::Int = 50_000)
+  public func shouldUseTiles(polylineCount: Swift::Int, vertexCount: Swift::Int) -> Swift::Bool
+  public static func == (a: MapConductorCore::PolylineTilingOptions, b: MapConductorCore::PolylineTilingOptions) -> Swift::Bool
 }
 public struct RasterHeaderRule : Swift::Equatable {
   public let host: Swift::String

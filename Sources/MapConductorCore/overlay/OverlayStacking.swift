@@ -8,7 +8,7 @@ import Foundation
 /// 2. グラウンドイメージ
 /// 3. ポリゴン（ネイティブのポリゴンと、SDK のポリゴンのタイルレイヤーが同じ帯）
 /// 4. サークル
-/// 5. ポリライン
+/// 5. ポリライン（ネイティブのポリラインと、SDK のポリラインのタイルレイヤーが同じ帯。タイルは帯の一番下）
 /// 6. マーカー（ネイティブのマーカーと、SDK のマーカーのタイルレイヤー・strategy の描画が同じ帯）
 ///
 /// 追加した順・送り直した順（`clearOverlays()` の後など）・デザイン変更の後に左右されない。
@@ -94,6 +94,8 @@ public enum OverlayStacking {
     public static let styleLayerPrefixes: [(String, OverlayBand)] = [
         // ポリゴンのタイル（feat/polygon-tiling の PolygonTiler）はラスターの経路で載るが、帯はポリゴン。
         ("mapconductor-raster-layer-\(polygonTileStateId)", .polygon),
+        // ポリラインのタイル（PolylineTiler）も同じ。帯はポリライン。
+        ("mapconductor-raster-layer-\(polylineTileStateId)", .polyline),
         ("mapconductor-raster-layer-\(markerTileStateIdPrefix)", .marker),
         ("mapconductor-raster-layer-", .rasterLayer),
         ("mc-gimg-lyr-", .groundImage),
@@ -110,15 +112,32 @@ public enum OverlayStacking {
     ///
     /// アプリのラスターはラスターの帯（zIndex つき）。SDK がラスターの経路で載せる
     /// ポリゴンのタイル（id ``polygonTileStateId``）はポリゴンの帯、マーカーのタイル
-    /// （id が ``markerTileStateIdPrefix`` で始まる）はマーカーの帯。
+    /// （id が ``markerTileStateIdPrefix`` で始まる）はマーカーの帯。ポリラインのタイル
+    /// （id ``polylineTileStateId``）はポリラインの帯の一番下（``polylineTileKey``）で、
+    /// ネイティブで描くポリライン（geodesic など）がその上に来る。
     public static func rasterKey(stateId: String, zIndex: Int) -> OverlayStackKey {
         if stateId == polygonTileStateId { return OverlayStackKey(.polygon) }
+        if stateId == polylineTileStateId { return polylineTileKey }
         if stateId.hasPrefix(markerTileStateIdPrefix) { return OverlayStackKey(.marker) }
         return OverlayStackKey(.rasterLayer, zIndex: zIndex)
     }
 
     /// PolygonTiler（feat/polygon-tiling）がラスターの経路で載せるレイヤの id。
     public static let polygonTileStateId = "mc-polygon-tiles"
+    /// PolylineTiler がラスターの経路で載せるレイヤの id。
+    public static let polylineTileStateId = "mc-polyline-tiles"
+    /// ポリラインのタイルのキー。帯の中で一番下（``globalZIndex(_:)`` が受け付ける範囲のすぐ外で、
+    /// 帯の下端に丸まる。`Int.min` にしないのは、zIndex に足し引きするプロバイダで桁あふれしないため）。
+    /// GL スタイルでは既存のポリラインのレイヤ（zIndex 0 扱い）より下に差し込まれる。
+    public static let polylineTileKey = OverlayStackKey(.polyline, zIndex: -(zIndexSpan + 1))
+
+    /// GL スタイルでラスターの経路から載せるレイヤ（ID `mapconductor-raster-layer-<state id>`）のキー。
+    /// ``rasterKey(stateId:zIndex:)`` をレイヤ ID から引く版。
+    public static func rasterKey(styleLayerId id: String, zIndex: Int) -> OverlayStackKey {
+        let prefix = "mapconductor-raster-layer-"
+        guard id.hasPrefix(prefix) else { return OverlayStackKey(.rasterLayer, zIndex: zIndex) }
+        return rasterKey(stateId: String(id.dropFirst(prefix.count)), zIndex: zIndex)
+    }
     /// マーカーのタイルをラスターの経路で載せるプロバイダ（ArcGIS / OMM）の id の接頭辞。
     public static let markerTileStateIdPrefix = "marker-tile-"
 
