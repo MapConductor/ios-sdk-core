@@ -366,6 +366,9 @@ open class AbstractMarkerController<
             await renderer.onRemove(data: entities)
             markerManager.clear()
             draggingMarkerIds.removeAll()
+            // 他の 5 種類と同じく、manager を空にしてから onPostProcess を呼ぶ。GL 系の描画担当は
+            // onRemove では地図に触らず、onPostProcess で manager の中身から描き直す。
+            await renderer.onPostProcess()
         }
     }
 
