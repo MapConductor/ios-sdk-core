@@ -142,9 +142,85 @@ private func unionRings(_ rings: [[Vec]]) -> [[Vec]] {
     return traceRings(boundary)
 }
 
+// Reach of intersectionPoints beyond a segment's box (degrees). Its collinear
+// test accepts an edge up to unionEps / |seg| off the line, and a segment
+// shorter than sqrt(unionEps) = 1e-6 is skipped there, so that is at most 2e-6.
+private let meetPad = 4e-6
+
+// Farthest a side sample is taken from a sub-edge's mid-point, doubled (degrees).
+private let clearanceCap = 2e-5
+
+/// Edges filed in a uniform grid over their bounding boxes, so a search asks
+/// only the edges near a box instead of all of them. A box covering every cell
+/// an edge's box touches finds every edge that box can meet.
+private struct EdgeGrid {
+    private let side: Int
+    private let minX: Double
+    private let minY: Double
+    private let cellW: Double
+    private let cellH: Double
+    private var cells: [Int: [Int]] = [:]
+    private var seen: [Int]
+    private var stamp = 0
+
+    init(_ edges: [Edge], pad: Double) {
+        var x0 = Double.infinity, y0 = Double.infinity
+        var x1 = -Double.infinity, y1 = -Double.infinity
+        for e in edges {
+            x0 = min(x0, e.a.x, e.b.x); x1 = max(x1, e.a.x, e.b.x)
+            y0 = min(y0, e.a.y, e.b.y); y1 = max(y1, e.a.y, e.b.y)
+        }
+        side = max(1, min(1024, Int(Double(edges.count).squareRoot().rounded(.up))))
+        minX = x0
+        minY = y0
+        let w = (x1 - x0) / Double(side), h = (y1 - y0) / Double(side)
+        cellW = w > 0 ? w : 1
+        cellH = h > 0 ? h : 1
+        seen = [Int](repeating: 0, count: edges.count)
+        for (i, e) in edges.enumerated() {
+            let (cx0, cy0, cx1, cy1) = cellRange(
+                min(e.a.x, e.b.x) - pad, min(e.a.y, e.b.y) - pad,
+                max(e.a.x, e.b.x) + pad, max(e.a.y, e.b.y) + pad
+            )
+            for cx in cx0...cx1 {
+                for cy in cy0...cy1 { cells[cx * side + cy, default: []].append(i) }
+            }
+        }
+    }
+
+    /// Indices of the edges filed in a cell the box touches, each once, in no order.
+    mutating func near(_ minX: Double, _ minY: Double, _ maxX: Double, _ maxY: Double, into out: inout [Int]) {
+        out.removeAll(keepingCapacity: true)
+        stamp += 1
+        let (cx0, cy0, cx1, cy1) = cellRange(minX, minY, maxX, maxY)
+        for cx in cx0...cx1 {
+            for cy in cy0...cy1 {
+                guard let bucket = cells[cx * side + cy] else { continue }
+                for i in bucket where seen[i] != stamp {
+                    seen[i] = stamp
+                    out.append(i)
+                }
+            }
+        }
+    }
+
+    private func cellRange(_ minX: Double, _ minY: Double, _ maxX: Double, _ maxY: Double) -> (Int, Int, Int, Int) {
+        (cell(minX, self.minX, cellW), cell(minY, self.minY, cellH),
+         cell(maxX, self.minX, cellW), cell(maxY, self.minY, cellH))
+    }
+
+    private func cell(_ v: Double, _ min: Double, _ size: Double) -> Int {
+        let c = ((v - min) / size).rounded(.down)
+        return c < 0 ? 0 : (c > Double(side - 1) ? side - 1 : Int(c))
+    }
+}
+
 /// Split every edge at all points where another edge crosses or touches it.
 private func splitEdges(_ edges: [Edge]) -> [Edge] {
     var result: [Edge] = []
+    // Only an edge whose box comes within meetPad of this one's can meet it.
+    var grid = EdgeGrid(edges, pad: meetPad)
+    var near: [Int] = []
     for i in edges.indices {
         let seg = edges[i]
         let dir = sub(seg.b, seg.a)
@@ -159,7 +235,12 @@ private func splitEdges(_ edges: [Edge]) -> [Edge] {
         }
         add(seg.a)
         add(seg.b)
-        for j in edges.indices where i != j {
+        grid.near(
+            min(seg.a.x, seg.b.x) - meetPad, min(seg.a.y, seg.b.y) - meetPad,
+            max(seg.a.x, seg.b.x) + meetPad, max(seg.a.y, seg.b.y) + meetPad,
+            into: &near
+        )
+        for j in near where i != j {
             for p in intersectionPoints(seg, edges[j]) { add(p) }
         }
 
@@ -180,6 +261,9 @@ private func splitEdges(_ edges: [Edge]) -> [Edge] {
 private func classifyBoundary(_ subEdges: [Edge], rings: [[Vec]]) -> [Edge] {
     var out: [Edge] = []
     var seen = Set<DirectedEdgeKey>()
+    var grid = EdgeGrid(subEdges, pad: 0)
+    var near: [Int] = []
+    let ringsBounds = rings.map(ringBounds)
     for seg in subEdges {
         let dir = sub(seg.b, seg.a)
         let len = (dir.x * dir.x + dir.y * dir.y).squareRoot()
@@ -195,9 +279,9 @@ private func classifyBoundary(_ subEdges: [Edge], rings: [[Vec]]) -> [Edge] {
         // and is dropped, and the traced ring cuts across a hole.
         let nx = -dir.y / len
         let ny = dir.x / len
-        let off = min(len * 0.25, 0.5 * clearance(mid, cap: 2e-5, subEdges))
-        let leftInside = coverage(Vec(x: mid.x + nx * off, y: mid.y + ny * off), rings) > 0
-        let rightInside = coverage(Vec(x: mid.x - nx * off, y: mid.y - ny * off), rings) > 0
+        let off = min(len * 0.25, 0.5 * clearance(mid, cap: clearanceCap, subEdges, grid: &grid, near: &near))
+        let leftInside = coverage(Vec(x: mid.x + nx * off, y: mid.y + ny * off), rings, ringsBounds) > 0
+        let rightInside = coverage(Vec(x: mid.x - nx * off, y: mid.y - ny * off), rings, ringsBounds) > 0
         if leftInside == rightInside { continue } // interior on both/neither side
 
         // Orient so the interior is on the left.
@@ -213,9 +297,19 @@ private func classifyBoundary(_ subEdges: [Edge], rings: [[Vec]]) -> [Edge] {
 /// Distance from `point` (the mid-point of a sub-edge) to the nearest sub-edge
 /// that does not pass through it, or `cap` when none is closer. The sub-edge
 /// itself and its duplicates from other rings pass through it and are skipped.
-private func clearance(_ point: Vec, cap: Double, _ subEdges: [Edge]) -> Double {
+/// Only the sub-edges filed near the box `cap` around the point are asked; any
+/// closer than `cap` is among them.
+private func clearance(
+    _ point: Vec,
+    cap: Double,
+    _ subEdges: [Edge],
+    grid: inout EdgeGrid,
+    near: inout [Int]
+) -> Double {
     var best = cap
-    for e in subEdges {
+    grid.near(point.x - cap, point.y - cap, point.x + cap, point.y + cap, into: &near)
+    for index in near {
+        let e = subEdges[index]
         if min(e.a.x, e.b.x) > point.x + best || max(e.a.x, e.b.x) < point.x - best
             || min(e.a.y, e.b.y) > point.y + best || max(e.a.y, e.b.y) < point.y - best {
             continue
@@ -320,11 +414,16 @@ private func intersectionPoints(_ seg: Edge, _ other: Edge) -> [Vec] {
     return [add2(seg.a, scale(r, clamp01(t)))]
 }
 
-/// How many rings' interiors contain the point.
-private func coverage(_ point: Vec, _ rings: [[Vec]]) -> Int {
-    rings.reduce(0) { count, ring in
-        pointInRing(point, ring) ? count + 1 : count
+/// How many rings' interiors contain the point. A ring whose latitudes do not
+/// straddle the point's has no edge pointInRing would count, so it is skipped.
+private func coverage(_ point: Vec, _ rings: [[Vec]], _ bounds: [Bounds]) -> Int {
+    var count = 0
+    for i in rings.indices {
+        let b = bounds[i]
+        if point.y < b.minY || point.y >= b.maxY { continue }
+        if pointInRing(point, rings[i]) { count += 1 }
     }
+    return count
 }
 
 /// Even-odd ray-casting point-in-polygon (winding-independent).
@@ -367,6 +466,24 @@ private func toRing(_ hole: [GeoPointProtocol], origin: Vec) -> [Vec]? {
         points.removeLast()
     }
     return points.count >= 3 ? points : nil
+}
+
+private struct Bounds {
+    var minX: Double
+    var minY: Double
+    var maxX: Double
+    var maxY: Double
+}
+
+private func ringBounds(_ ring: [Vec]) -> Bounds {
+    var b = Bounds(minX: .infinity, minY: .infinity, maxX: -.infinity, maxY: -.infinity)
+    for p in ring {
+        if p.x < b.minX { b.minX = p.x }
+        if p.x > b.maxX { b.maxX = p.x }
+        if p.y < b.minY { b.minY = p.y }
+        if p.y > b.maxY { b.maxY = p.y }
+    }
+    return b
 }
 
 private func signedArea(_ ring: [Vec]) -> Double {
