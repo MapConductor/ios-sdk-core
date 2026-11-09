@@ -37,6 +37,9 @@ public protocol PolylineManagerProtocol {
 
 public final class PolylineManager<ActualPolyline>: PolylineManagerProtocol {
     private var entities: [String: PolylineEntity<ActualPolyline>] = [:]
+    /// Every entity's ``PolylineHitBounds``, side by side, for a tap to skip
+    /// the lines it cannot hit without touching the entities.
+    private var hitBoxes = PolylineHitBoxes()
     private var destroyed = false
     private let lock = NSLock()
 
@@ -57,12 +60,14 @@ public final class PolylineManager<ActualPolyline>: PolylineManagerProtocol {
         defer { lock.unlock() }
         checkNotDestroyedLocked()
         entities[entity.state.id] = entity
+        hitBoxes.set(entity.state.id, entity.hitBounds)
     }
 
     public func removeEntity(_ id: String) -> PolylineEntity<ActualPolyline>? {
         lock.lock()
         defer { lock.unlock() }
         checkNotDestroyedLocked()
+        hitBoxes.remove(id)
         return entities.removeValue(forKey: id)
     }
 
@@ -92,6 +97,7 @@ public final class PolylineManager<ActualPolyline>: PolylineManagerProtocol {
         defer { lock.unlock() }
         checkNotDestroyedLocked()
         entities.removeAll()
+        hitBoxes = PolylineHitBoxes()
     }
 
     public func destroy() {
@@ -100,6 +106,7 @@ public final class PolylineManager<ActualPolyline>: PolylineManagerProtocol {
         if destroyed { return }
         destroyed = true
         entities.removeAll()
+        hitBoxes = PolylineHitBoxes()
     }
 
     public var isDestroyed: Bool {
@@ -114,26 +121,39 @@ public final class PolylineManager<ActualPolyline>: PolylineManagerProtocol {
     ) -> PolylineHitResult<ActualPolyline>? {
         let visibleRegion = cameraPosition?.visibleRegion?.bounds
         let zoom = cameraPosition?.zoom ?? 0.0
-        let fingerSizePx = PolylineDefaults.tapTolerancePx()
-        let threshold = calculateMetersPerPixel(latitude: position.latitude, zoom: zoom) * fingerSizePx
+        let screenScale = max(1.0, Double(UIScreen.main.scale))
+        let fingerSizePx = PolylineDefaults.tapTolerancePx(screenScale: screenScale)
+        let metersPerPixel = calculateMetersPerPixel(latitude: position.latitude, zoom: zoom)
 
         var candidates: [(PolylineEntity<ActualPolyline>, GeoPointProtocol, Double)] = []
 
-        for entity in allEntities() {
+        // A tap hits a line within a finger of its edge: the finger plus half
+        // the line's width, both converted to pixels the same way.
+        let thresholdFor = { (strokeWidth: Double) in metersPerPixel * (fingerSizePx + strokeWidth / 2 * screenScale) }
+        // Most lines are nowhere near the tap: they are skipped by their box,
+        // and neither the entity nor its points are read.
+        lock.lock()
+        checkNotDestroyedLocked()
+        let nearby = hitBoxes.candidates(latitude: position.latitude, longitude: position.longitude, meters: thresholdFor)
+            .compactMap { entities[$0] }
+        lock.unlock()
+
+        for entity in nearby {
+            let threshold = thresholdFor(entity.hitBounds.strokeWidth)
             let points = entity.state.points
             guard points.count >= 2 else { continue }
+            let geodesic = entity.state.geodesic
 
             for index in 0..<(points.count - 1) {
-                let segmentBounds = GeoRectBounds()
-                segmentBounds.extend(point: points[index])
-                segmentBounds.extend(point: points[index + 1])
-
-                if let visibleRegion, !visibleRegion.intersects(other: segmentBounds) {
-                    continue
+                if let visibleRegion {
+                    let segmentBounds = GeoRectBounds()
+                    segmentBounds.extend(point: points[index])
+                    segmentBounds.extend(point: points[index + 1])
+                    if !visibleRegion.intersects(other: segmentBounds) { continue }
                 }
 
                 let hit: (GeoPointProtocol, Double)?
-                if entity.state.geodesic {
+                if geodesic {
                     hit = WGS84Geodesic.pointOnLineOrNull(
                         from: points[index],
                         to: points[index + 1],
@@ -157,5 +177,47 @@ public final class PolylineManager<ActualPolyline>: PolylineManagerProtocol {
 
         guard let closest = candidates.min(by: { $0.2 < $1.2 }) else { return nil }
         return PolylineHitResult(entity: closest.0, closestPoint: closest.1)
+    }
+}
+
+/// The hit boxes of a manager's lines in flat arrays (non-generic, so a tap
+/// over 50,000 lines is a loop over plain values).
+struct PolylineHitBoxes {
+    private var ids: ContiguousArray<String> = []
+    private var boxes: ContiguousArray<PolylineHitBounds> = []
+    private var indexById: [String: Int] = [:]
+
+    mutating func set(_ id: String, _ bounds: PolylineHitBounds) {
+        if let i = indexById[id] {
+            boxes[i] = bounds
+        } else {
+            indexById[id] = ids.count
+            ids.append(id)
+            boxes.append(bounds)
+        }
+    }
+
+    mutating func remove(_ id: String) {
+        guard let i = indexById.removeValue(forKey: id) else { return }
+        let last = ids.count - 1
+        if i != last {
+            ids[i] = ids[last]
+            boxes[i] = boxes[last]
+            indexById[ids[i]] = i
+        }
+        ids.removeLast()
+        boxes.removeLast()
+    }
+
+    /// Ids of the lines whose box, padded by `meters(strokeWidth)`, holds the point.
+    func candidates(latitude: Double, longitude: Double, meters: (Double) -> Double) -> [String] {
+        var out: [String] = []
+        for i in boxes.indices {
+            let box = boxes[i]
+            if box.mayContain(latitude: latitude, longitude: longitude, meters: meters(box.strokeWidth)) {
+                out.append(ids[i])
+            }
+        }
+        return out
     }
 }
