@@ -14,6 +14,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     @Published public var visible: Bool
     @Published public var userAgent: String?
     @Published public var extraHeaders: [String: String]?
+    public var onAdded: OnRasterLayerAddedHandler?
     @Published public var extra: Any?
 
     public init(
@@ -23,7 +24,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         userAgent: String? = nil,
         extraHeaders: [String: String]? = nil,
         id: String? = nil,
-        extra: Any? = nil
+        extra: Any? = nil,
+        onAdded: OnRasterLayerAddedHandler? = nil
     )
 }
 ```
@@ -57,6 +59,10 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     - Type: `Any?`
     - Default: `nil`
     - Description: Arbitrary user data attached to the layer.
+- `onAdded`
+    - Type: `OnRasterLayerAddedHandler?`
+    - Default: `nil`
+    - Description: Called with this state each time the raster layer goes from not being on the map to being on it: for a natively drawn raster layer, right after the provider has created its native object. It does not wait for tile images to load or for pixels to show. Not called for in-place changes, on clear, or when the map goes away; called again when the raster layer is removed and later added again. Always on the main actor. Not part of the id, fingerprint, `==` or hash; replacing it does not redraw anything.
 
 ## Methods
 

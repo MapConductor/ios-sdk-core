@@ -18,6 +18,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
     @Published public var holes: [[GeoPointProtocol]]
     @Published public var extra: Any?
     @Published public var onClick: OnPolygonEventHandler?
+    public var onAdded: OnPolygonAddedHandler?
 
     public init(
         points: [GeoPointProtocol],
@@ -29,7 +30,8 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         zIndex: Int = 0,
         holes: [[GeoPointProtocol]] = [],
         extra: Any? = nil,
-        onClick: OnPolygonEventHandler? = nil
+        onClick: OnPolygonEventHandler? = nil,
+        onAdded: OnPolygonAddedHandler? = nil
     )
 }
 ```
@@ -75,6 +77,10 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
     - Type: `OnPolygonEventHandler?`
     - Default: `nil`
     - Description: Called when the polygon is tapped. Receives a `PolygonEvent`.
+- `onAdded`
+    - Type: `OnPolygonAddedHandler?`
+    - Default: `nil`
+    - Description: Called with this state each time the polygon goes from not being on the map to being on it: for a natively drawn polygon, right after the provider has created its native object; for a tiled polygon (drawn into raster tiles with many others), right after the URL template of the tile layer that holds it has been handed to the map. It does not wait for tile images to load or for pixels to show. Not called for in-place changes, for a move between native drawing and tiles, on clear, or when the map goes away; called again when the polygon is removed and later added again. Always on the main actor. Not part of the id, fingerprint, `==` or hash; replacing it does not redraw anything.
 
 ## Methods
 

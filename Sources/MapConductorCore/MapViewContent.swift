@@ -40,6 +40,17 @@ public struct MapViewContent {
     /// A single-expression builder closure always goes through `buildBlock`, which merges
     /// into a fresh content, so `.Disabled` was silently replaced by the default (tiling on).
     var explicitMarkerTilingOptions: MarkerTilingOptions?
+    /// Polyline tiling for this content. Reads ``PolylineTilingOptions/Default`` until something sets it.
+    ///
+    /// Tracked like ``markerTilingOptions``: an explicit choice, ``PolylineTilingOptions/Disabled``
+    /// included, survives the merge of a builder's pieces; pieces that never touched it leave it alone.
+    /// The map reads it on every content update; a change re-decides which polylines are tiled.
+    public var polylineTilingOptions: PolylineTilingOptions {
+        get { explicitPolylineTilingOptions ?? .Default }
+        set { explicitPolylineTilingOptions = newValue }
+    }
+    /// `nil` until ``polylineTilingOptions`` is assigned.
+    var explicitPolylineTilingOptions: PolylineTilingOptions?
     /// Handlers that manage a subset of polygons imperatively (e.g. cluster hull polygons).
     /// Map view coordinators call ``PolygonSyncHandler/bindPolygonSync(_:)`` on each handler
     /// to provide a direct polygon sync function, ensuring those polygons are committed before
@@ -70,6 +81,9 @@ public struct MapViewContent {
         // between two explicit settings the later one wins.
         if let tiling = other.explicitMarkerTilingOptions {
             explicitMarkerTilingOptions = tiling
+        }
+        if let tiling = other.explicitPolylineTilingOptions {
+            explicitPolylineTilingOptions = tiling
         }
     }
 }

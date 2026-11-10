@@ -44,6 +44,27 @@ public struct Polylines: MapOverlayItemProtocol {
     }
 }
 
+/// Sets the map's ``MapViewContent/polylineTilingOptions`` from inside a
+/// `MapViewContentBuilder` closure, next to the polylines it applies to:
+///
+/// ```swift
+/// MapLibreMapView(state: state) {
+///     PolylineTiling(.Disabled)
+///     Polylines(roads)
+/// }
+/// ```
+public struct PolylineTiling: MapOverlayItemProtocol {
+    private let options: PolylineTilingOptions
+
+    public init(_ options: PolylineTilingOptions) {
+        self.options = options
+    }
+
+    public func append(to content: inout MapViewContent) {
+        content.polylineTilingOptions = options
+    }
+}
+
 public struct Polygons: MapOverlayItemProtocol {
     private let states: [PolygonState]
 

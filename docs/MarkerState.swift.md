@@ -71,6 +71,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
     @Published public var onDragEnd: OnMarkerEventHandler?
     @Published public var onAnimateStart: OnMarkerEventHandler?
     @Published public var onAnimateEnd: OnMarkerEventHandler?
+    public var onAdded: OnMarkerEventHandler?
 
     public init(
         position: GeoPoint,
@@ -85,7 +86,8 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         onDrag: OnMarkerEventHandler? = nil,
         onDragEnd: OnMarkerEventHandler? = nil,
         onAnimateStart: OnMarkerEventHandler? = nil,
-        onAnimateEnd: OnMarkerEventHandler? = nil
+        onAnimateEnd: OnMarkerEventHandler? = nil,
+        onAdded: OnMarkerEventHandler? = nil
     )
 
     public convenience init(
@@ -101,7 +103,8 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
         onDrag: OnMarkerEventHandler? = nil,
         onDragEnd: OnMarkerEventHandler? = nil,
         onAnimateStart: OnMarkerEventHandler? = nil,
-        onAnimateEnd: OnMarkerEventHandler? = nil
+        onAnimateEnd: OnMarkerEventHandler? = nil,
+        onAdded: OnMarkerEventHandler? = nil
     )
 }
 ```
@@ -139,6 +142,10 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
     - Type: `OnMarkerEventHandler?`
     - Default: `nil`
     - Description: Event handlers for the respective user actions.
+- `onAdded`
+    - Type: `OnMarkerEventHandler?`
+    - Default: `nil`
+    - Description: Called with this state each time the marker goes from not being on the map to being on it: for a natively drawn marker, right after the provider has created its native object; for a tiled marker (drawn into raster tiles with many others), right after the URL template of the tile layer that holds it has been handed to the map. It does not wait for tile images to load or for pixels to show. Not called for in-place changes, for a move between native drawing and tiles, on clear, or when the map goes away; called again when the marker is removed and later added again. Always on the main actor. Not part of the id, fingerprint, `==` or hash; replacing it does not redraw anything.
 
 ## Methods
 

@@ -28,6 +28,9 @@ public struct CircleEvent {
 
 public typealias OnCircleEventHandler = (CircleEvent) -> Void
 
+/// The type of ``CircleState/onAdded``: called with the state that reached the map.
+public typealias OnCircleAddedHandler = (CircleState) -> Void
+
 public final class CircleState: ObservableObject, Identifiable, Equatable, Hashable {
     public let id: String
 
@@ -45,6 +48,18 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
     @Published public var extra: Any? { didSet { mutations.notifyMutated() } }
     @Published public var zIndex: Int? { didSet { mutations.notifyMutated() } }
     @Published public var onClick: OnCircleEventHandler? { didSet { mutations.notifyMutated() } }
+    /// Called with this state each time the circle goes from not being on the
+    /// map to being on it.
+    ///
+    /// - Drawn natively: after the provider has created its native circle.
+    ///
+    /// Not called for in-place changes, on `clear`, or when the map goes
+    /// away. Called again when the circle is removed and later added again.
+    /// Always on the main actor.
+    ///
+    /// Like `onClick` it is not part of the id, the fingerprint, `==` or the
+    /// hash, and replacing it does not redraw anything.
+    public var onAdded: OnCircleAddedHandler?
 
     public init(
         center: GeoPointProtocol,
@@ -57,7 +72,8 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
         id: String? = nil,
         zIndex: Int? = nil,
         extra: Any? = nil,
-        onClick: OnCircleEventHandler? = nil
+        onClick: OnCircleEventHandler? = nil,
+        onAdded: OnCircleAddedHandler? = nil
     ) {
         let resolvedId = id ?? CircleState.makeCircleId(
             center: center,
@@ -81,6 +97,7 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
         self.zIndex = zIndex
         self.extra = extra
         self.onClick = onClick
+        self.onAdded = onAdded
     }
 
     public func copy(
@@ -94,7 +111,8 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
         id: String? = nil,
         zIndex: Int? = nil,
         extra: Any? = nil,
-        onClick: OnCircleEventHandler? = nil
+        onClick: OnCircleEventHandler? = nil,
+        onAdded: OnCircleAddedHandler? = nil
     ) -> CircleState {
         CircleState(
             center: center ?? self.center,
@@ -107,7 +125,8 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
             id: id ?? self.id,
             zIndex: zIndex ?? self.zIndex,
             extra: extra ?? self.extra,
-            onClick: onClick ?? self.onClick
+            onClick: onClick ?? self.onClick,
+            onAdded: onAdded ?? self.onAdded
         )
     }
 

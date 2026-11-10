@@ -27,6 +27,9 @@ public struct PolylineEvent {
 
 public typealias OnPolylineEventHandler = (PolylineEvent) -> Void
 
+/// The type of ``PolylineState/onAdded``: called with the state that reached the map.
+public typealias OnPolylineAddedHandler = (PolylineState) -> Void
+
 public final class PolylineState: ObservableObject, Identifiable, Equatable, Hashable {
     public let id: String
 
@@ -41,6 +44,18 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
     @Published public var zIndex: Int { didSet { mutations.notifyMutated() } }
     @Published public var extra: Any? { didSet { mutations.notifyMutated() } }
     @Published public var onClick: OnPolylineEventHandler? { didSet { mutations.notifyMutated() } }
+    /// Called with this state each time the polyline goes from not being on the
+    /// map to being on it.
+    ///
+    /// - Drawn natively: after the provider has created its native polyline.
+    ///
+    /// Not called for in-place changes, on `clear`, or when the map goes
+    /// away. Called again when the polyline is removed and later added again.
+    /// Always on the main actor.
+    ///
+    /// Like `onClick` it is not part of the id, the fingerprint, `==` or the
+    /// hash, and replacing it does not redraw anything.
+    public var onAdded: OnPolylineAddedHandler?
 
     public init(
         points: [GeoPointProtocol],
@@ -50,7 +65,8 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
         geodesic: Bool = false,
         zIndex: Int = 0,
         extra: Any? = nil,
-        onClick: OnPolylineEventHandler? = nil
+        onClick: OnPolylineEventHandler? = nil,
+        onAdded: OnPolylineAddedHandler? = nil
     ) {
         let resolvedId = id ?? PolylineState.makePolylineId(
             points: points,
@@ -67,6 +83,7 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
         self.zIndex = zIndex
         self.extra = extra
         self.onClick = onClick
+        self.onAdded = onAdded
     }
 
     public func copy(
@@ -77,7 +94,8 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
         geodesic: Bool? = nil,
         zIndex: Int? = nil,
         extra: Any? = nil,
-        onClick: OnPolylineEventHandler? = nil
+        onClick: OnPolylineEventHandler? = nil,
+        onAdded: OnPolylineAddedHandler? = nil
     ) -> PolylineState {
         PolylineState(
             points: points ?? self.points,
@@ -87,7 +105,8 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
             geodesic: geodesic ?? self.geodesic,
             zIndex: zIndex ?? self.zIndex,
             extra: extra ?? self.extra,
-            onClick: onClick ?? self.onClick
+            onClick: onClick ?? self.onClick,
+            onAdded: onAdded ?? self.onAdded
         )
     }
 

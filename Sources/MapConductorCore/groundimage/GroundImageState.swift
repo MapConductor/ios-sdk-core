@@ -24,6 +24,9 @@ public struct GroundImageEvent {
 
 public typealias OnGroundImageEventHandler = (GroundImageEvent) -> Void
 
+/// The type of ``GroundImageState/onAdded``: called with the state that reached the map.
+public typealias OnGroundImageAddedHandler = (GroundImageState) -> Void
+
 /// 地表画像。
 ///
 /// ## URL で渡す
@@ -60,6 +63,18 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
     @Published public var tileSize: Int { didSet { mutations.notifyMutated() } }
     @Published public var extra: Any? { didSet { mutations.notifyMutated() } }
     @Published public var onClick: OnGroundImageEventHandler? { didSet { mutations.notifyMutated() } }
+    /// Called with this state each time the ground image goes from not being on the
+    /// map to being on it.
+    ///
+    /// - Drawn natively: after the provider has created its native ground image.
+    ///
+    /// Not called for in-place changes, on `clear`, or when the map goes
+    /// away. Called again when the ground image is removed and later added again.
+    /// Always on the main actor.
+    ///
+    /// Like `onClick` it is not part of the id, the fingerprint, `==` or the
+    /// hash, and replacing it does not redraw anything.
+    public var onAdded: OnGroundImageAddedHandler?
 
     private var loader: RemoteImageLoader = .shared
     private var applyingLoadedImage = false
@@ -71,7 +86,8 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         tileSize: Int = 512,
         id: String? = nil,
         extra: Any? = nil,
-        onClick: OnGroundImageEventHandler? = nil
+        onClick: OnGroundImageEventHandler? = nil,
+        onAdded: OnGroundImageAddedHandler? = nil
     ) {
         let resolvedId = id ?? GroundImageState.makeGroundImageId(
             bounds: bounds,
@@ -87,6 +103,7 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         self.tileSize = tileSize
         self.extra = extra
         self.onClick = onClick
+        self.onAdded = onAdded
     }
 
     /// 画像を URL で渡す。読み終えるまでは透明。`file:` の URL も使える。
@@ -97,11 +114,12 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         tileSize: Int = 512,
         id: String? = nil,
         extra: Any? = nil,
-        onClick: OnGroundImageEventHandler? = nil
+        onClick: OnGroundImageEventHandler? = nil,
+        onAdded: OnGroundImageAddedHandler? = nil
     ) {
         self.init(
             bounds: bounds, imageUrl: imageUrl, opacity: opacity, tileSize: tileSize, id: id, extra: extra,
-            onClick: onClick, loader: .shared
+            onClick: onClick, onAdded: onAdded, loader: .shared
         )
     }
 
@@ -114,6 +132,7 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         id: String? = nil,
         extra: Any? = nil,
         onClick: OnGroundImageEventHandler? = nil,
+        onAdded: OnGroundImageAddedHandler? = nil,
         loader: RemoteImageLoader
     ) {
         // 決めた id が読み込みの前後で変わらないよう、画像ではなく URL から作る。
@@ -126,7 +145,7 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         )
         self.init(
             bounds: bounds, image: GroundImageState.placeholder, opacity: opacity, tileSize: tileSize,
-            id: resolvedId, extra: extra, onClick: onClick
+            id: resolvedId, extra: extra, onClick: onClick, onAdded: onAdded
         )
         self.loader = loader
         self.imageUrl = imageUrl
@@ -165,7 +184,8 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
         tileSize: Int? = nil,
         id: String? = nil,
         extra: Any? = nil,
-        onClick: OnGroundImageEventHandler? = nil
+        onClick: OnGroundImageEventHandler? = nil,
+        onAdded: OnGroundImageAddedHandler? = nil
     ) -> GroundImageState {
         let copied = GroundImageState(
             bounds: bounds ?? self.bounds,
@@ -174,7 +194,8 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
             tileSize: tileSize ?? self.tileSize,
             id: id ?? self.id,
             extra: extra ?? self.extra,
-            onClick: onClick ?? self.onClick
+            onClick: onClick ?? self.onClick,
+            onAdded: onAdded ?? self.onAdded
         )
         if image == nil, let imageUrl {
             copied.loader = loader

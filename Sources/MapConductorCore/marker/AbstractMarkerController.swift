@@ -14,6 +14,12 @@ open class AbstractMarkerController<
 
     public let zIndex: Int = 10
     private let semaphore = AsyncSemaphore(1)
+
+    /// Which markers have reached the map, natively or in tiles, for their `onAdded`.
+    /// A provider that ingests with ``MarkerIngestionEngine`` passes it there and,
+    /// after handing the map its tile layer, admits ``MarkerIngestionEngine/Result/tiledAdded``.
+    @_spi(MapConductorDriver)
+    public let addedTracker = OverlayAddedTracker()
     private let defaultMarkerIcon = DefaultMarkerIcon().toBitmapIcon()
 
     public var clickListener: ((MarkerState) -> Void)?
@@ -133,8 +139,11 @@ open class AbstractMarkerController<
                 MCLog.probe("SLOW markerController.add \(Int(addMs))ms count=\(data.count)")
             }
         }
-        let entitiesToAnimate: [MarkerEntity<ActualMarker>] = await semaphore.withPermit {
-            if markerManager.isDestroyed { return [] }
+        let (entitiesToAnimate, landed): ([MarkerEntity<ActualMarker>], [MarkerState]) = await semaphore.withPermit {
+            if markerManager.isDestroyed { return ([], []) }
+            // The app's list: anything it no longer has can be added again later.
+            addedTracker.retain(Set(data.map(\.id)))
+            var landed: [MarkerState] = []
             var modifiedEntities: [MarkerEntity<ActualMarker>] = []
             var previous = Set(markerManager.allEntities().map { $0.state.id })
 
@@ -204,6 +213,7 @@ open class AbstractMarkerController<
                         )
                         markerManager.registerEntity(entity)
                         modifiedEntities.append(entity)
+                        landed.append(entity.state)
                     }
                     await Task.yield()
                 }
@@ -228,8 +238,14 @@ open class AbstractMarkerController<
             }
 
             await renderer.onPostProcess()
-            return modifiedEntities.filter { $0.state.getAnimation() != nil }
+            return (
+                modifiedEntities.filter { $0.state.getAnimation() != nil },
+                addedTracker.admit(landed)
+            )
         }
+
+        // After the renderer returned (and flushed): the native markers exist.
+        await OverlayAddedTracker.notify(landed)
 
         // アニメーションはロックの外で、まとめて並行に走らせる。
         // android-sdk の `onAnimate` は `coroutine.launch` / `host.start` で即座に返るため、
@@ -345,6 +361,7 @@ open class AbstractMarkerController<
         if markerManager.isDestroyed { return }
         await semaphore.withPermit {
             if markerManager.isDestroyed { return }
+            addedTracker.reset()
             let entities = markerManager.allEntities()
             await renderer.onRemove(data: entities)
             markerManager.clear()

@@ -12,6 +12,10 @@ where Renderer.ActualCircle == ActualCircle {
     public let zIndex: Int = 3
     private let semaphore = AsyncSemaphore(1)
 
+    /// Which overlays have reached the map, for their `onAdded`.
+    @_spi(MapConductorDriver)
+    public let addedTracker = OverlayAddedTracker()
+
     public var clickListener: ((CircleEvent) -> Void)?
 
     public init(
@@ -32,8 +36,11 @@ where Renderer.ActualCircle == ActualCircle {
 
     open func add(data: [CircleState]) async {
         if circleManager.isDestroyed { return }
-        await semaphore.withPermit {
-            if circleManager.isDestroyed { return }
+        let landed: [CircleState] = await semaphore.withPermit {
+            if circleManager.isDestroyed { return [] }
+            // The app's list: anything it no longer has can be added again later.
+            addedTracker.retain(Set(data.map(\.id)))
+            var landed: [CircleState] = []
             var previous = Set(circleManager.allEntities().map { $0.state.id })
             var added: [CircleOverlayAddParams] = []
             var updated: [CircleOverlayChangeParams<ActualCircle>] = []
@@ -77,6 +84,7 @@ where Renderer.ActualCircle == ActualCircle {
                     guard let circle else { continue }
                     let entity = CircleEntity(circle: circle, state: added[index].state)
                     circleManager.registerEntity(entity)
+                    landed.append(added[index].state)
                 }
             }
 
@@ -91,7 +99,10 @@ where Renderer.ActualCircle == ActualCircle {
             }
 
             await renderer.onPostProcess()
+            return addedTracker.admit(landed)
         }
+        // After the renderer returned: the native objects exist on the map.
+        await OverlayAddedTracker.notify(landed)
     }
 
     open func update(state: CircleState) async {
@@ -117,6 +128,7 @@ where Renderer.ActualCircle == ActualCircle {
     open func clear() async {
         if circleManager.isDestroyed { return }
         await semaphore.withPermit {
+            addedTracker.reset()
             let entities = circleManager.allEntities()
             await renderer.onRemove(data: entities)
             // manager を空にしてから onPostProcess を呼ぶ。GL 系の描画担当は remove では何もせず、

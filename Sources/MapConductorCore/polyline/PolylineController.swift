@@ -11,6 +11,10 @@ where Renderer.ActualPolyline == ActualPolyline {
 
     public let zIndex: Int = 5
     private let semaphore = AsyncSemaphore(1)
+
+    /// Which overlays have reached the map, for their `onAdded`.
+    @_spi(MapConductorDriver)
+    public let addedTracker = OverlayAddedTracker()
     /// Written from the map's camera callbacks on the main thread and from
     /// `onCameraChanged`, which the overlay registry runs in a detached task.
     /// Two unguarded writes of a class reference release the old camera twice:
@@ -25,6 +29,13 @@ where Renderer.ActualPolyline == ActualPolyline {
     }
 
     public var clickListener: ((PolylineEvent) -> Void)?
+
+    /// Set by a provider that can show polyline tiles (see ``PolylineTiler``).
+    /// Polylines it tiles stay in ``polylineManager``, for taps, with no native
+    /// overlay: their entity's `polyline` is nil and the renderer never sees them.
+    @_spi(MapConductorDriver)
+    public var tiler: PolylineTiler?
+    private var tiledIds: Set<String> = []
 
     public init(
         polylineManager: PolylineManager<ActualPolyline>,
@@ -44,9 +55,29 @@ where Renderer.ActualPolyline == ActualPolyline {
 
     open func add(data: [PolylineState]) async {
         if polylineManager.isDestroyed { return }
-        await semaphore.withPermit {
-            if polylineManager.isDestroyed { return }
-            var previous = Set(polylineManager.allEntities().map { $0.state.id })
+        let landed: [PolylineState] = await semaphore.withPermit {
+            if polylineManager.isDestroyed { return [] }
+            // The app's list: anything it no longer has can be added again later.
+            addedTracker.retain(Set(data.map(\.id)))
+            var landed: [PolylineState] = []
+            let wasTiled = tiledIds
+            // `route` returns once the tile layer's URL template has been handed
+            // to the map (the provider's `onTemplate` awaits its raster upsert).
+            let tiled = await tiler?.route(data) ?? []
+            if polylineManager.isDestroyed { return [] }
+            tiledIds = tiled
+            if !tiled.isEmpty, let tiler {
+                // Tiled polylines are on the map now. Report them before the
+                // bookkeeping below, as PolygonController does.
+                await OverlayAddedTracker.notify(addedTracker.admit(tiler.tiledStates()))
+            }
+            let data = tiled.isEmpty ? data : data.filter { !tiled.contains($0.id) }
+            // Only natively drawn polylines are diffed against the renderer.
+            var previous = Set(
+                polylineManager.allEntities()
+                    .map { $0.state.id }
+                    .filter { !wasTiled.contains($0) }
+            )
             var added: [PolylineOverlayAddParams] = []
             var updated: [PolylineOverlayChangeParams<ActualPolyline>] = []
             var removed: [PolylineEntity<ActualPolyline>] = []
@@ -80,22 +111,23 @@ where Renderer.ActualPolyline == ActualPolyline {
 
             if !removed.isEmpty {
                 await renderer.onRemove(data: removed)
-                if polylineManager.isDestroyed { return }
+                if polylineManager.isDestroyed { return [] }
             }
 
             if !added.isEmpty {
                 let actualPolylines = await renderer.onAdd(data: added)
-                if polylineManager.isDestroyed { return }
+                if polylineManager.isDestroyed { return [] }
                 for (index, polyline) in actualPolylines.enumerated() {
                     guard let polyline else { continue }
                     let entity = PolylineEntity(polyline: polyline, state: added[index].state)
                     polylineManager.registerEntity(entity)
+                    landed.append(added[index].state)
                 }
             }
 
             if !updated.isEmpty {
                 let actualPolylines = await renderer.onChange(data: updated)
-                if polylineManager.isDestroyed { return }
+                if polylineManager.isDestroyed { return [] }
                 for (index, polyline) in actualPolylines.enumerated() {
                     guard let polyline else { continue }
                     let params = updated[index]
@@ -104,15 +136,56 @@ where Renderer.ActualPolyline == ActualPolyline {
                 }
             }
 
-            if polylineManager.isDestroyed { return }
+            // Tiled polylines: kept for taps, nothing native. Those that left the
+            // tiles and the list are forgotten; those that left the tiles for
+            // native drawing were added above.
+            if !wasTiled.isEmpty {
+                let nativeIds = Set(data.map(\.id))
+                for id in wasTiled where !tiled.contains(id) && !nativeIds.contains(id) {
+                    _ = polylineManager.removeEntity(id)
+                }
+            }
+            if !tiled.isEmpty, let tiler {
+                for state in tiler.tiledStates() {
+                    polylineManager.registerEntity(PolylineEntity(polyline: nil, state: state))
+                }
+            }
+
+            if polylineManager.isDestroyed { return [] }
             await renderer.onPostProcess()
+            // A polyline that only moved from the tiles to native drawing is
+            // still on the map: `admit` drops it.
+            return addedTracker.admit(landed)
         }
+        // After the renderer returned: the native objects exist on the map.
+        await OverlayAddedTracker.notify(landed)
     }
 
     open func update(state: PolylineState) async {
         if polylineManager.isDestroyed { return }
         await semaphore.withPermit {
             guard let prevEntity = polylineManager.getEntity(state.id) else { return }
+            if tiledIds.contains(state.id) {
+                if PolylineTileSet.canTile(state) {
+                    polylineManager.registerEntity(PolylineEntity(polyline: nil, state: state))
+                    tiler?.update(state)
+                    return
+                }
+                // No longer drawable in a tile (geodesic, half the world wide, or
+                // under 2 points): the map SDK draws it from now on. Still on the
+                // map, so this is not an add.
+                tiledIds.remove(state.id)
+                tiler?.remove(state.id)
+                let polylines = await renderer.onAdd(data: [PolylineOverlayAddParams(state: state)])
+                if polylineManager.isDestroyed { return }
+                if polylines.count == 1, let actualPolyline = polylines[0] {
+                    polylineManager.registerEntity(PolylineEntity(polyline: actualPolyline, state: state))
+                } else {
+                    _ = polylineManager.removeEntity(state.id)
+                }
+                await renderer.onPostProcess()
+                return
+            }
             let currentFinger = state.fingerPrint()
             let prevFinger = prevEntity.fingerPrint
             if currentFinger == prevFinger { return }
@@ -135,7 +208,11 @@ where Renderer.ActualPolyline == ActualPolyline {
     open func clear() async {
         if polylineManager.isDestroyed { return }
         await semaphore.withPermit {
-            let entities = polylineManager.allEntities()
+            addedTracker.reset()
+            let tiled = tiledIds
+            tiledIds = []
+            await tiler?.clear()
+            let entities = polylineManager.allEntities().filter { !tiled.contains($0.state.id) }
             await renderer.onRemove(data: entities)
             if polylineManager.isDestroyed { return }
             // manager を空にしてから onPostProcess を呼ぶ。GL 系の描画担当は remove では何もせず、
@@ -167,6 +244,7 @@ where Renderer.ActualPolyline == ActualPolyline {
     }
 
     open func destroy() {
+        tiler?.dispose()
         polylineManager.destroy()
     }
     // ── SlottedOverlayController ────────────────────────────────────────

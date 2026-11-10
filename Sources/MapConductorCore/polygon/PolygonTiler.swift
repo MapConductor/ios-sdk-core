@@ -18,7 +18,8 @@ import Foundation
     removes ``layerId`` with `removeById(_:)` — never through the app's own
     raster layer list, which would drop one or the other.
 
- The iOS counterpart of js-sdk-core's `PolygonTiler`.
+ The iOS counterpart of js-sdk-core's `PolygonTiler`. The routing itself is
+ ``ShapeTiler``'s, shared with ``PolylineTiler``.
  */
 @_spi(MapConductorDriver)
 public final class PolygonTiler {
@@ -31,135 +32,73 @@ public final class PolygonTiler {
     }
 
     /// Called with the template to show, or nil to remove the layer, and the tile size.
-    public var onTemplate: ((String?, Int) async -> Void)?
+    public var onTemplate: ((String?, Int) async -> Void)? {
+        get { core.onTemplate }
+        set { core.onTemplate = newValue }
+    }
     public let options: PolygonTilingOptions
 
     let tileSet: PolygonTileSet
-    /// What is tiled. ``route(_:)`` runs wherever the polygon controller's
-    /// `add` runs (off the main thread), while ``refreshIfServerMoved()`` is
-    /// called from the map's content update on the main thread: everything below
-    /// is read and written under this lock.
-    private let lock = NSLock()
-    private var tiled: Set<String> = []
-    private var states: [PolygonState] = []
-    private var shownBaseUrl: String?
+    private let core: ShapeTiler<PolygonState>
 
     public init(options: PolygonTilingOptions = .Default) {
         self.options = options
-        self.tileSet = PolygonTileSet()
-        tileSet.onTemplateChanged = { [weak self] template in
-            guard let self else { return }
-            Task { await self.onTemplate?(template, self.tileSet.tileSize) }
-        }
-    }
-
-    private func withLock<T>(_ body: () -> T) -> T {
-        lock.lock()
-        defer { lock.unlock() }
-        return body()
+        let tileSet = PolygonTileSet()
+        self.tileSet = tileSet
+        core = ShapeTiler(
+            tileSet: tileSet.core,
+            id: { $0.id },
+            canTile: PolygonTileSet.canTile,
+            vertexCount: { state in state.holes.reduce(state.points.count) { $0 + $1.count } }
+        )
     }
 
     /// Re-decides tiling for `data` and returns the ids drawn as tiles.
     public func route(_ data: [PolygonState]) async -> Set<String> {
-        var tileable: [PolygonState] = []
-        tileable.reserveCapacity(data.count)
-        var vertices = 0
-        for state in data where PolygonTileSet.canTile(state) {
-            tileable.append(state)
-            vertices += state.points.count
-            for hole in state.holes { vertices += hole.count }
-        }
-        let useTiles = options.shouldUseTiles(polygonCount: tileable.count, vertexCount: vertices)
-        let template = useTiles ? await tileSet.setPolygons(tileable) : nil
-        if let template {
-            let ids = Set(tileable.map(\.id))
-            let baseUrl = TileServerRegistry.get().baseUrl
-            withLock {
-                tiled = ids
-                states = tileable
-                shownBaseUrl = baseUrl
-            }
-            await onTemplate?(template, tileSet.tileSize)
-            return ids
-        }
-        let hadTiles = withLock { () -> Bool in
-            let had = !tiled.isEmpty
-            tiled = []
-            states = []
-            shownBaseUrl = nil
-            return had
-        }
-        tileSet.dispose()
-        if hadTiles { await onTemplate?(nil, tileSet.tileSize) }
-        return []
+        let options = self.options
+        return await core.route(data) { options.shouldUseTiles(polygonCount: $0, vertexCount: $1) }
     }
 
     /// The states drawn as tiles, as of the last ``route(_:)``.
     public func tiledStates() -> [PolygonState] {
-        withLock { states }
+        core.tiledStates()
     }
 
     public func isTiled(_ id: String) -> Bool {
-        withLock { tiled.contains(id) }
+        core.isTiled(id)
     }
 
     /// An in-place change of a tiled polygon; only the tiles it touches are redrawn.
     public func update(_ state: PolygonState) {
-        tileSet.update(state)
+        core.update(state)
     }
 
     /// Takes one polygon out of the tiles, for a change that left it no longer
     /// ``PolygonTileSet/canTile(_:)``; only the tiles it was in are redrawn. The
     /// controller then hands it to the map SDK.
     public func remove(_ id: String) {
-        let removed = withLock { () -> Bool in
-            guard tiled.remove(id) != nil else { return false }
-            states.removeAll { $0.id == id }
-            return true
-        }
-        if removed { tileSet.remove(id) }
+        core.remove(id)
     }
 
     /// Shows the tiles again if the local tile server came back on another port
     /// (it does after the app has been in the background). Cheap enough to call
     /// on every content update, which is where the marker tiles check too.
     public func refreshIfServerMoved() {
-        let current = TileServerRegistry.get().baseUrl
-        let moved = withLock { () -> Bool in
-            guard !tiled.isEmpty, let shown = shownBaseUrl, shown != current else { return false }
-            shownBaseUrl = current
-            return true
-        }
-        guard moved else { return }
-        let template = tileSet.template()
-        Task { await onTemplate?(template, tileSet.tileSize) }
+        core.refreshIfServerMoved()
     }
 
     /// The current template, or nil when nothing is tiled. A provider whose map
     /// re-reads its layers (a style reload, a server that moved) asks here.
     public func currentTemplate() -> String? {
-        withLock { tiled.isEmpty } ? nil : tileSet.template()
+        core.currentTemplate()
     }
 
     /// Unregisters the tiles without telling the provider; for a map being torn down.
     public func dispose() {
-        withLock {
-            tiled = []
-            states = []
-            shownBaseUrl = nil
-        }
-        tileSet.dispose()
+        core.dispose()
     }
 
     public func clear() async {
-        let hadTiles = withLock { () -> Bool in
-            let had = !tiled.isEmpty
-            tiled = []
-            states = []
-            shownBaseUrl = nil
-            return had
-        }
-        tileSet.dispose()
-        if hadTiles { await onTemplate?(nil, tileSet.tileSize) }
+        await core.clear()
     }
 }

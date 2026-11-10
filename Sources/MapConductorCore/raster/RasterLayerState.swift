@@ -21,6 +21,9 @@ public struct RasterLayerEvent {
 
 public typealias OnRasterLayerEventHandler = (RasterLayerEvent) -> Void
 
+/// The type of ``RasterLayerState/onAdded``: called with the state that reached the map.
+public typealias OnRasterLayerAddedHandler = (RasterLayerState) -> Void
+
 public final class RasterLayerState: ObservableObject, Identifiable, Equatable, Hashable {
     /// `userAgent` を明示しなかったときに入る値。
     ///
@@ -43,6 +46,17 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
     @Published public var debug: Bool { didSet { mutations.notifyMutated() } }
     @Published public var userAgent: String? { didSet { mutations.notifyMutated() } }
     @Published public var extraHeaders: [String: String]? { didSet { mutations.notifyMutated() } }
+    /// Called with this state each time the layer goes from not being on the
+    /// map to being on it: after the provider has added it to the map. The tile
+    /// images may still be loading; this does not wait for pixels.
+    ///
+    /// Not called for in-place changes, on `clear`, or when the map goes away.
+    /// Called again when the layer is removed and later added again. Always on
+    /// the main actor.
+    ///
+    /// It is not part of the id, the fingerprint, `==` or the hash, and
+    /// replacing it does not redraw anything.
+    public var onAdded: OnRasterLayerAddedHandler?
 
     public init(
         source: RasterLayerSource,
@@ -52,7 +66,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         debug: Bool = false,
         userAgent: String = RasterLayerState.defaultUserAgent,
         extraHeaders: [String: String]? = nil,
-        id: String? = nil
+        id: String? = nil,
+        onAdded: OnRasterLayerAddedHandler? = nil
     ) {
         let resolvedId = id ?? RasterLayerState.makeRasterLayerId(
             source: source,
@@ -69,6 +84,7 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         self.debug = debug
         self.userAgent = userAgent
         self.extraHeaders = extraHeaders
+        self.onAdded = onAdded
     }
 
     public func copy(
@@ -79,7 +95,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
         debug: Bool? = nil,
         userAgent: String? = nil,
         extraHeaders: [String: String]? = nil,
-        id: String? = nil
+        id: String? = nil,
+        onAdded: OnRasterLayerAddedHandler? = nil
     ) -> RasterLayerState {
         RasterLayerState(
             source: source ?? self.source,
@@ -90,7 +107,8 @@ public final class RasterLayerState: ObservableObject, Identifiable, Equatable, 
             userAgent: userAgent ??
                 self.userAgent ?? RasterLayerState.defaultUserAgent,
             extraHeaders: extraHeaders ?? self.extraHeaders,
-            id: id ?? self.id
+            id: id ?? self.id,
+            onAdded: onAdded ?? self.onAdded
         )
     }
 

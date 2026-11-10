@@ -10,6 +10,10 @@ where Renderer.ActualLayer == ActualLayer {
 
     public let zIndex: Int = 0
     private let semaphore = AsyncSemaphore(1)
+
+    /// Which overlays have reached the map, for their `onAdded`.
+    @_spi(MapConductorDriver)
+    public let addedTracker = OverlayAddedTracker()
     // android-sdk / react-sdk と同じく、内部的に upsert したレイヤー（例: マーカータイル）は
     // アプリ層の add()/composition の削除スイープ対象から除外する。
     private var upsertedIds: Set<String> = []
@@ -32,8 +36,11 @@ where Renderer.ActualLayer == ActualLayer {
 
     open func add(data: [RasterLayerState]) async {
         if rasterLayerManager.isDestroyed { return }
-        await semaphore.withPermit {
-            if rasterLayerManager.isDestroyed { return }
+        let landed: [RasterLayerState] = await semaphore.withPermit {
+            if rasterLayerManager.isDestroyed { return [] }
+            // The app's list: anything it no longer has can be added again later.
+            addedTracker.retain(Set(data.map(\.id)))
+            var landed: [RasterLayerState] = []
             var previous = Set(
                 rasterLayerManager.allEntities()
                     .map { $0.state.id }
@@ -80,6 +87,7 @@ where Renderer.ActualLayer == ActualLayer {
                     guard let layer else { continue }
                     let entity = RasterLayerEntity(layer: layer, state: added[index].state)
                     rasterLayerManager.registerEntity(entity)
+                    landed.append(added[index].state)
                 }
             }
 
@@ -94,7 +102,10 @@ where Renderer.ActualLayer == ActualLayer {
             }
 
             await renderer.onPostProcess()
+            return addedTracker.admit(landed)
         }
+        // After the renderer returned: the native objects exist on the map.
+        await OverlayAddedTracker.notify(landed)
     }
 
     open func update(state: RasterLayerState) async {
@@ -160,6 +171,7 @@ where Renderer.ActualLayer == ActualLayer {
     open func clear() async {
         if rasterLayerManager.isDestroyed { return }
         await semaphore.withPermit {
+            addedTracker.reset()
             upsertedIds.removeAll()
             let entities = rasterLayerManager.allEntities()
             await renderer.onRemove(data: entities)
