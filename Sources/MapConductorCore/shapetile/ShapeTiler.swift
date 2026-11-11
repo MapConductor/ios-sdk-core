@@ -83,6 +83,13 @@ final class ShapeTiler<State> {
         tileSet.update(state)
     }
 
+    /// Rebuild draw order without re-evaluating the native/tile threshold.
+    func reorder(_ data: [State]) async {
+        guard let template = await tileSet.setStates(data) else { return }
+        withLock { states = data }
+        await onTemplate?(template, tileSet.tileSize)
+    }
+
     func remove(_ id: String) {
         let removed = withLock { () -> Bool in
             guard tiled.remove(id) != nil else { return false }
