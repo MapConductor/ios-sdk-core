@@ -51,6 +51,17 @@ public struct MapViewContent {
     }
     /// `nil` until ``polylineTilingOptions`` is assigned.
     var explicitPolylineTilingOptions: PolylineTilingOptions?
+    /// Circle tiling for this content. Reads ``CircleTilingOptions/Default`` until something sets it.
+    ///
+    /// Tracked like ``polylineTilingOptions``: an explicit choice, ``CircleTilingOptions/Disabled``
+    /// included, survives the merge of a builder's pieces; pieces that never touched it leave it alone.
+    /// The map reads it on every content update; a change re-decides which circles are tiled.
+    public var circleTilingOptions: CircleTilingOptions {
+        get { explicitCircleTilingOptions ?? .Default }
+        set { explicitCircleTilingOptions = newValue }
+    }
+    /// `nil` until ``circleTilingOptions`` is assigned.
+    var explicitCircleTilingOptions: CircleTilingOptions?
     /// Handlers that manage a subset of polygons imperatively (e.g. cluster hull polygons).
     /// Map view coordinators call ``PolygonSyncHandler/bindPolygonSync(_:)`` on each handler
     /// to provide a direct polygon sync function, ensuring those polygons are committed before
@@ -84,6 +95,9 @@ public struct MapViewContent {
         }
         if let tiling = other.explicitPolylineTilingOptions {
             explicitPolylineTilingOptions = tiling
+        }
+        if let tiling = other.explicitCircleTilingOptions {
+            explicitCircleTilingOptions = tiling
         }
     }
 }

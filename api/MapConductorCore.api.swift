@@ -3,6 +3,7 @@ import Combine
 import CoreGraphics
 import CoreLocation
 import CoreText
+import Darwin
 import Foundation
 import Metal
 import Network
@@ -48,6 +49,10 @@ public struct Markers : MapConductorCore::MapOverlayItemProtocol {
 }
 public struct Circles : MapConductorCore::MapOverlayItemProtocol {
   public init(_ states: [MapConductorCore::CircleState])
+  public func append(to content: inout MapConductorCore::MapViewContent)
+}
+public struct CircleTiling : MapConductorCore::MapOverlayItemProtocol {
+  public init(_ options: MapConductorCore::CircleTilingOptions)
   public func append(to content: inout MapConductorCore::MapViewContent)
 }
 public struct Polylines : MapConductorCore::MapOverlayItemProtocol {
@@ -261,6 +266,10 @@ public struct MapViewContent {
     get
     set
   }
+  public var circleTilingOptions: MapConductorCore::CircleTilingOptions {
+    get
+    set
+  }
   public var polygonSyncHandlers: [any MapConductorCore::PolygonSyncHandler]
   public init()
 }
@@ -322,6 +331,7 @@ open class CircleController<ActualCircle, Renderer> : MapConductorCore::OverlayC
   open func update(state: MapConductorCore::CircleState) async
   open func clear() async
   open func find(position: any MapConductorCore::GeoPointProtocol) -> MapConductorCore::CircleEntity<ActualCircle>?
+  public func setCurrentCameraPosition(_ cameraPosition: MapConductorCore::MapCameraPosition?)
   open func onCameraChanged(mapCameraPosition: MapConductorCore::MapCameraPosition) async
   open func destroy()
   public var kind: MapConductorCore::OverlayKind {
@@ -367,6 +377,7 @@ final public class CircleManager<ActualCircle> : MapConductorCore::CircleManager
     get
   }
   final public func find(position: any MapConductorCore::GeoPointProtocol) -> MapConductorCore::CircleEntity<ActualCircle>?
+  final public func find(position: any MapConductorCore::GeoPointProtocol, cameraPosition: MapConductorCore::MapCameraPosition?) -> MapConductorCore::CircleEntity<ActualCircle>?
   @objc deinit
 }
 public protocol CircleOverlayRendererProtocol {
@@ -537,6 +548,15 @@ final public class CircleState : Combine::ObservableObject, Swift::Identifiable,
   final public var hashValue: Swift::Int {
     get
   }
+}
+public struct CircleTilingOptions : Swift::Equatable {
+  public let enabled: Swift::Bool
+  public let minCircleCount: Swift::Int
+  public static let Default: MapConductorCore::CircleTilingOptions
+  public static let Disabled: MapConductorCore::CircleTilingOptions
+  public init(enabled: Swift::Bool = true, minCircleCount: Swift::Int = 2001)
+  public func shouldUseTiles(circleCount: Swift::Int) -> Swift::Bool
+  public static func == (a: MapConductorCore::CircleTilingOptions, b: MapConductorCore::CircleTilingOptions) -> Swift::Bool
 }
 public enum MapDriverConformance {
   public struct ViolationError : Swift::Error, Swift::CustomStringConvertible {

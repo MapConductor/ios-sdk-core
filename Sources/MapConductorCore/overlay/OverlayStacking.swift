@@ -7,7 +7,7 @@ import Foundation
 /// 1. ラスターレイヤー（``RasterLayerState``、アプリが足すタイル）
 /// 2. グラウンドイメージ
 /// 3. ポリゴン（ネイティブのポリゴンと、SDK のポリゴンのタイルレイヤーが同じ帯）
-/// 4. サークル
+/// 4. サークル（ネイティブのサークルと、SDK のサークルのタイルレイヤーが同じ帯。タイルは帯の一番下）
 /// 5. ポリライン（ネイティブのポリラインと、SDK のポリラインのタイルレイヤーが同じ帯。タイルは帯の一番下）
 /// 6. マーカー（ネイティブのマーカーと、SDK のマーカーのタイルレイヤー・strategy の描画が同じ帯）
 ///
@@ -96,6 +96,8 @@ public enum OverlayStacking {
         ("mapconductor-raster-layer-\(polygonTileStateId)", .polygon),
         // ポリラインのタイル（PolylineTiler）も同じ。帯はポリライン。
         ("mapconductor-raster-layer-\(polylineTileStateId)", .polyline),
+        // サークルのタイル（CircleTiler）も同じ。帯はサークル。
+        ("mapconductor-raster-layer-\(circleTileStateId)", .circle),
         ("mapconductor-raster-layer-\(markerTileStateIdPrefix)", .marker),
         ("mapconductor-raster-layer-", .rasterLayer),
         ("mc-gimg-lyr-", .groundImage),
@@ -114,10 +116,12 @@ public enum OverlayStacking {
     /// ポリゴンのタイル（id ``polygonTileStateId``）はポリゴンの帯、マーカーのタイル
     /// （id が ``markerTileStateIdPrefix`` で始まる）はマーカーの帯。ポリラインのタイル
     /// （id ``polylineTileStateId``）はポリラインの帯の一番下（``polylineTileKey``）で、
-    /// ネイティブで描くポリライン（geodesic など）がその上に来る。
+    /// ネイティブで描くポリライン（geodesic など）がその上に来る。サークルのタイル（id
+    /// ``circleTileStateId``）も同じくサークルの帯の一番下（``circleTileKey``）。
     public static func rasterKey(stateId: String, zIndex: Int) -> OverlayStackKey {
         if stateId == polygonTileStateId { return OverlayStackKey(.polygon) }
         if stateId == polylineTileStateId { return polylineTileKey }
+        if stateId == circleTileStateId { return circleTileKey }
         if stateId.hasPrefix(markerTileStateIdPrefix) { return OverlayStackKey(.marker) }
         return OverlayStackKey(.rasterLayer, zIndex: zIndex)
     }
@@ -130,6 +134,11 @@ public enum OverlayStacking {
     /// 帯の下端に丸まる。`Int.min` にしないのは、zIndex に足し引きするプロバイダで桁あふれしないため）。
     /// GL スタイルでは既存のポリラインのレイヤ（zIndex 0 扱い）より下に差し込まれる。
     public static let polylineTileKey = OverlayStackKey(.polyline, zIndex: -(zIndexSpan + 1))
+    /// CircleTiler がラスターの経路で載せるレイヤの id。
+    public static let circleTileStateId = "mc-circle-tiles"
+    /// サークルのタイルのキー。``polylineTileKey`` と同じく帯の一番下: ポリゴン（タイルとも）より上、
+    /// ネイティブのサークルより下。
+    public static let circleTileKey = OverlayStackKey(.circle, zIndex: -(zIndexSpan + 1))
 
     /// GL スタイルでラスターの経路から載せるレイヤ（ID `mapconductor-raster-layer-<state id>`）のキー。
     /// ``rasterKey(stateId:zIndex:)`` をレイヤ ID から引く版。
