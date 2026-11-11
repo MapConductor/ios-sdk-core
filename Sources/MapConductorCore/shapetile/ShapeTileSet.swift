@@ -18,6 +18,11 @@ final class ShapeTileSet<State> {
 
     let routeId: String
     let tileSize = 256
+    /// Where ``flush()`` runs: off the main thread, since redrawing the changed
+    /// shapes (and, past a few thousand changes, rewriting a circle file of
+    /// hundreds of thousands of records) took 150 ms there. Serial, so batches
+    /// reach the renderer in order.
+    private let flushQueue = DispatchQueue(label: "mapconductor.shapetile.flush", qos: .userInitiated)
     /// Called on the main thread with the template after a batch of in-place changes.
     var onTemplateChanged: ((String) -> Void)?
 
@@ -35,6 +40,25 @@ final class ShapeTileSet<State> {
         lock.lock(); defer { lock.unlock() }
         guard let index = indexById[id] else { return nil }
         return sourceStates[index]
+    }
+
+    /// The registered states whose shape's box meets the given one (Web Mercator),
+    /// as of now: changes still waiting for ``flush()`` are included, since their
+    /// shape in the renderer may be the old one.
+    func sources(minX: Double, minY: Double, maxX: Double, maxY: Double) -> [State] {
+        let slots = renderer.candidates(minX: minX, minY: minY, maxX: maxX, maxY: maxY)
+        lock.lock()
+        defer { lock.unlock() }
+        var states: [State] = []
+        var seen = Set<String>()
+        for slot in slots where Int(slot) < sourceStates.count {
+            guard let state = sourceStates[Int(slot)] else { continue }
+            if seen.insert(idOf(state)).inserted { states.append(state) }
+        }
+        for (id, state) in pending where indexById[id] != nil && seen.insert(id).inserted {
+            states.append(state)
+        }
+        return states
     }
 
     func visitSources(_ action: (State) -> Void) {
@@ -196,7 +220,7 @@ final class ShapeTileSet<State> {
         flushScheduled = true
         lock.unlock()
         if schedule {
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Self.updateCoalesceMs)) { [weak self] in
+            flushQueue.asyncAfter(deadline: .now() + .milliseconds(Self.updateCoalesceMs)) { [weak self] in
                 self?.flush()
             }
         }
@@ -244,7 +268,9 @@ final class ShapeTileSet<State> {
         lock.lock()
         version += 1
         lock.unlock()
-        onTemplateChanged?(template())
+        let template = template()
+        // onTemplateChanged is documented to run on the main thread.
+        DispatchQueue.main.async { [weak self] in self?.onTemplateChanged?(template) }
     }
 
     private func cancelPending() {

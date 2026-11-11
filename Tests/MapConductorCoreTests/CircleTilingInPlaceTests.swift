@@ -98,7 +98,8 @@ final class CircleTilingInPlaceTests: XCTestCase {
         return (controller, renderer, tiler, templates)
     }
 
-    /// Lets the tile set's coalesced update (16 ms on the main queue) run.
+    /// Lets the tile set's coalesced update (16 ms, on its own queue) run and
+    /// its template reach the main thread.
     private func settle() async {
         try? await Task.sleep(nanoseconds: 80_000_000)
         await MainActor.run {}
@@ -235,6 +236,90 @@ final class CircleTilingInPlaceTests: XCTestCase {
         XCTAssertEqual(Set(renderer.added), ["a", "b", "c", "osaka"])
         XCTAssertNil(templates.values.last ?? "not removed")
         await controller.clear()
+    }
+
+    /// A tap is decided on the circle's state as it is now, even before the
+    /// coalesced redraw has moved its tile shape.
+    func testATapFindsAMovedCircleBeforeItsTilesAreRedrawn() async {
+        let (controller, _, _, _) = setup()
+        let list = tokyo()
+        await controller.add(data: list)
+        let osaka = GeoPoint(latitude: 34.69, longitude: 135.5)
+        let moved = GeoPoint(latitude: lat - 0.01, longitude: lng)
+        list[3].center = moved
+        await controller.update(state: list[3])
+        // No settle(): the renderer still has Osaka's box.
+        XCTAssertEqual(controller.find(position: moved)?.state.id, "osaka")
+        XCTAssertNil(controller.find(position: osaka))
+        await settle()
+        XCTAssertEqual(controller.find(position: moved)?.state.id, "osaka")
+        XCTAssertNil(controller.find(position: osaka))
+        await controller.clear()
+    }
+
+    /// The outline counts for a tap, half outside the radius, at the camera's
+    /// zoom: also when it is wider than the radius, and when it is not drawn
+    /// (a transparent colour), which the tiles do not know of.
+    func testATapOnATiledCirclesOutlineHitsIt() async {
+        let (controller, _, _, _) = setup()
+        let list = tokyo()
+        for state in list {
+            state.radiusMeters = 5
+            state.strokeWidth = 40
+        }
+        list[0].strokeColor = .clear
+        await controller.add(data: list)
+        let camera = MapCameraPosition(position: GeoPoint(latitude: lat, longitude: lng), zoom: 18)
+        controller.setCurrentCameraPosition(camera)
+        let half = calculateMetersPerPixel(latitude: lat, zoom: 18) * 40 / 2
+        let center = GeoPoint(latitude: lat, longitude: lng)
+        let onOutline = Spherical.computeOffset(origin: center, distance: 5 + half - 0.5, heading: 270)
+        let beyond = Spherical.computeOffset(origin: center, distance: 5 + half + 0.5, heading: 270)
+        XCTAssertEqual(controller.find(position: onOutline)?.state.id, "a")
+        XCTAssertNil(controller.find(position: beyond))
+        await controller.clear()
+    }
+
+    /// A tap reads the few tiled circles near it, not all of them: at the
+    /// nationwide example's scale, reading every state took over a second.
+    func testATapAmongManyTiledCirclesIsQuick() async {
+        let renderer = Renderer()
+        let controller = CircleController<String, Renderer>(circleManager: CircleManager<String>(), renderer: renderer)
+        controller.tiler = CircleTiler()
+        var generator = SystemRandomNumberGenerator()
+        let list = (0..<100_000).map { i in
+            CircleState(
+                center: GeoPoint(
+                    latitude: Double.random(in: 30...45, using: &generator),
+                    longitude: Double.random(in: 130...145, using: &generator)
+                ),
+                radiusMeters: 500, strokeWidth: 1, id: "c\(i)", onClick: { _ in }
+            )
+        }
+        await controller.add(data: list)
+        controller.setCurrentCameraPosition(MapCameraPosition(position: list[0].center, zoom: 12))
+        let start = CFAbsoluteTimeGetCurrent()
+        for state in list.prefix(10) {
+            XCTAssertNotNil(controller.find(position: state.center))
+        }
+        let perTap = (CFAbsoluteTimeGetCurrent() - start) / 10
+        XCTAssertLessThan(perTap, 0.02, "a tap took \(perTap * 1000) ms")
+        await controller.clear()
+    }
+
+    func testInPlaceChangesReportTheirTemplateOnTheMainThread() async {
+        let tileSet = CircleTileSet(pixelRatio: 1)
+        let list = tokyo()
+        _ = await tileSet.setCircles(list)
+        let reported = expectation(description: "template")
+        tileSet.onTemplateChanged = { _ in
+            XCTAssertTrue(Thread.isMainThread)
+            reported.fulfill()
+        }
+        list[0].fillColor = .green
+        tileSet.update(list[0])
+        await fulfillment(of: [reported], timeout: 2)
+        tileSet.dispose()
     }
 
     func testDestroyUnregistersTheTilesWithoutTellingTheProvider() async {

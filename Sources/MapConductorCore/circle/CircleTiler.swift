@@ -96,6 +96,32 @@ public final class CircleTiler {
     }
 
     func state(_ id: String) -> CircleState? { tileSet.core.source(id) }
+
+    /// The tiled circles a tap at `latitude`/`longitude` can hit: those whose
+    /// extent (the box the tiles index them by) comes within reach of the point.
+    /// Found through the tiles' index, so a tap reads a handful of states, not
+    /// every one; ``CircleManager/find(position:cameraPosition:)`` then decides
+    /// on those states exactly as before.
+    ///
+    /// The reach allows for half the widest outline (points, at `metersPerPoint`;
+    /// at least ``tapOutlineSlackPoints``, since outlines that are not drawn,
+    /// such as a transparent one, still count for a tap) plus ``tapSlackMeters``,
+    /// for a planar circle's box (along the parallel) against the great-circle
+    /// distance the tap is decided with.
+    func states(near latitude: Double, _ longitude: Double, metersPerPoint: Double) -> [CircleState] {
+        let lat = min(ShapeTileRenderer.maxLatitude, max(-ShapeTileRenderer.maxLatitude, latitude))
+        let point = ShapeTileRenderer.toMercator([lat, normalizeLngDegrees(longitude)])
+        // Mercator units per metre at this latitude.
+        let perMeter = 1 / (Earth.circumferenceMeters * max(cos(lat * .pi / 180), 1e-6))
+        let outline = max(Self.tapOutlineSlackPoints, tileSet.renderer.maxStrokePx)
+        let pad = (metersPerPoint * outline / 2 + Self.tapSlackMeters) * perMeter
+        return tileSet.core.sources(
+            minX: point[0] - pad, minY: point[1] - pad, maxX: point[0] + pad, maxY: point[1] + pad
+        )
+    }
+
+    static let tapOutlineSlackPoints = 64.0
+    static let tapSlackMeters = 100.0
     func visitStates(_ action: (CircleState) -> Void) { tileSet.core.visitSources(action) }
 
     /// An in-place change of a tiled circle; only the tiles it touches are redrawn.

@@ -3,6 +3,7 @@ import Combine
 import CoreGraphics
 import CoreLocation
 import CoreText
+import Darwin
 import Foundation
 import Metal
 import Network
@@ -553,7 +554,7 @@ public struct CircleTilingOptions : Swift::Equatable {
   public let minCircleCount: Swift::Int
   public static let Default: MapConductorCore::CircleTilingOptions
   public static let Disabled: MapConductorCore::CircleTilingOptions
-  public init(enabled: Swift::Bool = true, minCircleCount: Swift::Int = 2000)
+  public init(enabled: Swift::Bool = true, minCircleCount: Swift::Int = 2001)
   public func shouldUseTiles(circleCount: Swift::Int) -> Swift::Bool
   public static func == (a: MapConductorCore::CircleTilingOptions, b: MapConductorCore::CircleTilingOptions) -> Swift::Bool
 }

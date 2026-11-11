@@ -8,13 +8,8 @@ public protocol CircleManagerProtocol {
     func getEntity(_ id: String) -> CircleEntity<ActualCircle>?
     func hasEntity(_ id: String) -> Bool
     func allEntities() -> [CircleEntity<ActualCircle>]
-    func nativeEntities() -> [CircleEntity<ActualCircle>]
     func clear()
     func find(position: GeoPointProtocol) -> CircleEntity<ActualCircle>?
-}
-
-public extension CircleManagerProtocol {
-    func nativeEntities() -> [CircleEntity<ActualCircle>] { allEntities().filter { $0.circle != nil } }
 }
 
 public final class CircleManager<ActualCircle>: CircleManagerProtocol {
@@ -85,6 +80,11 @@ public final class CircleManager<ActualCircle>: CircleManagerProtocol {
         return result
     }
 
+    /// The circles the map SDK draws (each has a native `circle`), without the
+    /// tiled ones ``allEntities()`` also lists. What a renderer that redraws
+    /// from the manager reads: listing the tiled ones makes an entity per tiled
+    /// circle, seconds at hundreds of thousands.
+    @_spi(MapConductorDriver)
     public func nativeEntities() -> [CircleEntity<ActualCircle>] {
         lock.lock(); defer { lock.unlock() }
         return Array(entities.values)
@@ -162,8 +162,11 @@ public final class CircleManager<ActualCircle>: CircleManagerProtocol {
             }
         }
         for entity in candidates { consider(entity.state, hit: entity.hit, entity: entity) }
-        source?.visitStates { state in
-            if !nativeIds.contains(state.id) { consider(state, hit: CircleHitValues(state), entity: nil) }
+        // Tiled circles: only those near the tap, found through the tiles' index.
+        // Reading every state here took over a second at 700k circles.
+        for state in source?.states(near: position.latitude, position.longitude, metersPerPoint: metersPerPoint) ?? []
+        where !nativeIds.contains(state.id) {
+            consider(state, hit: CircleHitValues(state), entity: nil)
         }
         return best ?? bestState.map { CircleEntity(circle: nil, state: $0) }
     }

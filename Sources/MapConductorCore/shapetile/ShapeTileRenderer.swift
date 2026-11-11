@@ -537,6 +537,22 @@ final class ShapeTileRenderer: TileProvider {
         if close { path.closeSubpath() }
     }
 
+    /// Slots whose shape's box meets the given one (Web Mercator). For taps: the caller tests the few candidates
+    /// against their states instead of reading every state.
+    func candidates(minX: Double, minY: Double, maxX: Double, maxY: Double) -> [Int32] {
+        lock.lock()
+        let snapshot = data
+        lock.unlock()
+        return Self.query(snapshot, minX: minX, minY: minY, maxX: maxX, maxY: maxY)
+    }
+
+    /// The widest outline drawn (points).
+    var maxStrokePx: Double {
+        lock.lock()
+        defer { lock.unlock() }
+        return data.maxStrokePx
+    }
+
     /// Indices of the shapes whose box meets the given one, in draw order.
     private static func query(_ data: Data, minX: Double, minY: Double, maxX: Double, maxY: Double) -> [Int32] {
         data.index.query(data.shapes, minX: minX, minY: minY, maxX: maxX, maxY: maxY)
