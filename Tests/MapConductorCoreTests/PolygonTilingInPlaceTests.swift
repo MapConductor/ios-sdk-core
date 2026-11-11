@@ -228,4 +228,20 @@ final class PolygonTilingInPlaceTests: XCTestCase {
         XCTAssertEqual(added, [])
         await controller.clear()
     }
+    func testChangingZIndexReordersTilesBelowRoutingThreshold() async throws {
+        let (controller, _, tiler) = setup()
+        let red = square("red", lat, lng, .red)
+        let green = square("green", lat, lng, .green)
+        green.zIndex = 1
+        let far = square("far", 34.69, 135.5, .blue)
+        await controller.add(data: [red, green, far])
+        XCTAssertTrue(isGreen(try pixel(tiler, lat + 0.001, lng + 0.001, z: 16)))
+        far.geodesic = true
+        await controller.update(state: far)
+        red.zIndex = 2
+        await controller.update(state: red)
+        await settle()
+        XCTAssertTrue(isRed(try pixel(tiler, lat + 0.001, lng + 0.001, z: 16)), "red should cover green after zIndex changes")
+        await controller.clear()
+    }
 }

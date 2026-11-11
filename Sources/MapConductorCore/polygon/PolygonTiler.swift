@@ -73,6 +73,10 @@ public final class PolygonTiler {
         core.update(state)
     }
 
+    func reorder(_ states: [PolygonState]) async {
+        await core.reorder(states)
+    }
+
     /// Takes one polygon out of the tiles, for a change that left it no longer
     /// ``PolygonTileSet/canTile(_:)``; only the tiles it was in are redrawn. The
     /// controller then hands it to the map SDK.

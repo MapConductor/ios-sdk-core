@@ -154,8 +154,15 @@ where Renderer.ActualPolygon == ActualPolygon {
             guard let prevEntity = polygonManager.getEntity(state.id) else { return }
             if tiledIds.contains(state.id) {
                 if PolygonTileSet.canTile(state) {
+                    if state.zIndex != prevEntity.fingerPrint.zIndex, let tiler {
+                        let states = tiler.tiledStates().map {
+                            $0.id == state.id ? state : polygonManager.getEntity($0.id)?.state ?? $0
+                        }
+                        await tiler.reorder(states)
+                    } else {
+                        tiler?.update(state)
+                    }
                     polygonManager.registerEntity(PolygonEntity(polygon: nil, state: state))
-                    tiler?.update(state)
                     return
                 }
                 // No longer drawable in a tile (geodesic, half the world wide, or
