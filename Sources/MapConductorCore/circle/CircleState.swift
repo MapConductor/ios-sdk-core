@@ -37,23 +37,33 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
     /// Writes to the fields below are announced here rather than discovered by
     /// subscribing to each state. See ``StateMutationSignal``.
     public let mutations = StateMutationSignal()
+    internal private(set) var revision: UInt64 = 0
+    internal private(set) var changedFields: UInt16 = 0
+    private func markChanged(_ mask: UInt16) {
+        revision &+= 1
+        changedFields |= mask
+        mutations.notifyMutated()
+    }
 
-    @Published public var center: GeoPointProtocol { didSet { mutations.notifyMutated() } }
-    @Published public var radiusMeters: Double { didSet { mutations.notifyMutated() } }
-    @Published public var geodesic: Bool { didSet { mutations.notifyMutated() } }
-    @Published public var clickable: Bool { didSet { mutations.notifyMutated() } }
-    @Published public var strokeColor: UIColor { didSet { mutations.notifyMutated() } }
-    @Published public var strokeWidth: Double { didSet { mutations.notifyMutated() } }
-    @Published public var fillColor: UIColor { didSet { mutations.notifyMutated() } }
-    @Published public var extra: Any? { didSet { mutations.notifyMutated() } }
-    @Published public var zIndex: Int? { didSet { mutations.notifyMutated() } }
-    @Published public var onClick: OnCircleEventHandler? { didSet { mutations.notifyMutated() } }
+    @Published public var center: GeoPointProtocol { didSet { markChanged(1) } }
+    @Published public var radiusMeters: Double { didSet { markChanged(2) } }
+    @Published public var geodesic: Bool { didSet { markChanged(4) } }
+    @Published public var clickable: Bool { didSet { markChanged(8) } }
+    @Published public var strokeColor: UIColor { didSet { markChanged(16) } }
+    @Published public var strokeWidth: Double { didSet { markChanged(32) } }
+    @Published public var fillColor: UIColor { didSet { markChanged(64) } }
+    @Published public var extra: Any? { didSet { markChanged(128) } }
+    @Published public var zIndex: Int? { didSet { markChanged(256) } }
+    @Published public var onClick: OnCircleEventHandler? { didSet { markChanged(512) } }
     /// Called with this state each time the circle goes from not being on the
     /// map to being on it.
     ///
     /// - Drawn natively: after the provider has created its native circle.
+    /// - Drawn into tiles (``CircleTilingOptions``): after the tile layer's URL
+    ///   template has been handed to the map. The tile images may still be
+    ///   loading; this does not wait for pixels.
     ///
-    /// Not called for in-place changes, on `clear`, or when the map goes
+    /// Not called for in-place changes or for a move between native drawing and tiles, on `clear`, or when the map goes
     /// away. Called again when the circle is removed and later added again.
     /// Always on the main actor.
     ///
@@ -98,6 +108,10 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
         self.extra = extra
         self.onClick = onClick
         self.onAdded = onAdded
+        // Optional @Published properties start with nil and may invoke didSet
+        // during initialization. A newly constructed state has no pending edits.
+        revision = 0
+        changedFields = 0
     }
 
     public func copy(

@@ -3,24 +3,29 @@ import Foundation
 import UIKit
 
 /**
- Draws a set of shapes — polygons or polylines — into raster tiles.
+ Draws a set of shapes — polygons, polylines or circles — into raster tiles.
 
- The renderer under both ``PolygonTileSet`` (polygons) and ``PolylineTileSet``
- (polylines); each tile set has its own renderer, so one renderer only ever
- holds one kind. The native counterpart of the "Shape tiles" section of
+ The renderer under ``PolygonTileSet`` (polygons), ``PolylineTileSet``
+ (polylines) and ``CircleTileSet`` (circles); each tile set has its own
+ renderer, so one renderer only ever holds one kind. The native counterpart of the "Shape tiles" section of
  js-sdk-core's `tile-sw.js`, and drawn the same way:
 
  - Every shape is kept in Web Mercator coordinates in [0, 1]. A polygon's
    outline is wound one way and its holes the other, so a nonzero ("winding")
    fill leaves out the union of the holes without computing it. A polyline is
    one open path.
- - Shapes are found through a grid of their bounding boxes (one z12 tile per
-   cell); one covering too many cells is kept in a list every query checks.
+ - Shapes are found through grids of their bounding boxes. The finest cell
+   is one z12 tile; wide shapes use coarser grids. Candidates are deduplicated
+   before their bounds are tested, keeping queries bounded by actual shapes.
  - Each zoom gets its own simplified copy of a shape, built the first time a
    tile at that zoom needs it: vertices snapped to that zoom's pixel grid,
    repeats dropped, Douglas-Peucker at half a pixel (a path keeps both ends).
    A polygon smaller than a pixel is drawn as one pixel; a polyline that
    collapses to one point is drawn as a dot as wide as the line.
+ - A circle is kept as its centre and radius (``CircleTilePainter``): a true
+   circle at each zoom, or the native 128-gon where the projection bends it,
+   one pixel when it is smaller than one. Its radius is on the ground, so it
+   doubles with each zoom; its outline is on screen, as a polygon's.
  - A polygon's outline only is stroked, and not at all for a polygon under 4 px
    on screen. A polyline is stroked, never filled. Caps and joins are round.
  - Line widths are on screen (points), so they do not change with the zoom.
@@ -38,8 +43,6 @@ import UIKit
 final class ShapeTileRenderer: TileProvider {
     /// Cells of the shape index, in Web Mercator units: one z12 tile.
     static let cellSize = 1.0 / 4096.0
-    /// A shape covering more cells than this is kept in a list every query checks.
-    static let maxCells = 256
     /// Simplified copies kept, most recent zooms first.
     static let zoomsKept = 4
     static let dpTolerancePx = 0.5
@@ -47,6 +50,8 @@ final class ShapeTileRenderer: TileProvider {
     /// round a 3 px parcel is the whole parcel, and a city of them zoomed out
     /// turns into the outline colour.
     static let minOutlinedPx = 4.0
+    /// The Web Mercator world's edge, where ``toMercator(_:)`` clamps latitudes.
+    static let maxLatitude = 85.05112878
 
     /// Logical tile size (points), the grid the map asks tiles on.
     let tileSize: Int
@@ -57,7 +62,7 @@ final class ShapeTileRenderer: TileProvider {
 
     /// One shape as drawn: plain values, so drawing never touches a state.
     final class Shape {
-        enum Kind { case polygon, line }
+        enum Kind { case polygon, line, circle }
 
         let kind: Kind
         /// Mercator rings, flat `[x, y, ...]`. A polygon's outline has positive
@@ -67,8 +72,10 @@ final class ShapeTileRenderer: TileProvider {
         let fill: CGColor?
         let stroke: CGColor?
         let strokeWidth: Double
+        /// A circle's centre and extent; nil for the other kinds.
+        let circle: CircleTilePainter.Geometry?
 
-        private init(kind: Kind, rings: [[Double]], fill: CGColor?, stroke: CGColor?, strokeWidth: Double) {
+        private convenience init(kind: Kind, rings: [[Double]], fill: CGColor?, stroke: CGColor?, strokeWidth: Double) {
             let first = rings[0]
             var minX = Double.infinity, minY = Double.infinity, maxX = -Double.infinity, maxY = -Double.infinity
             var i = 0
@@ -77,12 +84,33 @@ final class ShapeTileRenderer: TileProvider {
                 minY = Swift.min(minY, first[i + 1]); maxY = Swift.max(maxY, first[i + 1])
                 i += 2
             }
+            self.init(
+                kind: kind, rings: rings, minX: minX, minY: minY, maxX: maxX, maxY: maxY,
+                fill: fill, stroke: stroke, strokeWidth: strokeWidth, circle: nil
+            )
+        }
+
+        init(
+            kind: Kind, rings: [[Double]], minX: Double, minY: Double, maxX: Double, maxY: Double,
+            fill: CGColor?, stroke: CGColor?, strokeWidth: Double, circle: CircleTilePainter.Geometry?
+        ) {
             self.kind = kind
             self.rings = rings
             self.minX = minX; self.minY = minY; self.maxX = maxX; self.maxY = maxY
             self.fill = ShapeTileRenderer.isVisible(fill) ? fill : nil
             self.stroke = strokeWidth > 0 && ShapeTileRenderer.isVisible(stroke) ? stroke : nil
             self.strokeWidth = strokeWidth
+            self.circle = circle
+        }
+
+        /// A circle; nil when it has no extent (a radius of 0 or less, or not finite).
+        convenience init?(_ shape: CircleTileShape) {
+            guard let geometry = CircleTilePainter.Geometry(shape) else { return nil }
+            self.init(
+                kind: .circle, rings: [],
+                minX: geometry.westX, minY: geometry.northY, maxX: geometry.eastX, maxY: geometry.southY,
+                fill: shape.fill, stroke: shape.stroke, strokeWidth: shape.strokeWidth, circle: geometry
+            )
         }
 
         /// A polygon; nil when its outline has fewer than 3 points.
@@ -120,34 +148,112 @@ final class ShapeTileRenderer: TileProvider {
     typealias Polygon = Shape
 
     struct Index {
-        var cells: [Int64: [Int32]] = [:]
-        var large: [Int32] = []
+        struct Level {
+            let size: Double
+            var cells: [Int64: [Int32]] = [:]
+            var groups: [Int64: [[Int32]]] = [:]
+            var canGroup = true
+        }
+        var levels = (0..<7).map { Level(size: ShapeTileRenderer.cellSize * Double(1 << ($0 * 2))) }
 
-        init(_ shapes: [Shape?]) {
-            for (i, p) in shapes.enumerated() {
-                guard let p else { continue }
-                let cx0 = Int64(floor(p.minX / ShapeTileRenderer.cellSize))
-                let cx1 = Int64(floor(p.maxX / ShapeTileRenderer.cellSize))
-                let cy0 = Int64(floor(p.minY / ShapeTileRenderer.cellSize))
-                let cy1 = Int64(floor(p.maxY / ShapeTileRenderer.cellSize))
-                if (cx1 - cx0 + 1) * (cy1 - cy0 + 1) > Int64(ShapeTileRenderer.maxCells) {
-                    large.append(Int32(i))
-                    continue
+        init(_ shapes: [Shape?]) { self.init(ShapeTileStorage(shapes)) }
+
+        init(_ shapes: ShapeTileStorage) {
+            for i in 0..<shapes.count {
+                guard let p = shapes.bounds(at: i) else { continue }
+                var level = 0
+                func cellCount(_ size: Double) -> Double {
+                    (floor(p.maxX / size) - floor(p.minX / size) + 1) *
+                        (floor(p.maxY / size) - floor(p.minY / size) + 1)
                 }
+                // A nationwide circle must not be replicated in hundreds of
+                // z12 cells, or checked by every tile in a global overflow list.
+                while level < levels.count - 1 && cellCount(levels[level].size) > 16 { level += 1 }
+                let size = levels[level].size
+                let cx0 = Int64(floor(p.minX / size)), cx1 = Int64(floor(p.maxX / size))
+                let cy0 = Int64(floor(p.minY / size)), cy1 = Int64(floor(p.maxY / size))
+                if cy0 < 0 || cy1 >= 1_048_576 { levels[level].canGroup = false }
                 for cx in cx0...cx1 {
                     for cy in cy0...cy1 {
-                        cells[cx &* 1_048_576 &+ cy, default: []].append(Int32(i))
+                        levels[level].cells[cx &* 1_048_576 &+ cy, default: []].append(Int32(i))
                     }
                 }
             }
+            for level in levels.indices where levels[level].canGroup {
+                for (key, bucket) in levels[level].cells {
+                    let cy = key & 1_048_575
+                    let cx = (key - cy) / 1_048_576
+                    let gx = Int64(floor(Double(cx) / 16)), gy = cy / 16
+                    levels[level].groups[gx &* 1_048_576 &+ gy, default: []].append(bucket)
+                }
+            }
+            levels.removeAll { $0.cells.isEmpty }
+        }
+
+        /// Each matching shape once, in the original draw order.
+        func query(_ shapes: [Shape?], minX: Double, minY: Double, maxX: Double, maxY: Double) -> [Int32] {
+            query(ShapeTileStorage(shapes), minX: minX, minY: minY, maxX: maxX, maxY: maxY)
+        }
+
+        func query(_ shapes: ShapeTileStorage, minX: Double, minY: Double, maxX: Double, maxY: Double) -> [Int32] {
+            var matches = [UInt64](repeating: 0, count: (shapes.count + 63) / 64)
+            func take(_ index: Int32) {
+                let i = Int(index), word = i >> 6
+                let bit = UInt64(1) << (i & 63)
+                matches[word] |= bit
+            }
+            for level in levels {
+                let cx0 = Int64(floor(minX / level.size)), cx1 = Int64(floor(maxX / level.size))
+                let cy0 = Int64(floor(minY / level.size)), cy1 = Int64(floor(maxY / level.size))
+                let cells = Double(cx1 - cx0 + 1) * Double(cy1 - cy0 + 1)
+                if cells > 16_384, level.canGroup, !level.groups.isEmpty {
+                    let gx0 = Int64(floor(Double(cx0) / 16)), gx1 = Int64(floor(Double(cx1) / 16))
+                    let gy0 = Int64(floor(Double(cy0) / 16)), gy1 = Int64(floor(Double(cy1) / 16))
+                    let groupArea = Double(gx1 - gx0 + 1) * Double(gy1 - gy0 + 1)
+                    if groupArea > Double(level.groups.count) {
+                        for bucket in level.cells.values { for i in bucket { take(i) } }
+                    } else if gx0 <= gx1, gy0 <= gy1 {
+                        for gx in gx0...gx1 { for gy in gy0...gy1 {
+                            if let buckets = level.groups[gx &* 1_048_576 &+ gy] {
+                                for bucket in buckets { for i in bucket { take(i) } }
+                            }
+                        } }
+                    }
+                } else if cells > Double(level.cells.count) {
+                    for bucket in level.cells.values { for i in bucket { take(i) } }
+                } else if cx0 <= cx1, cy0 <= cy1 {
+                    for cx in cx0...cx1 {
+                        for cy in cy0...cy1 {
+                            if let bucket = level.cells[cx &* 1_048_576 &+ cy] {
+                                for i in bucket { take(i) }
+                            }
+                        }
+                    }
+                }
+            }
+            // Deduplicate before bounding-box checks, then enumerate set bits:
+            // no giant temporary list or sorting of duplicate candidates.
+            var result: [Int32] = []
+            for (word, value) in matches.enumerated() {
+                var bits = value
+                while bits != 0 {
+                    let i = word * 64 + bits.trailingZeroBitCount
+                    if shapes.active?[i] != false, let p = shapes.bounds(at: i),
+                       p.minX <= maxX && p.maxX >= minX && p.minY <= maxY && p.maxY >= minY {
+                        result.append(Int32(i))
+                    }
+                    bits &= bits - 1
+                }
+            }
+            return result
         }
     }
 
     /// What is drawn; replaced as a whole (copy-on-write) so a tile being drawn
     /// keeps the version it started with.
     private struct Data {
-        var shapes: [Shape?] = []
-        var index = Index([])
+        var shapes = ShapeTileStorage([])
+        var index = Index(ShapeTileStorage([]))
         var maxStrokePx = 0.0
         /// Bumped by every change, so a tile drawn before it is not cached after it.
         var generation = 0
@@ -163,11 +269,17 @@ final class ShapeTileRenderer: TileProvider {
         case rings([[Double]], outlined: Bool)
         /// World-pixel points of a polyline, flat `[x, y, ...]`, at least two.
         case path([Double])
+        /// A circle drawn as a true circle: world-pixel centre and radius.
+        case arc(Double, Double, Double, outlined: Bool)
     }
 
     private final class ZoomCache {
-        var entries: [Simplified?]
-        init(count: Int) { entries = Array(repeating: nil, count: count) }
+        let shapeCount: Int
+        // A new zoom used to initialise a large optional-enum array for every
+        // registered shape, even when only a few circles touch the viewport.
+        // Store just the shapes actually requested at this zoom.
+        var entries: [Int: Simplified] = [:]
+        init(count: Int) { shapeCount = count }
     }
 
     private struct TileKey: Hashable {
@@ -194,14 +306,35 @@ final class ShapeTileRenderer: TileProvider {
     /// Replaces every shape. Draw order is the order of `shapes`; a nil keeps a
     /// slot that draws nothing.
     func setShapes(_ shapes: [Shape?]) {
+        setStorage(ShapeTileStorage(shapes))
+    }
+
+    func setStorage(_ shapes: ShapeTileStorage) {
+        prepareStorage(shapes)()
+    }
+
+    /// Build the index away from the route lock; publication is a short operation.
+    func prepareStorage(_ shapes: ShapeTileStorage) -> () -> Void {
         var maxStroke = 0.0
-        for p in shapes { if let p { maxStroke = max(maxStroke, p.strokePx) } }
+        for i in 0..<shapes.count { maxStroke = max(maxStroke, shapes.strokeWidth(at: i)) }
         let index = Index(shapes)
+        return {
+            self.lock.lock()
+            self.data = Data(shapes: shapes, index: index, maxStrokePx: maxStroke, generation: self.data.generation + 1)
+            self.simplified.removeAll()
+            self.dropAllTilesLocked()
+            self.lock.unlock()
+        }
+    }
+
+    func reuseCircles(_ states: [CircleState], slots: [Int], active: [Bool]) -> Bool {
         lock.lock()
-        data = Data(shapes: shapes, index: index, maxStrokePx: maxStroke, generation: data.generation + 1)
-        simplified.removeAll()
+        defer { lock.unlock() }
+        for (state, slot) in zip(states, slots) where !data.shapes.matches(state, at: slot) { return false }
+        data.shapes.active = active
+        data.generation += 1
         dropAllTilesLocked()
-        lock.unlock()
+        return true
     }
 
     /// Replaces the shapes at the given positions (as passed to ``setShapes(_:)``);
@@ -226,10 +359,11 @@ final class ShapeTileRenderer: TileProvider {
                 next.maxStrokePx = max(next.maxStrokePx, after.strokePx)
             }
             // A shape that moved needs the index rebuilt; a restyle does not.
-            if (before == nil) != (after == nil) { moved = true }
+            if before == nil && after != nil { moved = true }
             if let before, let after, !before.sameBox(after) { moved = true }
         }
         if moved { next.index = Index(next.shapes) }
+        next.shapes.compactIfNeeded()
         data = next
         dropTilesLocked(overlapping: touched, strokePx: next.maxStrokePx)
     }
@@ -309,10 +443,23 @@ final class ShapeTileRenderer: TileProvider {
         context.setLineCap(.round)
 
         let zoomCache = zoomCache(for: z, count: data.shapes.count)
+        let thinCircles = data.shapes[Int(candidates[0])]?.kind == .circle
+        var lastDot = [Int32](repeating: 0, count: thinCircles ? tileSize * tileSize : 0)
+        if thinCircles { for (n, index) in candidates.enumerated() {
+            if n & 255 == 255, isCancelled() { throw Cancelled() }
+            guard let p = data.shapes[Int(index)], p.kind == .circle,
+                  p.fill != nil || (p.strokeWidth > 0 && p.stroke != nil) else { continue }
+            let slot = CircleTilePainter.subpixelSlot(p, scale: scale, originX: originX, originY: originY, tileSize: tileSize)
+            if slot >= 0 { lastDot[slot] = index + 1 }
+        } }
         var drew = false
         for (n, index) in candidates.enumerated() {
             if n & 255 == 255, isCancelled() { throw Cancelled() }
             guard let p = data.shapes[Int(index)] else { continue }
+            if thinCircles {
+                let slot = CircleTilePainter.subpixelSlot(p, scale: scale, originX: originX, originY: originY, tileSize: tileSize)
+                if slot == -1 || (slot >= 0 && lastDot[slot] != index + 1) { continue }
+            }
             let shape = simplified(p, index: Int(index), z: z, scale: scale, cache: zoomCache)
             switch shape {
             case .none:
@@ -347,6 +494,12 @@ final class ShapeTileRenderer: TileProvider {
                     context.setStrokeColor(stroke)
                     context.setLineWidth(CGFloat(p.strokeWidth))
                     context.strokePath()
+                    drew = true
+                }
+            case let .arc(cx, cy, radius, outlined):
+                if CircleTilePainter.drawArc(
+                    p, in: context, cx: cx - originX, cy: cy - originY, radius: radius, outlined: outlined
+                ) {
                     drew = true
                 }
             case let .path(points):
@@ -386,27 +539,7 @@ final class ShapeTileRenderer: TileProvider {
 
     /// Indices of the shapes whose box meets the given one, in draw order.
     private static func query(_ data: Data, minX: Double, minY: Double, maxX: Double, maxY: Double) -> [Int32] {
-        var out: [Int32] = []
-        let take: (Int32) -> Void = { i in
-            guard let p = data.shapes[Int(i)] else { return }
-            if p.minX <= maxX && p.maxX >= minX && p.minY <= maxY && p.maxY >= minY { out.append(i) }
-        }
-        for i in data.index.large { take(i) }
-        let cx0 = Int64(floor(minX / cellSize)), cx1 = Int64(floor(maxX / cellSize))
-        let cy0 = Int64(floor(minY / cellSize)), cy1 = Int64(floor(maxY / cellSize))
-        if cx0 <= cx1, cy0 <= cy1 {
-            for cx in cx0...cx1 {
-                for cy in cy0...cy1 {
-                    if let bucket = data.index.cells[cx &* 1_048_576 &+ cy] { bucket.forEach(take) }
-                }
-            }
-        }
-        // A shape spanning several cells is found once per cell; draw order is list order.
-        out.sort()
-        var unique: [Int32] = []
-        unique.reserveCapacity(out.count)
-        for i in out where unique.last != i { unique.append(i) }
-        return unique
+        data.index.query(data.shapes, minX: minX, minY: minY, maxX: maxX, maxY: maxY)
     }
 
     private func zoomCache(for z: Int, count: Int) -> ZoomCache {
@@ -415,7 +548,7 @@ final class ShapeTileRenderer: TileProvider {
         if let at = simplified.firstIndex(where: { $0.zoom == z }) {
             let entry = simplified.remove(at: at)
             simplified.append(entry)
-            if entry.cache.entries.count == count { return entry.cache }
+            if entry.cache.shapeCount == count { return entry.cache }
         }
         let cache = ZoomCache(count: count)
         simplified.removeAll { $0.zoom == z }
@@ -425,6 +558,9 @@ final class ShapeTileRenderer: TileProvider {
     }
 
     private func simplified(_ p: Shape, index: Int, z: Int, scale: Double, cache: ZoomCache) -> Simplified {
+        // Dot/Arc projection is cheap; retaining one object per circle at
+        // several zooms costs more than recomputing it for visible tiles.
+        if p.kind == .circle { return CircleTilePainter.simplify(p, scale: scale) }
         lock.lock()
         let cached = cache.entries[index]
         lock.unlock()
@@ -441,6 +577,7 @@ final class ShapeTileRenderer: TileProvider {
         switch p.kind {
         case .polygon: return simplifyPolygon(p, scale: scale)
         case .line: return simplifyLine(p, scale: scale)
+        case .circle: return CircleTilePainter.simplify(p, scale: scale)
         }
     }
 
@@ -579,7 +716,7 @@ final class ShapeTileRenderer: TileProvider {
         let n = latLngs.count / 2
         var ring = [Double](repeating: 0, count: n * 2)
         for i in 0..<n {
-            let lat = min(85.05112878, max(-85.05112878, latLngs[i * 2]))
+            let lat = min(maxLatitude, max(-maxLatitude, latLngs[i * 2]))
             let s = sin(lat * .pi / 180)
             ring[i * 2] = (latLngs[i * 2 + 1] + 180) / 360
             ring[i * 2 + 1] = 0.5 - log((1 + s) / (1 - s)) / (4 * .pi)

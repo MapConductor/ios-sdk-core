@@ -31,6 +31,27 @@ public struct Circles: MapOverlayItemProtocol {
     }
 }
 
+/// Sets the map's ``MapViewContent/circleTilingOptions`` from inside a
+/// `MapViewContentBuilder` closure, next to the circles it applies to:
+///
+/// ```swift
+/// MapLibreMapView(state: state) {
+///     CircleTiling(.Disabled)
+///     Circles(trees)
+/// }
+/// ```
+public struct CircleTiling: MapOverlayItemProtocol {
+    private let options: CircleTilingOptions
+
+    public init(_ options: CircleTilingOptions) {
+        self.options = options
+    }
+
+    public func append(to content: inout MapViewContent) {
+        content.circleTilingOptions = options
+    }
+}
+
 public struct Polylines: MapOverlayItemProtocol {
     private let states: [PolylineState]
 

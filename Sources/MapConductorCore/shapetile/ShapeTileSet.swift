@@ -25,9 +25,24 @@ final class ShapeTileSet<State> {
     private let idOf: (State) -> String
     private let zIndexOf: (State) -> Int
     private let shapeOf: (State) -> ShapeTileRenderer.Shape?
+    private let fileBackedCircles: Bool
     private let lock = NSLock()
     private var indexById: [String: Int] = [:]
+    private var sourceStates: [State?] = []
+    private var sourceZ: [Int] = []
+
+    func source(_ id: String) -> State? {
+        lock.lock(); defer { lock.unlock() }
+        guard let index = indexById[id] else { return nil }
+        return sourceStates[index]
+    }
+
+    func visitSources(_ action: (State) -> Void) {
+        lock.lock(); let sources = sourceStates; lock.unlock()
+        for state in sources { if let state { action(state) } }
+    }
     private var version = 0
+    private var registration = 0
     private var registered = false
     private var pending: [String: State] = [:]
     private var pendingRemovals: [Int] = []
@@ -38,6 +53,7 @@ final class ShapeTileSet<State> {
         pixelRatio: Int,
         id: @escaping (State) -> String,
         zIndex: @escaping (State) -> Int,
+        fileBackedCircles: Bool = false,
         shape: @escaping (State) -> ShapeTileRenderer.Shape?
     ) {
         routeId = "\(routePrefix)-\(UUID().uuidString.prefix(8).lowercased())"
@@ -45,6 +61,7 @@ final class ShapeTileSet<State> {
         idOf = id
         zIndexOf = zIndex
         shapeOf = shape
+        self.fileBackedCircles = fileBackedCircles
     }
 
     deinit {
@@ -56,42 +73,92 @@ final class ShapeTileSet<State> {
     /// calling thread.
     func setStates(_ states: [State]) async -> String? {
         cancelPending()
+        let registration = nextRegistration()
         let renderer = self.renderer
         let idOf = self.idOf, zIndexOf = self.zIndexOf, shapeOf = self.shapeOf
-        let indexById = await Task.detached(priority: .userInitiated) { () -> [String: Int] in
+        let fileBackedCircles = self.fileBackedCircles
+        let work = Task.detached(priority: .userInitiated) { () -> Bool in
             // Draw order is list order: zIndex, then the order given. Each zIndex
             // is read once: a state's properties are not free to read, and a
             // sort reads them n log n times.
             let zIndex = states.map(zIndexOf)
-            let ordered = states.indices
-                .sorted { zIndex[$0] != zIndex[$1] ? zIndex[$0] < zIndex[$1] : $0 < $1 }
-                .map { states[$0] }
+            let order = states.indices.sorted { zIndex[$0] != zIndex[$1] ? zIndex[$0] < zIndex[$1] : $0 < $1 }
+            let ordered = order.map { states[$0] }
+            let sortedZ = fileBackedCircles ? order.map { zIndex[$0] } : []
+            if fileBackedCircles, self.reuse(ordered, sortedZ: sortedZ, registration: registration) { return true }
             var indexById: [String: Int] = [:]
             indexById.reserveCapacity(ordered.count)
-            var shapes: [ShapeTileRenderer.Shape?] = []
-            shapes.reserveCapacity(ordered.count)
             for (i, state) in ordered.enumerated() {
                 indexById[idOf(state)] = i
-                shapes.append(shapeOf(state))
             }
-            renderer.setShapes(shapes)
-            return indexById
-        }.value
+            let storage: ShapeTileStorage
+            if fileBackedCircles, ordered.count > 2_000,
+               let file = try? CircleGeometryFile(count: ordered.count, shapeAt: { shapeOf(ordered[$0]) }) {
+                storage = ShapeTileStorage(file)
+            } else {
+                guard !Task.isCancelled else { return false }
+                storage = ShapeTileStorage(ordered.map(shapeOf))
+            }
+            guard !Task.isCancelled else { return false }
+            let install = renderer.prepareStorage(storage)
+            return self.publish(
+                registration: registration, indexById: indexById, sources: ordered.map { Optional($0) },
+                sortedZ: sortedZ, install: install
+            )
+        }
+        let published = await withTaskCancellationHandler(operation: { await work.value }, onCancel: { work.cancel() })
+        return published ? template() : nil
+    }
 
+    private func nextRegistration() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        registration += 1
+        return registration
+    }
+
+    private func publish(
+        registration: Int, indexById: [String: Int], sources: [State?], sortedZ: [Int], install: () -> Void
+    ) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard self.registration == registration, !Task.isCancelled else { return false }
+        install()
         let server = TileServerRegistry.get()
         server.register(routeId: routeId, provider: renderer)
-        lock.lock()
         self.indexById = indexById
+        self.sourceStates = sources
+        self.sourceZ = sortedZ
         registered = true
         version += 1
-        lock.unlock()
-        return template()
+        return true
+    }
+
+    private func reuse(_ ordered: [State], sortedZ: [Int], registration: Int) -> Bool {
+        guard let circles = ordered as? [CircleState] else { return false }
+        lock.lock()
+        defer { lock.unlock() }
+        guard registered, sourceStates.count > 2_000, self.registration == registration, !Task.isCancelled else { return false }
+        var active = [Bool](repeating: false, count: sourceStates.count)
+        var slots: [Int] = []
+        slots.reserveCapacity(ordered.count)
+        for (i, state) in ordered.enumerated() {
+            guard let slot = indexById[idOf(state)], slot > (slots.last ?? -1),
+                  sortedZ[i] == sourceZ[slot] else { return false }
+            slots.append(slot)
+            active[slot] = true
+        }
+        guard renderer.reuseCircles(circles, slots: slots, active: active) else { return false }
+        for i in sourceStates.indices where !active[i] { sourceStates[i] = nil }
+        for (state, slot) in zip(ordered, slots) { sourceStates[slot] = state }
+        version += 1
+        return true
     }
 
     func has(_ id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return indexById[id] != nil
+        return indexById[id].map { sourceStates[$0] != nil } ?? false
     }
 
     /// One state changed in place. A change of zIndex reorders the list and
@@ -104,6 +171,7 @@ final class ShapeTileSet<State> {
             return
         }
         pending[id] = state
+        sourceStates[indexById[id]!] = state
         scheduleFlushLocked()
     }
 
@@ -117,6 +185,7 @@ final class ShapeTileSet<State> {
             return
         }
         pending[id] = nil
+        sourceStates[index] = nil
         pendingRemovals.append(index)
         scheduleFlushLocked()
     }
@@ -146,9 +215,12 @@ final class ShapeTileSet<State> {
     func dispose() {
         cancelPending()
         lock.lock()
+        registration += 1
         let wasRegistered = registered
         registered = false
         indexById.removeAll()
+        sourceStates.removeAll()
+        sourceZ.removeAll()
         lock.unlock()
         if wasRegistered { TileServerRegistry.get().unregister(routeId: routeId) }
         renderer.clear()
