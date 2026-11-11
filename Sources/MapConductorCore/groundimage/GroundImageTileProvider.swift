@@ -96,10 +96,10 @@ public final class GroundImageTileProvider: TileProvider {
             east += 360.0
         }
 
-        let overlayLeft = WebMercator.lonToPixelX(west, worldSize: worldSize)
-        let overlayRight = WebMercator.lonToPixelX(east, worldSize: worldSize)
-        let overlayTop = WebMercator.latToPixelY(north, worldSize: worldSize)
-        let overlayBottom = WebMercator.latToPixelY(south, worldSize: worldSize)
+        let overlayLeft = MercatorPixels.lonToPixelX(west, worldSize: worldSize)
+        let overlayRight = MercatorPixels.lonToPixelX(east, worldSize: worldSize)
+        let overlayTop = MercatorPixels.latToPixelY(north, worldSize: worldSize)
+        let overlayBottom = MercatorPixels.latToPixelY(south, worldSize: worldSize)
 
         let overlayWidth = overlayRight - overlayLeft
         let overlayHeight = overlayBottom - overlayTop
@@ -185,7 +185,7 @@ public final class GroundImageTileProvider: TileProvider {
         let opacity: Double
     }
 
-    private enum WebMercator {
+    private enum MercatorPixels {
         private static let maxLat: Double = 85.05112878
 
         static func lonToPixelX(_ lon: Double, worldSize: Double) -> Double {

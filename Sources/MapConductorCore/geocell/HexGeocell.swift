@@ -256,7 +256,7 @@ public struct HexGeocell: HexGeocellProtocol {
 
     public static func defaultGeocell() -> HexGeocellProtocol {
         HexGeocell(
-            projection: WebMercatorProjection(),
+            projection: WebMercator(),
             baseHexSideLength: 100_000
         )
     }
