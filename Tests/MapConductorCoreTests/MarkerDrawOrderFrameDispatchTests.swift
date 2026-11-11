@@ -47,13 +47,13 @@ final class MarkerDrawOrderFrameDispatchTests: XCTestCase {
         XCTAssertTrue(renderer.frames.isEmpty, "north-up pan must not reorder")
 
         await controller.onCameraChanged(mapCameraPosition: camera(bearing: 180))
-        XCTAssertEqual(renderer.frames.map(\.heading), [180])
+        XCTAssertEqual(renderer.frames.map(\.headingDegrees), [180])
         XCTAssertEqual(renderer.entityCounts, [2])
 
         await controller.onCameraChanged(mapCameraPosition: camera(bearing: 180.2, longitude: 140))
         XCTAssertEqual(renderer.frames.count, 1, "turns under 0.5° are ignored")
 
         await controller.onCameraChanged(mapCameraPosition: camera(bearing: 0))
-        XCTAssertEqual(renderer.frames.map(\.heading), [180, 0])
+        XCTAssertEqual(renderer.frames.map(\.headingDegrees), [180, 0])
     }
 }

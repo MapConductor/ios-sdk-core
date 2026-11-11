@@ -68,7 +68,7 @@ final class MarkerDrawOrderTests: XCTestCase {
     // ── 地図の向き ─────────────────────────────────────────────
 
     private func frame(_ heading: Double, origin: Double = 139) -> MarkerDrawOrder.Frame {
-        MarkerDrawOrder.Frame(heading: heading, originLongitude: origin)
+        MarkerDrawOrder.Frame(headingDegrees: heading, originLongitude: origin)
     }
 
     private func front(_ a: GeoPoint, _ b: GeoPoint, _ f: MarkerDrawOrder.Frame) -> GeoPoint {
@@ -142,7 +142,7 @@ final class MarkerDrawOrderTests: XCTestCase {
     func testFrameFromCameraConvertsBearingToHeading() {
         // MapConductor の bearing は地図の回転角。90 なら画面の上が西（heading 270）。
         let camera = MapCameraPosition(position: p(35, 139), zoom: 10, bearing: 90)
-        XCTAssertEqual(MarkerDrawOrder.Frame(camera: camera).heading, 270, accuracy: 1e-9)
+        XCTAssertEqual(MarkerDrawOrder.Frame(camera: camera).headingDegrees, 270, accuracy: 1e-9)
         XCTAssertEqual(MarkerDrawOrder.Frame(camera: camera).originLongitude, 139, accuracy: 1e-9)
     }
 }

@@ -22,7 +22,7 @@ import Foundation
 /// - ``integerKey(zIndex:position:tieSteps:frame:)``: 整数しか受けない SDK
 ///   （Google の `GMSMarker.zIndex` など）向け。`zIndex × tieSteps + 順位`。
 ///
-/// android-sdk-core / js-sdk-core にも同じ式で置く。
+/// android-sdk-core / js-sdk-core にも同じ式・同じ名前（`headingDegrees`）で置く。
 @_spi(MapConductorDriver)
 public enum MarkerDrawOrder {
     /// ``integerKey(zIndex:position:tieSteps:frame:)`` と ``key(zIndex:position:frame:)`` が受け付ける
@@ -35,19 +35,19 @@ public enum MarkerDrawOrder {
         ///
         /// ``MapCameraPositionProtocol/bearing``（地図の回転角）とは符号が逆。
         /// ``init(camera:)`` は ``CameraBearing/toNativeHeading(_:)`` で変換する。
-        public let heading: Double
+        public let headingDegrees: Double
         /// 経度の折り返しの基準（ふつうは画面中心の経度）。±180° 離れたマーカー同士の
         /// 左右がここで決まる。
         public let originLongitude: Double
 
-        public init(heading: Double = 0, originLongitude: Double = 0) {
-            self.heading = heading.isFinite ? heading : 0
+        public init(headingDegrees: Double = 0, originLongitude: Double = 0) {
+            self.headingDegrees = headingDegrees.isFinite ? headingDegrees : 0
             self.originLongitude = originLongitude.isFinite ? originLongitude : 0
         }
 
         public init(camera: MapCameraPositionProtocol) {
             self.init(
-                heading: CameraBearing.toNativeHeading(camera.bearing),
+                headingDegrees: CameraBearing.toNativeHeading(camera.bearing),
                 originLongitude: camera.position.longitude
             )
         }
@@ -59,8 +59,8 @@ public enum MarkerDrawOrder {
         /// （回転のたびに全マーカーを付け直さないため）。基準経度だけの変化は無視する:
         /// 効くのは 180° 離れたマーカー同士だけで、パンのたびに付け直す価値はない。
         public func needsReorder(from previous: Frame?, threshold: Double = 0.5) -> Bool {
-            guard let previous else { return heading != 0 }
-            var delta = (heading - previous.heading).truncatingRemainder(dividingBy: 360)
+            guard let previous else { return headingDegrees != 0 }
+            var delta = (headingDegrees - previous.headingDegrees).truncatingRemainder(dividingBy: 360)
             if delta < -180 { delta += 360 }
             if delta >= 180 { delta -= 360 }
             return abs(delta) >= threshold
@@ -79,7 +79,7 @@ public enum MarkerDrawOrder {
         if dx < -0.5 { dx += 1 }
         if dx >= 0.5 { dx -= 1 }
         let dy = wy - 0.5
-        let theta = frame.heading * .pi / 180
+        let theta = frame.headingDegrees * .pi / 180
         // 画面の下向き・右向き。|dx|,|dy| <= 0.5 なので絶対値は 1/√2 以下。
         let down = -dx * sin(theta) + dy * cos(theta)
         let right = dx * cos(theta) + dy * sin(theta)
