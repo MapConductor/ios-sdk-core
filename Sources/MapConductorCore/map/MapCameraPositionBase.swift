@@ -83,7 +83,8 @@ public final class MapCameraPosition: MapCameraPositionProtocol {
     ///
     /// 明示された 0（zoom 0 = 世界全体、真北、真上から）と未指定を区別するために持つ。
     /// ``MapViewState/moveCameraTo(cameraPosition:durationMillis:)`` は未指定の
-    /// プロパティだけを現在のカメラから引き継ぐ（``resolved(onto:)``）。
+    /// プロパティだけを現在のカメラから引き継ぐ（``resolved(onto:)``）。`paddings` も
+    /// 辺ごとに同じ規則で引き継ぐ（``MapPaddings``）。
     public let isZoomSpecified: Bool
     public let isBearingSpecified: Bool
     public let isTiltSpecified: Bool
@@ -109,11 +110,14 @@ public final class MapCameraPosition: MapCameraPositionProtocol {
         self.fov = fov
     }
 
-    /// 未指定の `zoom` / `bearing` / `tilt` を `current` の値で埋めたカメラを返す。
+    /// 未指定の `zoom` / `bearing` / `tilt` と、`paddings` の省略された辺を
+    /// `current` の値で埋めたカメラを返す。
     ///
-    /// 明示されたプロパティは、0 であってもそのまま使う。
+    /// 明示されたプロパティは、0 であってもそのまま使う。`paddings` 自体が nil の
+    /// ときはそのまま（辺ごとの引き継ぎは ``MapPaddings`` の省略された辺だけ）。
     public func resolved(onto current: MapCameraPositionProtocol) -> MapCameraPosition {
-        if isZoomSpecified && isBearingSpecified && isTiltSpecified {
+        let partialPaddings = (paddings as? MapPaddings).flatMap { $0.isFullySpecified ? nil : $0 }
+        if isZoomSpecified && isBearingSpecified && isTiltSpecified && partialPaddings == nil {
             return self
         }
         return MapCameraPosition(
@@ -121,7 +125,7 @@ public final class MapCameraPosition: MapCameraPositionProtocol {
             zoom: isZoomSpecified ? zoom : current.zoom,
             bearing: isBearingSpecified ? bearing : current.bearing,
             tilt: isTiltSpecified ? tilt : current.tilt,
-            paddings: paddings,
+            paddings: partialPaddings?.resolved(onto: current.paddings) ?? paddings,
             visibleRegion: visibleRegion,
             fov: fov
         )
