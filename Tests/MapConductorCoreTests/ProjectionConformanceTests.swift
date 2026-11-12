@@ -28,7 +28,7 @@ final class ProjectionConformanceTests: XCTestCase {
             XCTFail("projection-vectors.txt が見つからない")
             return ""
         }
-        let projection = WebMercatorProjection()
+        let projection = WebMercator()
         var out = ""
         for line in try String(contentsOf: url, encoding: .utf8).split(separator: "\n", omittingEmptySubsequences: false) {
             let row = line.trimmingCharacters(in: .whitespaces)

@@ -831,11 +831,33 @@ public struct HexGeocell : MapConductorCore::HexGeocellProtocol {
   public func hexRange(center: MapConductorCore::HexCoord, radius: Swift::Int) -> [MapConductorCore::HexCoord]
   public static func defaultGeocell() -> any MapConductorCore::HexGeocellProtocol
 }
+public struct MapCoordinateSystem : Swift::Equatable, Swift::Hashable, Swift::Sendable {
+  public let code: Swift::String?
+  public let unit: MapConductorCore::ProjectedUnit
+  public init(code: Swift::String?, unit: MapConductorCore::ProjectedUnit)
+  public static let webMercator: MapConductorCore::MapCoordinateSystem
+  public static let wgs84: MapConductorCore::MapCoordinateSystem
+  public static func == (a: MapConductorCore::MapCoordinateSystem, b: MapConductorCore::MapCoordinateSystem) -> Swift::Bool
+  public func hash(into hasher: inout Swift::Hasher)
+  public var hashValue: Swift::Int {
+    get
+  }
+}
+public enum ProjectedUnit : Swift::String, Swift::Sendable {
+  case meters
+  case degrees
+  case other
+  public init?(rawValue: Swift::String)
+  public typealias RawValue = Swift::String
+  public var rawValue: Swift::String {
+    get
+  }
+}
 public protocol ProjectionProtocol : Swift::Sendable {
   func project(_ point: any MapConductorCore::GeoPointProtocol) -> CoreFoundation::CGPoint
   func unproject(_ point: CoreFoundation::CGPoint) -> MapConductorCore::GeoPoint
 }
-public struct WebMercatorProjection : MapConductorCore::ProjectionProtocol {
+public struct WebMercator : MapConductorCore::ProjectionProtocol {
   public init()
   public func project(_ point: any MapConductorCore::GeoPointProtocol) -> CoreFoundation::CGPoint
   public func unproject(_ point: CoreFoundation::CGPoint) -> MapConductorCore::GeoPoint
@@ -1397,10 +1419,18 @@ public protocol MapViewHolderProtocol {
   func fromScreenOffset(offset: CoreFoundation::CGPoint) async -> MapConductorCore::GeoPoint?
   func fromScreenOffsetSync(offset: CoreFoundation::CGPoint) -> MapConductorCore::GeoPoint?
   func viewportSizePx() -> CoreFoundation::CGSize?
+  var coordinateSystem: MapConductorCore::MapCoordinateSystem { get }
+  func toProjectedPoint(_ position: any MapConductorCore::GeoPointProtocol) -> CoreFoundation::CGPoint?
+  func fromProjectedPoint(_ point: CoreFoundation::CGPoint) -> MapConductorCore::GeoPoint?
 }
 extension MapConductorCore::MapViewHolderProtocol {
   public func fromScreenOffset(offset: CoreFoundation::CGPoint) async -> MapConductorCore::GeoPoint?
   public func fromScreenOffsetSync(offset _: CoreFoundation::CGPoint) -> MapConductorCore::GeoPoint?
+  public var coordinateSystem: MapConductorCore::MapCoordinateSystem {
+    get
+  }
+  public func toProjectedPoint(_ position: any MapConductorCore::GeoPointProtocol) -> CoreFoundation::CGPoint?
+  public func fromProjectedPoint(_ point: CoreFoundation::CGPoint) -> MapConductorCore::GeoPoint?
 }
 public struct AnyMapViewHolder : MapConductorCore::MapViewHolderProtocol {
   public typealias ActualMapView = Any
@@ -1412,6 +1442,11 @@ public struct AnyMapViewHolder : MapConductorCore::MapViewHolderProtocol {
   public func fromScreenOffset(offset: CoreFoundation::CGPoint) async -> MapConductorCore::GeoPoint?
   public func fromScreenOffsetSync(offset: CoreFoundation::CGPoint) -> MapConductorCore::GeoPoint?
   public func viewportSizePx() -> CoreFoundation::CGSize?
+  public var coordinateSystem: MapConductorCore::MapCoordinateSystem {
+    get
+  }
+  public func toProjectedPoint(_ position: any MapConductorCore::GeoPointProtocol) -> CoreFoundation::CGPoint?
+  public func fromProjectedPoint(_ point: CoreFoundation::CGPoint) -> MapConductorCore::GeoPoint?
 }
 public enum InitState {
   case NotStarted
@@ -3132,6 +3167,9 @@ extension MapConductorCore::OverlayKind : Swift::Hashable {}
 extension MapConductorCore::OverlayKind : Swift::RawRepresentable {}
 extension MapConductorCore::Direction6 : Swift::Equatable {}
 extension MapConductorCore::Direction6 : Swift::Hashable {}
+extension MapConductorCore::ProjectedUnit : Swift::Equatable {}
+extension MapConductorCore::ProjectedUnit : Swift::Hashable {}
+extension MapConductorCore::ProjectedUnit : Swift::RawRepresentable {}
 extension MapConductorCore::DefaultInfoBubbleView : Swift::Sendable {}
 extension MapConductorCore::InfoBubbleOverlayCoordinator : Swift::Sendable {}
 extension MapConductorCore::MapAttributionOverlay : Swift::Sendable {}

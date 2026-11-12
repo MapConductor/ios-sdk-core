@@ -32,6 +32,9 @@ open class AbstractMarkerController<
 
     private var animatingMarkerIds: Set<String> = []
 
+    /// 描画担当に最後に渡した地図の向き。[semaphore] の permit を持っている間だけ触る。
+    private var drawOrderFrame: MarkerDrawOrder.Frame = .northUp
+
     /// ドラッグ中のマーカー id。
     ///
     /// react-sdk が `AbstractMarkerController` に持つ WeakMap のドラッグ状態の移植。
@@ -373,7 +376,22 @@ open class AbstractMarkerController<
     }
 
     open func onCameraChanged(mapCameraPosition: MapCameraPosition) async {
-        // No-op for default marker flow.
+        await applyDrawOrderFrame(MarkerDrawOrder.Frame(camera: mapCameraPosition))
+    }
+
+    /// 地図の向きが変わっていれば、地図に載っているマーカーの重なり順を付け直させる
+    /// （``MarkerDrawOrder``: 同じ zIndex なら回したあとの画面で下ほど手前）。
+    /// 0.5 度未満の回転では呼ばない。サブクラスが onCameraChanged を上書きするときも呼ぶこと。
+    @_spi(MapConductorDriver)
+    public func applyDrawOrderFrame(_ frame: MarkerDrawOrder.Frame) async {
+        if markerManager.isDestroyed { return }
+        await semaphore.withPermit {
+            if markerManager.isDestroyed { return }
+            guard frame.needsReorder(from: drawOrderFrame) else { return }
+            drawOrderFrame = frame
+            let manager = markerManager
+            await dispatchDrawOrderFrame(to: renderer, frame: frame) { manager.allEntities() }
+        }
     }
 
     open func find(position: GeoPointProtocol) -> MarkerEntity<ActualMarker>? {

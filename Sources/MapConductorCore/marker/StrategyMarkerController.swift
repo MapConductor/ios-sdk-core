@@ -50,6 +50,8 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
     private var mapCameraPosition: MapCameraPosition?
     private var lastKnownBounds: GeoRectBounds?
     private var pendingStates: [MarkerState]?
+    /// 描画担当に最後に渡した地図の向き（``MarkerDrawOrder``）。permit 内でのみ触る。
+    private var drawOrderFrame: MarkerDrawOrder.Frame = .northUp
 
     /// 最新のカメラだけを残す箱。``onCameraChanged(mapCameraPosition:)`` を参照。
     ///
@@ -214,6 +216,13 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
                     mapCameraPosition: camera,
                     renderer: renderer
                 )
+                // 回したら同じ zIndex の重なり順が変わる（画面で下ほど手前）。
+                let frame = MarkerDrawOrder.Frame(camera: camera)
+                if frame.needsReorder(from: drawOrderFrame) {
+                    drawOrderFrame = frame
+                    let manager = markerManager
+                    await dispatchDrawOrderFrame(to: renderer, frame: frame) { manager.allEntities() }
+                }
             }
 
             // 保留分は再クラスタリングを省いた側でも流す。bounds が分かった時点で

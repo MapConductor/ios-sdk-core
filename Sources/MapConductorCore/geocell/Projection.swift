@@ -7,7 +7,7 @@ public protocol ProjectionProtocol: Sendable {
 }
 
 /// Web Mercator projection where projected coordinates are meters in EPSG:3857.
-public struct WebMercatorProjection: ProjectionProtocol {
+public struct WebMercator: ProjectionProtocol {
     public init() {}
 
     public func project(_ point: GeoPointProtocol) -> CGPoint {
