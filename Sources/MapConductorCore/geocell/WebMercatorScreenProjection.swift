@@ -81,14 +81,14 @@ public enum WebMercatorScreenProjection {
 
         let extent = 2.0 * Earth.radiusMeters * Double.pi
         let projected = CGPoint(x: (wx - 0.5) * extent, y: (0.5 - wy) * extent)
-        let point = WebMercatorProjection().unproject(projected)
+        let point = WebMercator().unproject(projected)
         guard point.latitude.isFinite, point.longitude.isFinite else { return nil }
         return point
     }
 
     /// Web Mercator のメートル座標を [0,1] へ。y は北が 0。
     private static func normalize(_ position: GeoPointProtocol) -> (x: Double, y: Double) {
-        let projected = WebMercatorProjection().project(position)
+        let projected = WebMercator().project(position)
         let extent = 2.0 * Earth.radiusMeters * Double.pi
         return (x: 0.5 + Double(projected.x) / extent, y: 0.5 - Double(projected.y) / extent)
     }
