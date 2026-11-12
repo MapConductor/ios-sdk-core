@@ -100,4 +100,16 @@ final class CameraPaddingEmulationTests: XCTestCase {
         XCTAssertTrue(cam.equals(other: MapCameraPosition(position: tokyo, zoom: 10)))
         XCTAssertNil(MapCameraPosition(position: tokyo).fov)
     }
+
+    func testAppliedAndRestoredRoundTrip() {
+        let paddings = MapPaddings(top: 300)
+        let cam = camera(tilt: 60, bearing: 45, paddings: paddings)
+        let sent = CameraPaddingEmulation.applied(to: cam, fov: 36.87, viewportSize: viewport)
+        XCTAssertEqual(sent.paddings?.top, 0)
+        let back = CameraPaddingEmulation.restored(sent, paddings: paddings, fov: 36.87, viewportSize: viewport)
+        // 読み戻しは中心の緯度で縮尺を取るので、往復は 1 m 程度の誤差を許す。
+        XCTAssertLessThan(Spherical.computeDistanceBetween(from: GeoPoint.from(position: back.position), to: tokyo), 1.0)
+        XCTAssertEqual(back.paddings?.top, 300)
+        XCTAssertEqual(back.fov, 36.87)
+    }
 }

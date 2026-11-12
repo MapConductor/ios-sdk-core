@@ -61,6 +61,53 @@ public enum CameraPaddingEmulation {
         return GeoPoint(latitude: target.latitude, longitude: target.longitude, altitude: origin.altitude ?? 0)
     }
 
+    /// 地図 SDK へ渡すカメラ。`position` をずらした中心に、`paddings` を 0 にしたもの。
+    ///
+    /// 移動の入り口で一度だけ通す。アニメーションの補間は、この「中心」の空間で行う。
+    public static func applied(
+        to camera: MapCameraPosition,
+        fov: Double?,
+        viewportSize: CGSize
+    ) -> MapCameraPosition {
+        guard groundOffset(camera: camera, paddings: camera.paddings, fov: fov, viewportSize: viewportSize) != nil else {
+            return camera
+        }
+        return camera.copy(
+            position: cameraCenter(for: camera, fov: fov, viewportSize: viewportSize),
+            paddings: MapPaddings.Zeros
+        )
+    }
+
+    /// 地図 SDK から読み戻したカメラ（`position` は画面中心）を、ターゲットと `paddings`・`fov` を
+    /// 持つカメラへ戻す。``applied(to:fov:viewportSize:)`` の逆。
+    public static func restored(
+        _ camera: MapCameraPosition,
+        paddings: MapPaddingsProtocol?,
+        fov: Double?,
+        viewportSize: CGSize
+    ) -> MapCameraPosition {
+        let target = self.target(
+            forCameraCenter: camera.position,
+            camera: camera,
+            paddings: paddings,
+            fov: fov,
+            viewportSize: viewportSize
+        )
+        return MapCameraPosition(
+            position: GeoPoint(
+                latitude: target.latitude,
+                longitude: target.longitude,
+                altitude: camera.position.altitude ?? 0
+            ),
+            zoom: camera.zoom,
+            bearing: camera.bearing,
+            tilt: camera.tilt,
+            paddings: paddings ?? MapPaddings.Zeros,
+            visibleRegion: camera.visibleRegion,
+            fov: fov
+        )
+    }
+
     /// 画面中心からターゲットまでの地表の距離（メートル）。手前が正の `backward`、右が正の `lateral`。
     static func groundOffset(
         camera: MapCameraPositionProtocol,
