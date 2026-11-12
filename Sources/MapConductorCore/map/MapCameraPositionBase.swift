@@ -50,6 +50,16 @@ public protocol MapCameraPositionProtocol {
     var tilt: Double { get }
     var paddings: MapPaddingsProtocol? { get }
     var visibleRegion: VisibleRegion? { get }
+    /// 描画しているカメラの**縦**の視野角（度）。
+    ///
+    /// 地図 SDK ごとに違うので、カメラを読み戻すときにプロバイダが入れる。
+    /// `0` は「tilt を遠近なしで描いている」（ビューを傾けて擬似的に表現している）、
+    /// `nil` は「分からない／傾けられない」。カメラを動かすときには使わない。
+    var fov: Double? { get }
+}
+
+public extension MapCameraPositionProtocol {
+    var fov: Double? { nil }
 }
 
 public final class MapCameraPosition: MapCameraPositionProtocol {
@@ -62,6 +72,11 @@ public final class MapCameraPosition: MapCameraPositionProtocol {
     public let tilt: Double
     public let paddings: MapPaddingsProtocol?
     public let visibleRegion: VisibleRegion?
+    /// 描画しているカメラの縦の視野角（度）。``MapCameraPositionProtocol/fov`` を参照。
+    ///
+    /// ``visibleRegion`` と同じく読み戻し専用の値で、カメラを動かすときは無視される。
+    /// ``equals(other:)`` の比較にも入れない。
+    public let fov: Double?
     private let positionValue: GeoPoint
 
     /// `zoom` / `bearing` / `tilt` が明示されたか。
@@ -79,7 +94,8 @@ public final class MapCameraPosition: MapCameraPositionProtocol {
         bearing: Double? = nil,
         tilt: Double? = nil,
         paddings: MapPaddingsProtocol? = MapPaddings.Zeros,
-        visibleRegion: VisibleRegion? = nil
+        visibleRegion: VisibleRegion? = nil,
+        fov: Double? = nil
     ) {
         self.positionValue = GeoPoint.from(position: position)
         self.zoom = zoom ?? 0.0
@@ -90,6 +106,7 @@ public final class MapCameraPosition: MapCameraPositionProtocol {
         self.isTiltSpecified = tilt != nil
         self.paddings = paddings
         self.visibleRegion = visibleRegion
+        self.fov = fov
     }
 
     /// 未指定の `zoom` / `bearing` / `tilt` を `current` の値で埋めたカメラを返す。
@@ -105,7 +122,8 @@ public final class MapCameraPosition: MapCameraPositionProtocol {
             bearing: isBearingSpecified ? bearing : current.bearing,
             tilt: isTiltSpecified ? tilt : current.tilt,
             paddings: paddings,
-            visibleRegion: visibleRegion
+            visibleRegion: visibleRegion,
+            fov: fov
         )
     }
 
@@ -122,7 +140,8 @@ public final class MapCameraPosition: MapCameraPositionProtocol {
         bearing: Double? = nil,
         tilt: Double? = nil,
         paddings: MapPaddingsProtocol? = nil,
-        visibleRegion: VisibleRegion? = nil
+        visibleRegion: VisibleRegion? = nil,
+        fov: Double? = nil
     ) -> MapCameraPosition {
         // 渡されなかったプロパティは、未指定だったならコピー後も未指定のまま。
         MapCameraPosition(
@@ -131,7 +150,8 @@ public final class MapCameraPosition: MapCameraPositionProtocol {
             bearing: bearing ?? (isBearingSpecified ? self.bearing : nil),
             tilt: tilt ?? (isTiltSpecified ? self.tilt : nil),
             paddings: paddings ?? self.paddings,
-            visibleRegion: visibleRegion ?? self.visibleRegion
+            visibleRegion: visibleRegion ?? self.visibleRegion,
+            fov: fov ?? self.fov
         )
     }
 

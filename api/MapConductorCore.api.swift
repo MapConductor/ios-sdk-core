@@ -1213,6 +1213,12 @@ public protocol MapCameraPositionProtocol {
   var tilt: Swift::Double { get }
   var paddings: (any MapConductorCore::MapPaddingsProtocol)? { get }
   var visibleRegion: MapConductorCore::VisibleRegion? { get }
+  var fov: Swift::Double? { get }
+}
+extension MapConductorCore::MapCameraPositionProtocol {
+  public var fov: Swift::Double? {
+    get
+  }
 }
 final public class MapCameraPosition : MapConductorCore::MapCameraPositionProtocol {
   final public var position: any MapConductorCore::GeoPointProtocol {
@@ -1223,13 +1229,14 @@ final public class MapCameraPosition : MapConductorCore::MapCameraPositionProtoc
   final public let tilt: Swift::Double
   final public let paddings: (any MapConductorCore::MapPaddingsProtocol)?
   final public let visibleRegion: MapConductorCore::VisibleRegion?
+  final public let fov: Swift::Double?
   final public let isZoomSpecified: Swift::Bool
   final public let isBearingSpecified: Swift::Bool
   final public let isTiltSpecified: Swift::Bool
-  public init(position: any MapConductorCore::GeoPointProtocol, zoom: Swift::Double? = nil, bearing: Swift::Double? = nil, tilt: Swift::Double? = nil, paddings: (any MapConductorCore::MapPaddingsProtocol)? = MapPaddings.Zeros, visibleRegion: MapConductorCore::VisibleRegion? = nil)
+  public init(position: any MapConductorCore::GeoPointProtocol, zoom: Swift::Double? = nil, bearing: Swift::Double? = nil, tilt: Swift::Double? = nil, paddings: (any MapConductorCore::MapPaddingsProtocol)? = MapPaddings.Zeros, visibleRegion: MapConductorCore::VisibleRegion? = nil, fov: Swift::Double? = nil)
   final public func resolved(onto current: any MapConductorCore::MapCameraPositionProtocol) -> MapConductorCore::MapCameraPosition
   final public func equals(other: any MapConductorCore::MapCameraPositionProtocol) -> Swift::Bool
-  final public func copy(position: (any MapConductorCore::GeoPointProtocol)? = nil, zoom: Swift::Double? = nil, bearing: Swift::Double? = nil, tilt: Swift::Double? = nil, paddings: (any MapConductorCore::MapPaddingsProtocol)? = nil, visibleRegion: MapConductorCore::VisibleRegion? = nil) -> MapConductorCore::MapCameraPosition
+  final public func copy(position: (any MapConductorCore::GeoPointProtocol)? = nil, zoom: Swift::Double? = nil, bearing: Swift::Double? = nil, tilt: Swift::Double? = nil, paddings: (any MapConductorCore::MapPaddingsProtocol)? = nil, visibleRegion: MapConductorCore::VisibleRegion? = nil, fov: Swift::Double? = nil) -> MapConductorCore::MapCameraPosition
   final public func hashCode() -> Swift::Int
   public static let Default: MapConductorCore::MapCameraPosition
   @objc deinit
