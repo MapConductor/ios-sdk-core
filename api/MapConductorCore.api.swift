@@ -1343,9 +1343,17 @@ open class MapPaddings : MapConductorCore::MapPaddingsProtocol {
   final public let left: Swift::Double
   final public let bottom: Swift::Double
   final public let right: Swift::Double
-  public init(top: Swift::Double = 0.0, left: Swift::Double = 0.0, bottom: Swift::Double = 0.0, right: Swift::Double = 0.0)
+  final public let isTopSpecified: Swift::Bool
+  final public let isLeftSpecified: Swift::Bool
+  final public let isBottomSpecified: Swift::Bool
+  final public let isRightSpecified: Swift::Bool
+  public var isFullySpecified: Swift::Bool {
+    get
+  }
+  public init(top: Swift::Double? = nil, left: Swift::Double? = nil, bottom: Swift::Double? = nil, right: Swift::Double? = nil)
   public static let Zeros: MapConductorCore::MapPaddings
   public static func from(paddings: any MapConductorCore::MapPaddingsProtocol) -> MapConductorCore::MapPaddings
+  public func resolved(onto current: (any MapConductorCore::MapPaddingsProtocol)?) -> MapConductorCore::MapPaddings
   public func hashCode() -> Swift::Int
   @objc deinit
 }
