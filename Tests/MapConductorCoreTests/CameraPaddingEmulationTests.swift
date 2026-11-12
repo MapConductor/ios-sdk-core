@@ -112,4 +112,36 @@ final class CameraPaddingEmulationTests: XCTestCase {
         XCTAssertEqual(back.paddings?.top, 300)
         XCTAssertEqual(back.fov, 36.87)
     }
+
+    /// 地図の縮尺が計算より 7% 大きくても、投影で測って詰めればターゲットがパディングの残りの中央に来る。
+    func testCorrectedCenterConvergesWithAMisScaledMap() {
+        let paddings = MapPaddings(top: 300)
+        let cam = camera(tilt: 0, paddings: paddings)
+        let pointsPerMeter = 1.07 / mpp(cam)
+        var center = CameraPaddingEmulation.cameraCenter(for: cam, fov: 0, viewportSize: viewport)
+        func project(_ point: GeoPointProtocol) -> CGPoint? {
+            let distance = Spherical.computeDistanceBetween(from: center, to: GeoPoint.from(position: point))
+            let angle = Spherical.computeHeading(from: center, to: GeoPoint.from(position: point)) * .pi / 180
+            return CGPoint(
+                x: viewport.width / 2 + distance * sin(angle) * pointsPerMeter,
+                y: viewport.height / 2 - distance * cos(angle) * pointsPerMeter
+            )
+        }
+        func unproject(_ point: CGPoint) -> GeoPoint? {
+            let dx = (Double(point.x) - viewport.width / 2) / pointsPerMeter
+            let dy = (viewport.height / 2 - Double(point.y)) / pointsPerMeter
+            let north = Spherical.computeOffset(origin: center, distance: dy, heading: 0)
+            return Spherical.computeOffset(origin: north, distance: dx, heading: 90)
+        }
+        for _ in 0..<3 {
+            guard let next = CameraPaddingEmulation.correctedCenter(
+                target: tokyo, paddings: paddings, viewportSize: viewport,
+                project: project, unproject: unproject
+            ) else { break }
+            center = next
+        }
+        let landed = project(tokyo)!
+        XCTAssertEqual(landed.y, viewport.height / 2 + 150, accuracy: 0.5)
+        XCTAssertEqual(landed.x, viewport.width / 2, accuracy: 0.5)
+    }
 }

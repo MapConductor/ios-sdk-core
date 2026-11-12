@@ -80,19 +80,25 @@ public enum CameraPaddingEmulation {
 
     /// 地図 SDK から読み戻したカメラ（`position` は画面中心）を、ターゲットと `paddings`・`fov` を
     /// 持つカメラへ戻す。``applied(to:fov:viewportSize:)`` の逆。
+    ///
+    /// `unproject`（画面座標 → 地理座標）を渡すと、パディングの残りの中央にある地点を地図に直接
+    /// 聞いてターゲットにする。地図 SDK の縮尺や傾きの扱いが計算とずれていても正確になる。
     public static func restored(
         _ camera: MapCameraPosition,
         paddings: MapPaddingsProtocol?,
         fov: Double?,
-        viewportSize: CGSize
+        viewportSize: CGSize,
+        unproject: ((CGPoint) -> GeoPoint?)? = nil
     ) -> MapCameraPosition {
-        let target = self.target(
-            forCameraCenter: camera.position,
-            camera: camera,
-            paddings: paddings,
-            fov: fov,
-            viewportSize: viewportSize
-        )
+        let target = paddedCenterPoint(paddings: paddings, viewportSize: viewportSize)
+            .flatMap { point in unproject?(point) }
+            ?? self.target(
+                forCameraCenter: camera.position,
+                camera: camera,
+                paddings: paddings,
+                fov: fov,
+                viewportSize: viewportSize
+            )
         return MapCameraPosition(
             position: GeoPoint(
                 latitude: target.latitude,
@@ -106,6 +112,35 @@ public enum CameraPaddingEmulation {
             visibleRegion: camera.visibleRegion,
             fov: fov
         )
+    }
+
+    /// パディングを除いた領域の中央（画面座標）。パディングが無ければ nil。
+    public static func paddedCenterPoint(paddings: MapPaddingsProtocol?, viewportSize: CGSize) -> CGPoint? {
+        guard let paddings, viewportSize.width > 0, viewportSize.height > 0 else { return nil }
+        let dx = (paddings.left - paddings.right) / 2.0
+        let dy = (paddings.top - paddings.bottom) / 2.0
+        if dx == 0, dy == 0 { return nil }
+        return CGPoint(x: viewportSize.width / 2.0 + dx, y: viewportSize.height / 2.0 + dy)
+    }
+
+    /// 動かした後の地図で、ターゲットがパディングの残りの中央からずれていれば、ずれを打ち消す
+    /// カメラの中心を返す（ずれが 0.5pt 未満なら nil）。
+    ///
+    /// 計算で置いた中心は、地図 SDK の縮尺・傾きの上限・視野角が計算と違うとずれる。地図の
+    /// 投影（`project` / `unproject`）で実際の位置を測って詰める。数回繰り返すと収束する。
+    public static func correctedCenter(
+        target: GeoPointProtocol,
+        paddings: MapPaddingsProtocol?,
+        viewportSize: CGSize,
+        project: (GeoPointProtocol) -> CGPoint?,
+        unproject: (CGPoint) -> GeoPoint?
+    ) -> GeoPoint? {
+        guard let desired = paddedCenterPoint(paddings: paddings, viewportSize: viewportSize),
+              let actual = project(target) else { return nil }
+        let deltaX = actual.x - desired.x
+        let deltaY = actual.y - desired.y
+        guard abs(deltaX) >= 0.5 || abs(deltaY) >= 0.5 else { return nil }
+        return unproject(CGPoint(x: viewportSize.width / 2.0 + deltaX, y: viewportSize.height / 2.0 + deltaY))
     }
 
     /// 画面中心からターゲットまでの地表の距離（メートル）。手前が正の `backward`、右が正の `lateral`。
