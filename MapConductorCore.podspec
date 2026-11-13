@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = "MapConductorCore"
-  s.version = "1.3.2"
+  s.version = "1.4.0"
   s.summary = "MapConductor's provider-agnostic core types and protocols."
   s.license = { :type => "Apache-2.0", :file => "LICENSE" }
   s.author = "MapConductor"
@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.source_files = "Sources/MapConductorCore/**/*.swift"
   # The C shim is its own pod so that `import CTilePng` resolves. See
   # CTilePng.podspec for why it cannot be source files in here.
-  s.dependency "CTilePng"
+  s.dependency "CTilePng", "~> 1.4"
   # The Rust PNG encoder. Marker tiles are rasterised in-process and the
   # platform encoder is several times slower; MarkerTileRenderer falls back to
   # it if this is missing, so the pod stays usable either way.

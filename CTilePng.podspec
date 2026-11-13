@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = "CTilePng"
-  s.version = "1.3.1"
+  s.version = "1.4.0"
   s.summary = "The C shim MapConductorCore's Rust PNG encoder is reached through."
   s.license = { :type => "Apache-2.0", :file => "LICENSE" }
   s.author = "MapConductor"
