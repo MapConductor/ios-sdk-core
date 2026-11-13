@@ -18,6 +18,10 @@ struct ShapeTileStorage {
 
     var count: Int { file?.count ?? memory.count }
 
+    /// Stored position -> index, when the file is stored by place (see
+    /// ``CircleGeometryFile``). A pass over every shape walks this order.
+    var storageOrder: [Int32]? { file?.indexAt }
+
     subscript(index: Int) -> Shape? {
         get {
             guard let file else { return memory[index] }
@@ -44,7 +48,7 @@ struct ShapeTileStorage {
     mutating func compactIfNeeded() {
         guard overrides.count > 2_048 else { return }
         let snapshot = self
-        if let replacement = try? CircleGeometryFile(count: count, shapeAt: { snapshot[$0] }) {
+        if let replacement = try? CircleGeometryFile(count: count, order: file?.indexAt, shapeAt: { snapshot[$0] }) {
             self = ShapeTileStorage(replacement)
             active = snapshot.active
         }
@@ -99,6 +103,10 @@ final class ShapeColorCache {
 
 /// Fixed-width geometry streamed to an anonymous cache file and paged by the OS.
 /// The mapping is reclaimed when the last render snapshot releases it.
+///
+/// With an `order`, the records are stored by place: a tile's circles then lie
+/// in a few pages instead of all over the file. Everything here still takes
+/// the list's indices.
 final class CircleGeometryFile {
     struct Record {
         var latitude = 0.0, longitude = 0.0, radius = 0.0
@@ -113,12 +121,16 @@ final class CircleGeometryFile {
 
     private static let stride = MemoryLayout<Record>.stride
     let count: Int
+    /// Stored position -> index, and back; nil when stored in index order.
+    let indexAt: [Int32]?
+    private let positionOf: [Int32]?
     private let mapping: UnsafeMutableRawPointer
     private let colors: [CGColor]
     /// The palette as premultiplied RGBA, made once: the GPU path reads a colour per circle.
     private let premultipliedPalette: [SIMD4<Float>?]
 
-    init(count: Int, shapeAt: (Int) -> ShapeTileRenderer.Shape?) throws {
+    init(count: Int, order: [Int32]? = nil, shapeAt: (Int) -> ShapeTileRenderer.Shape?) throws {
+        precondition(order == nil || order!.count == count)
         let directory = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         let url = directory.appendingPathComponent("mc-circle-\(UUID().uuidString)")
         let fd = open(url.path, O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR)
@@ -144,7 +156,8 @@ final class CircleGeometryFile {
             block.withUnsafeMutableBytes { (bytes: UnsafeMutableRawBufferPointer) in
                 for i in 0..<size {
                     var record = Record()
-                    if let p = shapeAt(start + i), let c = p.circle {
+                    let index = order.map { Int($0[start + i]) } ?? start + i
+                    if let p = shapeAt(index), let c = p.circle {
                         record = Record(latitude: c.latitude, longitude: c.longitude, radius: c.radiusMeters,
                                         x: c.x, y: c.y, west: c.westX, north: c.northY, east: c.eastX, south: c.southY,
                                         strokeWidth: p.strokeWidth, fill: colorIndex(p.fill), stroke: colorIndex(p.stroke),
@@ -158,6 +171,14 @@ final class CircleGeometryFile {
         let mapped = mmap(nil, count * Self.stride, PROT_READ, MAP_PRIVATE, fd, 0)
         guard let mapped, mapped != MAP_FAILED else { throw CocoaError(.fileReadUnknown) }
         self.count = count
+        self.indexAt = order
+        if let order {
+            var positions = [Int32](repeating: 0, count: count)
+            for (position, index) in order.enumerated() { positions[Int(index)] = Int32(position) }
+            self.positionOf = positions
+        } else {
+            self.positionOf = nil
+        }
         self.mapping = mapped
         self.colors = palette
         self.premultipliedPalette = palette.map { MetalShapeRasterizer.premultiplied($0) }
@@ -172,7 +193,51 @@ final class CircleGeometryFile {
     }
 
     func record(at index: Int) -> Record {
-        mapping.load(fromByteOffset: index * Self.stride, as: Record.self)
+        let position = positionOf.map { Int($0[index]) } ?? index
+        return mapping.load(fromByteOffset: position * Self.stride, as: Record.self)
+    }
+
+    /// The indices `0..<count` sorted by `keyOf` (24-bit keys), ties in index
+    /// order: two stable 12-bit counting passes, since a comparison sort of a
+    /// nationwide set takes most of a second on a phone.
+    static func sortedOrder(count: Int, keyOf: (Int) -> Int) -> [Int32] {
+        let keys = (0..<count).map { UInt32(truncatingIfNeeded: keyOf($0)) & 0xffffff }
+        var from = (0..<count).map { Int32($0) }
+        var to = [Int32](repeating: 0, count: count)
+        var counts = [Int](repeating: 0, count: 4096)
+        for shift in [UInt32(0), 12] {
+            for b in 0..<4096 { counts[b] = 0 }
+            for i in 0..<count { counts[Int((keys[Int(from[i])] >> shift) & 4095)] += 1 }
+            var sum = 0
+            for b in 0..<4096 {
+                let c = counts[b]
+                counts[b] = sum
+                sum += c
+            }
+            for i in 0..<count {
+                let bucket = Int((keys[Int(from[i])] >> shift) & 4095)
+                to[counts[bucket]] = from[i]
+                counts[bucket] += 1
+            }
+            swap(&from, &to)
+        }
+        return from
+    }
+
+    /// The z12 cell of a point in Z-order (Morton), 24 bits: cells next to each
+    /// other mostly get keys next to each other. The same key as js-sdk-core's
+    /// `mortonCellKey` and android-sdk-core's `StorageOrder.mortonCellKey`.
+    static func mortonCellKey(latitude: Double, longitude: Double) -> Int {
+        let x = (longitude + 180) / 360
+        let s = sin(min(85, max(-85, latitude)) * .pi / 180)
+        let y = 0.5 - log((1 + s) / (1 - s)) / (4 * .pi)
+        let cx = min(4095, max(0, Int(floor(x * 4096))))
+        let cy = min(4095, max(0, Int(floor(y * 4096))))
+        var key = 0
+        for bit in 0..<12 {
+            key |= ((cx >> bit) & 1) << (2 * bit) | ((cy >> bit) & 1) << (2 * bit + 1)
+        }
+        return key
     }
 
     func shape(at index: Int) -> ShapeTileRenderer.Shape? {
