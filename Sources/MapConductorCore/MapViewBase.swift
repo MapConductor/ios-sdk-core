@@ -49,6 +49,7 @@ public struct MapViewBase<MapContent: View, TopContent: View>: View {
     private let content: MapViewContent
     private let mapContent: () -> MapContent
     private let topContent: () -> TopContent
+    @StateObject private var addProgress = AddProgressHost()
 
     public init(
         attributionRules: [AttributionRule],
@@ -65,6 +66,9 @@ public struct MapViewBase<MapContent: View, TopContent: View>: View {
     }
 
     public var body: some View {
+        // Before the map below is handed the content, so that the collections
+        // know their lists ahead of the first arrival.
+        let _ = addProgress.sync(content.addProgressRequests)
         ZStack {
             mapContent()
             ForEach(0..<content.views.count, id: \.self) { index in

@@ -110,23 +110,30 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
     }
 
     public func add(data: [MarkerState]) async {
-        await semaphore.withPermit { await addLocked(data: data) }
+        let landed = await semaphore.withPermit { await addLocked(data: data) }
+        await OverlayAddedTracker.notify(landed)
     }
 
     /// ``add(data:)`` の中身。**呼び出し側が permit を持っていること。**
     /// ``onCameraChanged(mapCameraPosition:)`` が保留分を流すときに、
     /// permit を持ったまま呼ぶ（``AsyncSemaphore`` は再入できないので
     /// `add(data:)` をそのまま呼ぶとデッドロックする）。
-    private func addLocked(data: [MarkerState]) async {
+    ///
+    /// Returns the states that reached the map, for their `onAdded`: the strategy
+    /// keeps every marker it shows (or clusters) in its manager, the same as
+    /// js-sdk-core's and android-sdk's `StrategyMarkerController`.
+    private func addLocked(data: [MarkerState]) async -> [MarkerState] {
         guard let bounds = mapCameraPosition?.visibleRegion?.bounds ?? lastKnownBounds else {
             pendingStates = data
-            return
+            return []
         }
+        let fresh = data.filter { !markerManager.hasEntity($0.id) }
         _ = await strategy.onAdd(
             data: data,
             viewport: bounds,
             renderer: renderer
         )
+        return fresh.filter { markerManager.hasEntity($0.id) }
     }
 
     public func update(state: MarkerState) async {
@@ -206,6 +213,7 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
     /// ではなくなる）。終了時の見た目は変わらない。
     public func onCameraChanged(mapCameraPosition: MapCameraPosition) async {
         await latestCamera.store(mapCameraPosition)
+        var landed: [MarkerState] = []
         await semaphore.withPermit {
             if let camera = await latestCamera.take() {
                 self.mapCameraPosition = camera
@@ -229,9 +237,10 @@ where Strategy.ActualMarker == ActualMarker, Renderer.ActualMarker == ActualMark
             // 流したいのであって、どのタスクが流すかは問わない。
             if let pending = pendingStates {
                 pendingStates = nil
-                await addLocked(data: pending)
+                landed = await addLocked(data: pending)
             }
         }
+        await OverlayAddedTracker.notify(landed)
     }
 
     public func destroy() {

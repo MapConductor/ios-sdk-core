@@ -7,27 +7,63 @@ import UIKit
 /// ビューを作らないので、`MapViewContentBuilder` の中でそのまま使える。
 public struct Markers: MapOverlayItemProtocol {
     private let states: [MarkerState]
+    private let progress: AddProgressRequest?
 
-    public init(_ states: [MarkerState]) {
+    /// `onAddStart`, `onAddProgress` and `onAddEnd` say how far the states this
+    /// list adds are with reaching the map; see ``AddProgressCallbacks``. Leave
+    /// `fileID`, `line` and `column` to their defaults: they tell this
+    /// collection apart from the others on the map.
+    public init(
+        _ states: [MarkerState],
+        onAddStart: ((_ total: Int) -> Void)? = nil,
+        onAddProgress: ((_ added: Int, _ total: Int) -> Void)? = nil,
+        onAddEnd: ((_ total: Int) -> Void)? = nil,
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
+    ) {
         self.states = states
+        let callbacks = AddProgressCallbacks(onAddStart: onAddStart, onAddProgress: onAddProgress, onAddEnd: onAddEnd)
+        progress = callbacks.isEmpty
+            ? nil
+            : AddProgressRequest(kind: "markers", states: states, callbacks: callbacks, fileID: fileID, line: line, column: column)
     }
 
     public func append(to content: inout MapViewContent) {
         let items = states.map { Marker(state: $0) }
         if content.markers.isEmpty { content.markers = items } else { content.markers.append(contentsOf: items) }
+        if let progress { content.addProgressRequests.append(progress) }
     }
 }
 
 public struct Circles: MapOverlayItemProtocol {
     private let states: [CircleState]
+    private let progress: AddProgressRequest?
 
-    public init(_ states: [CircleState]) {
+    /// `onAddStart`, `onAddProgress` and `onAddEnd` say how far the states this
+    /// list adds are with reaching the map; see ``AddProgressCallbacks``. Leave
+    /// `fileID`, `line` and `column` to their defaults: they tell this
+    /// collection apart from the others on the map.
+    public init(
+        _ states: [CircleState],
+        onAddStart: ((_ total: Int) -> Void)? = nil,
+        onAddProgress: ((_ added: Int, _ total: Int) -> Void)? = nil,
+        onAddEnd: ((_ total: Int) -> Void)? = nil,
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
+    ) {
         self.states = states
+        let callbacks = AddProgressCallbacks(onAddStart: onAddStart, onAddProgress: onAddProgress, onAddEnd: onAddEnd)
+        progress = callbacks.isEmpty
+            ? nil
+            : AddProgressRequest(kind: "circles", states: states, callbacks: callbacks, fileID: fileID, line: line, column: column)
     }
 
     public func append(to content: inout MapViewContent) {
         let items = states.map { Circle(state: $0) }
         if content.circles.isEmpty { content.circles = items } else { content.circles.append(contentsOf: items) }
+        if let progress { content.addProgressRequests.append(progress) }
     }
 }
 
@@ -54,14 +90,32 @@ public struct CircleTiling: MapOverlayItemProtocol {
 
 public struct Polylines: MapOverlayItemProtocol {
     private let states: [PolylineState]
+    private let progress: AddProgressRequest?
 
-    public init(_ states: [PolylineState]) {
+    /// `onAddStart`, `onAddProgress` and `onAddEnd` say how far the states this
+    /// list adds are with reaching the map; see ``AddProgressCallbacks``. Leave
+    /// `fileID`, `line` and `column` to their defaults: they tell this
+    /// collection apart from the others on the map.
+    public init(
+        _ states: [PolylineState],
+        onAddStart: ((_ total: Int) -> Void)? = nil,
+        onAddProgress: ((_ added: Int, _ total: Int) -> Void)? = nil,
+        onAddEnd: ((_ total: Int) -> Void)? = nil,
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
+    ) {
         self.states = states
+        let callbacks = AddProgressCallbacks(onAddStart: onAddStart, onAddProgress: onAddProgress, onAddEnd: onAddEnd)
+        progress = callbacks.isEmpty
+            ? nil
+            : AddProgressRequest(kind: "polylines", states: states, callbacks: callbacks, fileID: fileID, line: line, column: column)
     }
 
     public func append(to content: inout MapViewContent) {
         let items = states.map { Polyline(state: $0) }
         if content.polylines.isEmpty { content.polylines = items } else { content.polylines.append(contentsOf: items) }
+        if let progress { content.addProgressRequests.append(progress) }
     }
 }
 
@@ -88,14 +142,32 @@ public struct PolylineTiling: MapOverlayItemProtocol {
 
 public struct Polygons: MapOverlayItemProtocol {
     private let states: [PolygonState]
+    private let progress: AddProgressRequest?
 
-    public init(_ states: [PolygonState]) {
+    /// `onAddStart`, `onAddProgress` and `onAddEnd` say how far the states this
+    /// list adds are with reaching the map; see ``AddProgressCallbacks``. Leave
+    /// `fileID`, `line` and `column` to their defaults: they tell this
+    /// collection apart from the others on the map.
+    public init(
+        _ states: [PolygonState],
+        onAddStart: ((_ total: Int) -> Void)? = nil,
+        onAddProgress: ((_ added: Int, _ total: Int) -> Void)? = nil,
+        onAddEnd: ((_ total: Int) -> Void)? = nil,
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
+    ) {
         self.states = states
+        let callbacks = AddProgressCallbacks(onAddStart: onAddStart, onAddProgress: onAddProgress, onAddEnd: onAddEnd)
+        progress = callbacks.isEmpty
+            ? nil
+            : AddProgressRequest(kind: "polygons", states: states, callbacks: callbacks, fileID: fileID, line: line, column: column)
     }
 
     public func append(to content: inout MapViewContent) {
         let items = states.map { Polygon(state: $0) }
         if content.polygons.isEmpty { content.polygons = items } else { content.polygons.append(contentsOf: items) }
+        if let progress { content.addProgressRequests.append(progress) }
     }
 }
 

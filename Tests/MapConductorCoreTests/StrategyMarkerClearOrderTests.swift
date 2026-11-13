@@ -115,4 +115,25 @@ final class StrategyMarkerClearOrderTests: XCTestCase {
         await controller.add(data: markers())
         XCTAssertEqual(renderer.drawn, ["m1", "m2"])
     }
+
+    /// `onAdded` comes once each, for markers added directly and for those held for the
+    /// first camera, as js-sdk-core's and android-sdk's StrategyMarkerController do.
+    @MainActor
+    func testOnAddedForDirectAndHeldMarkers() async {
+        var added: [String] = []
+        func marker(_ id: String) -> MarkerState {
+            MarkerState(position: GeoPoint(latitude: 35.0, longitude: 139.0), id: id, onAdded: { added.append($0.id) })
+        }
+        let strategy = DrawAllStrategy()
+        let renderer = GlRenderer(strategy.markerManager)
+        let controller = StrategyMarkerController(strategy: strategy, renderer: renderer)
+        let held = [marker("h1"), marker("h2")]
+        await controller.add(data: held) // before the first camera: held
+        XCTAssertEqual(added, [])
+        await controller.onCameraChanged(mapCameraPosition: camera)
+        XCTAssertEqual(added, ["h1", "h2"])
+
+        await controller.add(data: held + [marker("d1")])
+        XCTAssertEqual(added, ["h1", "h2", "d1"], "only the new one")
+    }
 }
