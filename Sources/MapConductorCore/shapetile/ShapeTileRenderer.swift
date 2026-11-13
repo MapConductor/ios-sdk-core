@@ -426,6 +426,16 @@ final class ShapeTileRenderer: TileProvider {
         )
         if candidates.isEmpty { return nil }
 
+        let zoomCache = zoomCache(for: z, count: data.shapes.count)
+        let thinCircles = data.shapes[Int(candidates[0])]?.kind == .circle
+        if thinCircles, let gpu = gpuRasterizer(),
+           case let .drawn(png) = try drawCircles(
+               on: gpu, data, candidates: candidates, scale: scale,
+               originX: originX, originY: originY, ratio: ratio, isCancelled: isCancelled
+           ) {
+            return png
+        }
+
         let pixels = tileSize * ratio
         let bytesPerRow = pixels * 4
         guard let buffer = NSMutableData(length: bytesPerRow * pixels),
@@ -442,8 +452,6 @@ final class ShapeTileRenderer: TileProvider {
         context.setLineJoin(.round)
         context.setLineCap(.round)
 
-        let zoomCache = zoomCache(for: z, count: data.shapes.count)
-        let thinCircles = data.shapes[Int(candidates[0])]?.kind == .circle
         var lastDot = [Int32](repeating: 0, count: thinCircles ? tileSize * tileSize : 0)
         if thinCircles { for (n, index) in candidates.enumerated() {
             if n & 255 == 255, isCancelled() { throw Cancelled() }
@@ -525,6 +533,86 @@ final class ShapeTileRenderer: TileProvider {
             throw Cancelled()
         }
         return png
+    }
+
+    private enum GpuOutcome {
+        /// Drawn on the GPU: the PNG, or nil when nothing was drawn.
+        case drawn(Foundation.Data?)
+        /// The tile needs the CPU (a circle drawn as its 128-gon, or the GPU failed).
+        case fallback
+    }
+
+    /// Circles only, on the GPU (``MetalShapeRasterizer``): the same choices as
+    /// the CPU loop in ``draw(_:z:x:y:ratio:isCancelled:)`` and ``CircleTilePainter``
+    /// -- which circle a pixel keeps, Dot or Arc, outlined or not -- made into instances.
+    ///
+    /// Reads plain values (``ShapeTileStorage/circleValues(at:colors:)``): building a
+    /// ``Shape`` per circle from the geometry file took 6 µs, seconds for a tile of
+    /// a few hundred thousand, against milliseconds for drawing them all.
+    private func drawCircles(
+        on gpu: MetalShapeRasterizer, _ data: Data, candidates: [Int32], scale: Double,
+        originX: Double, originY: Double, ratio: Int, isCancelled: () -> Bool
+    ) throws -> GpuOutcome {
+        let colors = ShapeColorCache()
+        let tile = Double(tileSize)
+        /// -2: a circle of a pixel or more; -1: a dot outside this tile; else its pixel.
+        func slot(_ c: ShapeTileStorage.CircleValues) -> Int {
+            let radius = max(c.east - c.x, c.y - c.north, c.south - c.y) * scale
+            guard radius < 0.5 else { return -2 }
+            let x = floor(c.x * scale) - originX, y = floor(c.y * scale) - originY
+            guard x >= 0, x < tile, y >= 0, y < tile else { return -1 }
+            return Int(y) * tileSize + Int(x)
+        }
+        var lastDot = [Int32](repeating: 0, count: tileSize * tileSize)
+        for (n, index) in candidates.enumerated() {
+            if n & 4095 == 4095, isCancelled() { throw Cancelled() }
+            guard let c = data.shapes.circleValues(at: Int(index), colors: colors),
+                  c.fill != nil || c.stroke != nil else { continue }
+            let at = slot(c)
+            if at >= 0 { lastDot[at] = index + 1 }
+        }
+        let r = Float(ratio)
+        var instances: [MetalShapeRasterizer.Instance] = []
+        instances.reserveCapacity(min(candidates.count, tileSize * tileSize))
+        for (n, index) in candidates.enumerated() {
+            if n & 4095 == 4095, isCancelled() { throw Cancelled() }
+            guard let c = data.shapes.circleValues(at: Int(index), colors: colors) else { continue }
+            let at = slot(c)
+            if at == -1 || (at >= 0 && lastDot[at] != index + 1) { continue }
+            let cx = c.x * scale, cy = c.y * scale
+            let rx = (c.east - c.x) * scale
+            let ryN = (c.y - c.north) * scale, ryS = (c.south - c.y) * scale
+            if max(rx, ryN, ryS) < 0.5 {
+                // Dot: one point, the fill colour or else the outline's.
+                guard let color = c.fill ?? c.stroke else { continue }
+                instances.append(.init(
+                    x: Float(floor(cx) - originX) * r, y: Float(floor(cy) - originY) * r, radius: r, strokeWidth: r,
+                    fill: color, stroke: .zero, kind: 1
+                ))
+                continue
+            }
+            // Bent by the projection: the 128-gon, which only the CPU draws.
+            if max(abs(ryN - rx), abs(ryS - rx)) > CircleTilePainter.arcTolerancePx { return .fallback }
+            let outlined = 2 * max(rx, ryN, ryS) >= Self.minOutlinedPx
+            let stroke = outlined ? c.stroke : nil
+            if c.fill == nil && stroke == nil { continue }
+            instances.append(.init(
+                x: Float(cx - originX) * r, y: Float(cy - originY) * r, radius: Float(rx) * r,
+                strokeWidth: stroke == nil ? 0 : Float(c.strokeWidth) * r,
+                fill: c.fill ?? .zero, stroke: stroke ?? .zero, kind: 0
+            ))
+        }
+        if instances.isEmpty { return .drawn(nil) }
+        if isCancelled() { throw Cancelled() }
+        guard let png = gpu.renderPng(instances: instances, pixels: tileSize * ratio) else { return .fallback }
+        return .drawn(png)
+    }
+
+    /// The GPU rasterizer for circle tiles; nil without Metal, or with
+    /// `MAPCONDUCTOR_SHAPE_TILE_CPU=1` to compare against the CPU drawing.
+    private func gpuRasterizer() -> MetalShapeRasterizer? {
+        if ProcessInfo.processInfo.environment["MAPCONDUCTOR_SHAPE_TILE_CPU"] == "1" { return nil }
+        return MetalShapeRasterizer.shared
     }
 
     private static func add(_ ring: [Double], to path: CGMutablePath, originX: Double, originY: Double, close: Bool) {
