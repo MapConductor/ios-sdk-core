@@ -54,6 +54,47 @@ struct ShapeTileStorage {
         guard let file, overrides[index] == nil else { return false }
         return file.matches(state, at: index)
     }
+
+    /// A circle as the GPU path reads it: plain values, no objects made.
+    struct CircleValues {
+        var x: Double, y: Double, north: Double, south: Double, east: Double
+        var strokeWidth: Double
+        /// Premultiplied colours; nil when not drawn.
+        var fill: SIMD4<Float>?
+        var stroke: SIMD4<Float>?
+    }
+
+    /// The circle at `index` without building a ``Shape``: the file's record
+    /// as it is, or the overriding shape. Nil for an empty slot or another kind.
+    /// `colors` turns a colour into premultiplied RGBA once per colour.
+    func circleValues(at index: Int, colors: ShapeColorCache) -> CircleValues? {
+        if let file, overrides[index] == nil {
+            let r = file.record(at: index)
+            guard r.radius > 0 else { return nil }
+            return CircleValues(
+                x: r.x, y: r.y, north: r.north, south: r.south, east: r.east, strokeWidth: r.strokeWidth,
+                fill: file.premultipliedColor(r.fill), stroke: r.strokeWidth > 0 ? file.premultipliedColor(r.stroke) : nil
+            )
+        }
+        guard let p = self[index], let c = p.circle else { return nil }
+        return CircleValues(
+            x: c.x, y: c.y, north: c.northY, south: c.southY, east: c.eastX, strokeWidth: p.strokeWidth,
+            fill: colors.premultiplied(p.fill), stroke: colors.premultiplied(p.stroke)
+        )
+    }
+}
+
+/// Premultiplied RGBA per `CGColor`, for one tile: a tile reuses a handful of colours.
+final class ShapeColorCache {
+    private var cache: [CGColor: SIMD4<Float>?] = [:]
+
+    func premultiplied(_ color: CGColor?) -> SIMD4<Float>? {
+        guard let color else { return nil }
+        if let hit = cache[color] { return hit }
+        let value = MetalShapeRasterizer.premultiplied(color)
+        cache[color] = value
+        return value
+    }
 }
 
 /// Fixed-width geometry streamed to an anonymous cache file and paged by the OS.
@@ -74,6 +115,8 @@ final class CircleGeometryFile {
     let count: Int
     private let mapping: UnsafeMutableRawPointer
     private let colors: [CGColor]
+    /// The palette as premultiplied RGBA, made once: the GPU path reads a colour per circle.
+    private let premultipliedPalette: [SIMD4<Float>?]
 
     init(count: Int, shapeAt: (Int) -> ShapeTileRenderer.Shape?) throws {
         let directory = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -117,9 +160,16 @@ final class CircleGeometryFile {
         self.count = count
         self.mapping = mapped
         self.colors = palette
+        self.premultipliedPalette = palette.map { MetalShapeRasterizer.premultiplied($0) }
     }
 
     deinit { munmap(mapping, count * Self.stride) }
+
+    /// The colour at a record's index (0 is none) as premultiplied RGBA.
+    func premultipliedColor(_ index: UInt32) -> SIMD4<Float>? {
+        guard index > 0 else { return nil }
+        return premultipliedPalette[Int(index) - 1]
+    }
 
     func record(at index: Int) -> Record {
         mapping.load(fromByteOffset: index * Self.stride, as: Record.self)
