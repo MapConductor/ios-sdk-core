@@ -159,7 +159,10 @@ final class ShapeTileRenderer: TileProvider {
         init(_ shapes: [Shape?]) { self.init(ShapeTileStorage(shapes)) }
 
         init(_ shapes: ShapeTileStorage) {
-            for i in 0..<shapes.count {
+            // In storage order: a file stored by place is then read page by page.
+            let order = shapes.storageOrder
+            for position in 0..<shapes.count {
+                let i = order.map { Int($0[position]) } ?? position
                 guard let p = shapes.bounds(at: i) else { continue }
                 var level = 0
                 func cellCount(_ size: Double) -> Double {
@@ -316,7 +319,10 @@ final class ShapeTileRenderer: TileProvider {
     /// Build the index away from the route lock; publication is a short operation.
     func prepareStorage(_ shapes: ShapeTileStorage) -> () -> Void {
         var maxStroke = 0.0
-        for i in 0..<shapes.count { maxStroke = max(maxStroke, shapes.strokeWidth(at: i)) }
+        let order = shapes.storageOrder
+        for position in 0..<shapes.count {
+            maxStroke = max(maxStroke, shapes.strokeWidth(at: order.map { Int($0[position]) } ?? position))
+        }
         let index = Index(shapes)
         return {
             self.lock.lock()

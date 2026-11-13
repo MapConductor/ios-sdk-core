@@ -31,6 +31,8 @@ final class ShapeTileSet<State> {
     private let zIndexOf: (State) -> Int
     private let shapeOf: (State) -> ShapeTileRenderer.Shape?
     private let fileBackedCircles: Bool
+    /// Where a state is, for storing a large set by place (see ``CircleGeometryFile``).
+    private let spatialKeyOf: ((State) -> Int)?
     private let lock = NSLock()
     private var indexById: [String: Int] = [:]
     private var sourceStates: [State?] = []
@@ -78,6 +80,7 @@ final class ShapeTileSet<State> {
         id: @escaping (State) -> String,
         zIndex: @escaping (State) -> Int,
         fileBackedCircles: Bool = false,
+        spatialKey: ((State) -> Int)? = nil,
         shape: @escaping (State) -> ShapeTileRenderer.Shape?
     ) {
         routeId = "\(routePrefix)-\(UUID().uuidString.prefix(8).lowercased())"
@@ -86,6 +89,7 @@ final class ShapeTileSet<State> {
         zIndexOf = zIndex
         shapeOf = shape
         self.fileBackedCircles = fileBackedCircles
+        spatialKeyOf = spatialKey
     }
 
     deinit {
@@ -101,6 +105,7 @@ final class ShapeTileSet<State> {
         let renderer = self.renderer
         let idOf = self.idOf, zIndexOf = self.zIndexOf, shapeOf = self.shapeOf
         let fileBackedCircles = self.fileBackedCircles
+        let spatialKeyOf = self.spatialKeyOf
         let work = Task.detached(priority: .userInitiated) { () -> Bool in
             // Draw order is list order: zIndex, then the order given. Each zIndex
             // is read once: a state's properties are not free to read, and a
@@ -116,8 +121,13 @@ final class ShapeTileSet<State> {
                 indexById[idOf(state)] = i
             }
             let storage: ShapeTileStorage
+            // Stored by place, so that a tile reads the few pages round it.
             if fileBackedCircles, ordered.count > 2_000,
-               let file = try? CircleGeometryFile(count: ordered.count, shapeAt: { shapeOf(ordered[$0]) }) {
+               let file = try? CircleGeometryFile(
+                   count: ordered.count,
+                   order: spatialKeyOf.map { keyOf in CircleGeometryFile.sortedOrder(count: ordered.count) { keyOf(ordered[$0]) } },
+                   shapeAt: { shapeOf(ordered[$0]) }
+               ) {
                 storage = ShapeTileStorage(file)
             } else {
                 guard !Task.isCancelled else { return false }
