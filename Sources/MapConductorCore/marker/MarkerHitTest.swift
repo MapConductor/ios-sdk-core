@@ -167,12 +167,24 @@ public enum MarkerHitTest {
         project: (GeoPointProtocol) -> CGPoint?,
         searchRadius: CGFloat = searchRadius
     ) -> GeoRectBounds? {
-        let epsilon = 1e-4
-        guard let north = project(GeoPoint(latitude: position.latitude + epsilon, longitude: position.longitude)),
-              let east = project(GeoPoint(latitude: position.latitude, longitude: position.longitude + epsilon))
-        else { return nil }
-        let ptPerDegLat = Double(hypot(north.x - touchScreen.x, north.y - touchScreen.y)) / epsilon
-        let ptPerDegLon = Double(hypot(east.x - touchScreen.x, east.y - touchScreen.y)) / epsilon
+        // The scale round the tap, from points a little north and east of it. Some
+        // projections round to whole pixels (ArcGIS's 3D SceneView): zoomed out, 1e-4°
+        // is under a pixel and both points land on the tap, so widen the step until
+        // they move far enough to measure.
+        var epsilon = 1e-4
+        var ptPerDegLat = 0.0
+        var ptPerDegLon = 0.0
+        while true {
+            guard let north = project(GeoPoint(latitude: position.latitude + epsilon, longitude: position.longitude)),
+                  let east = project(GeoPoint(latitude: position.latitude, longitude: position.longitude + epsilon))
+            else { return nil }
+            let dLat = Double(hypot(north.x - touchScreen.x, north.y - touchScreen.y))
+            let dLon = Double(hypot(east.x - touchScreen.x, east.y - touchScreen.y))
+            ptPerDegLat = dLat / epsilon
+            ptPerDegLon = dLon / epsilon
+            if (dLat >= minMeasured && dLon >= minMeasured) || epsilon >= maxEpsilonDegrees { break }
+            epsilon *= 10
+        }
         guard ptPerDegLat > 0, ptPerDegLon > 0 else { return nil }
         let halfLat = Double(searchRadius) / ptPerDegLat
         let halfLon = Double(searchRadius) / ptPerDegLon
@@ -185,4 +197,10 @@ public enum MarkerHitTest {
     /// 候補を探す半径（pt）。ラベルの長さの上限の目安で、これより遠くまで伸びたラベルの端は拾えない。
     @_spi(MapConductorDriver)
     public static let searchRadius: CGFloat = 256
+
+    /// The scale is measured over at least this many points (see ``searchBounds(position:touchScreen:project:searchRadius:)``).
+    private static let minMeasured = 4.0
+
+    /// The widest step tried when measuring the scale: a 1° step covers any zoom that shows markers.
+    private static let maxEpsilonDegrees = 1.0
 }
