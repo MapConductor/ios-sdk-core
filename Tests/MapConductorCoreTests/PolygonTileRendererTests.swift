@@ -176,7 +176,9 @@ final class PolygonTileRendererTests: XCTestCase {
         let large = PolygonTileRenderer()
         large.setPolygons([shape([local(100, 100, 110, 110)], fill: clear, stroke: blue, width: 1)])
         let pixels = try XCTUnwrap(try render(large, z: z, x: tile.x, y: tile.y))
-        XCTAssertGreaterThan(pixels.blueCount, 10)
+        // 1 px の枠線は画素の境目に乗るので、隣り合う 2 列が半分ずつの濃さになる（どちらも 128 前後）。
+        // 濃さではなく、描かれた画素の数で見る。
+        XCTAssertGreaterThan(pixels.opaqueCount, 10)
     }
 
     func testOutlineCrossingTheTileEdgeIsDrawnInTheNeighbour() throws {

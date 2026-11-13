@@ -299,7 +299,20 @@ final class ShapeTileRenderer: TileProvider {
         self.tileSize = tileSize
         self.pixelRatio = max(1, pixelRatio)
         self.tileCacheBytes = tileCacheBytes
+        Self.prepareGpu()
     }
+
+    /// The GPU rasterizers compile their shaders when first used, about 0.4 s on an
+    /// iPad Pro 11 (2018). Start that when shapes are about to be tiled, instead of
+    /// making the first tiles the map asks for wait for it.
+    private static let gpuPreparation: Void = {
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = MetalShapeRasterizer.shared
+            _ = MetalPathRasterizer.shared
+        }
+    }()
+
+    private static func prepareGpu() { _ = gpuPreparation }
 
     // MARK: Changes
 
@@ -435,6 +448,13 @@ final class ShapeTileRenderer: TileProvider {
            ) {
             return png
         }
+        if let paths = pathRasterizer(),
+           case let .drawn(png) = try drawPaths(
+               on: paths, data, candidates: candidates, z: z, scale: scale, cache: zoomCache,
+               originX: originX, originY: originY, ratio: ratio, thinCircles: thinCircles, isCancelled: isCancelled
+           ) {
+            return png
+        }
 
         let pixels = tileSize * ratio
         let bytesPerRow = pixels * 4
@@ -538,7 +558,8 @@ final class ShapeTileRenderer: TileProvider {
     private enum GpuOutcome {
         /// Drawn on the GPU: the PNG, or nil when nothing was drawn.
         case drawn(Foundation.Data?)
-        /// The tile needs the CPU (a circle drawn as its 128-gon, or the GPU failed).
+        /// Not drawn here: the circle path met a circle drawn as its 128-gon (the
+        /// path rasterizer takes it), or the GPU failed (the CPU takes it).
         case fallback
     }
 
@@ -591,7 +612,7 @@ final class ShapeTileRenderer: TileProvider {
                 ))
                 continue
             }
-            // Bent by the projection: the 128-gon, which only the CPU draws.
+            // Bent by the projection: the 128-gon, a polygon, which drawPaths draws.
             if max(abs(ryN - rx), abs(ryS - rx)) > CircleTilePainter.arcTolerancePx { return .fallback }
             let outlined = 2 * max(rx, ryN, ryS) >= Self.minOutlinedPx
             let stroke = outlined ? c.stroke : nil
@@ -606,6 +627,93 @@ final class ShapeTileRenderer: TileProvider {
         if isCancelled() { throw Cancelled() }
         guard let png = gpu.renderPng(instances: instances, pixels: tileSize * ratio) else { return .fallback }
         return .drawn(png)
+    }
+
+    /// Polygons, polylines and circles drawn as their 128-gon, on the GPU
+    /// (``MetalPathRasterizer``): the CPU loop of ``draw(_:z:x:y:ratio:isCancelled:)``,
+    /// shape for shape, with each `CGContext` call made into scene geometry.
+    private func drawPaths(
+        on gpu: MetalPathRasterizer, _ data: Data, candidates: [Int32], z: Int, scale: Double, cache: ZoomCache,
+        originX: Double, originY: Double, ratio: Int, thinCircles: Bool, isCancelled: () -> Bool
+    ) throws -> GpuOutcome {
+        let colors = ShapeColorCache()
+        let r = Double(ratio)
+        var builder = PathSceneBuilder(pixels: tileSize * ratio)
+        /// World-pixel points (`[x, y, ...]`) as tile pixels.
+        func local(_ points: [Double]) -> [Float] {
+            var out = [Float](repeating: 0, count: points.count)
+            var i = 0
+            while i < points.count {
+                out[i] = Float((points[i] - originX) * r)
+                out[i + 1] = Float((points[i + 1] - originY) * r)
+                i += 2
+            }
+            return out
+        }
+        var lastDot = [Int32](repeating: 0, count: thinCircles ? tileSize * tileSize : 0)
+        if thinCircles { for (n, index) in candidates.enumerated() {
+            if n & 255 == 255, isCancelled() { throw Cancelled() }
+            guard let p = data.shapes[Int(index)], p.kind == .circle,
+                  p.fill != nil || (p.strokeWidth > 0 && p.stroke != nil) else { continue }
+            let slot = CircleTilePainter.subpixelSlot(p, scale: scale, originX: originX, originY: originY, tileSize: tileSize)
+            if slot >= 0 { lastDot[slot] = index + 1 }
+        } }
+        for (n, index) in candidates.enumerated() {
+            if n & 255 == 255, isCancelled() { throw Cancelled() }
+            guard let p = data.shapes[Int(index)] else { continue }
+            if thinCircles {
+                let slot = CircleTilePainter.subpixelSlot(p, scale: scale, originX: originX, originY: originY, tileSize: tileSize)
+                if slot == -1 || (slot >= 0 && lastDot[slot] != index + 1) { continue }
+            }
+            switch simplified(p, index: Int(index), z: z, scale: scale, cache: cache) {
+            case .none:
+                continue
+            case let .dot(px, py):
+                if p.kind == .line {
+                    guard let color = colors.premultiplied(p.stroke) else { continue }
+                    // As wide as the line, and at least one pixel.
+                    let d = max(p.strokeWidth, 1 / r)
+                    builder.add(
+                        lineDot: SIMD2(Float((px - originX) * r), Float((py - originY) * r)),
+                        radius: Float(d / 2 * r), color: color
+                    )
+                } else {
+                    guard let color = colors.premultiplied(p.fill ?? p.stroke) else { continue }
+                    builder.add(circle: .init(
+                        x: Float((px - originX) * r), y: Float((py - originY) * r), radius: Float(r),
+                        strokeWidth: Float(r), fill: color, stroke: .zero, kind: 1
+                    ))
+                }
+            case let .rings(rings, outlined):
+                let fill = colors.premultiplied(p.fill)
+                let outline = outlined ? colors.premultiplied(p.stroke) : nil
+                if fill == nil && outline == nil { continue }
+                builder.add(polygon: rings.map(local), fill: fill, outline: outline, strokeWidth: Float(p.strokeWidth * r))
+            case let .arc(cx, cy, radius, outlined):
+                let fill = colors.premultiplied(p.fill)
+                let stroke = outlined ? colors.premultiplied(p.stroke) : nil
+                if fill == nil && stroke == nil { continue }
+                builder.add(circle: .init(
+                    x: Float((cx - originX) * r), y: Float((cy - originY) * r), radius: Float(radius * r),
+                    strokeWidth: stroke == nil ? 0 : Float(p.strokeWidth * r),
+                    fill: fill ?? .zero, stroke: stroke ?? .zero, kind: 0
+                ))
+            case let .path(points):
+                guard let color = colors.premultiplied(p.stroke) else { continue }
+                builder.add(line: local(points), color: color, strokeWidth: Float(p.strokeWidth * r))
+            }
+        }
+        let scene = builder.finish()
+        if scene.isEmpty { return .drawn(nil) }
+        if isCancelled() { throw Cancelled() }
+        guard let png = gpu.renderPng(scene, pixels: tileSize * ratio) else { return .fallback }
+        return .drawn(png)
+    }
+
+    /// The GPU rasterizer for polygon and polyline tiles; nil as for ``gpuRasterizer()``.
+    private func pathRasterizer() -> MetalPathRasterizer? {
+        if ProcessInfo.processInfo.environment["MAPCONDUCTOR_SHAPE_TILE_CPU"] == "1" { return nil }
+        return MetalPathRasterizer.shared
     }
 
     /// The GPU rasterizer for circle tiles; nil without Metal, or with

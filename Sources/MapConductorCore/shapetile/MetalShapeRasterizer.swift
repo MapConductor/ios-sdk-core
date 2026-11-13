@@ -47,11 +47,13 @@ final class MetalShapeRasterizer {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private let pipeline: MTLRenderPipelineState
-    private let queue = DispatchQueue(label: "com.mapconductor.shape.metal")
-    /// 描画先。画素の一辺ごとに 1 枚。
-    private var targets: [Int: MTLTexture] = [:]
+    /// 空いている描画先。一辺の画素ごと。タイルは並行して頼まれるので、
+    /// 描画を 1 本の列には並べず、描画先を必要なだけ持つ。
+    private var idleTargets: [Int: [MTLTexture]] = [:]
+    private let targetsLock = NSLock()
 
-    private static let shaderSource = """
+    /// ``MetalPathRasterizer`` も同じ関数を MSAA の描画先で使う（1 点の矩形や小さな丸、円）。
+    static let shaderSource = """
     #include <metal_stdlib>
     using namespace metal;
 
@@ -119,7 +121,7 @@ final class MetalShapeRasterizer {
     }
     """
 
-    /// 1 つを使い回す。パイプラインの作成は重く、描画は ``queue`` で順に流す。
+    /// 1 つを使い回す。パイプラインの作成は重い。
     static let shared: MetalShapeRasterizer? = {
         guard let device = MTLCreateSystemDefaultDevice(),
               let commandQueue = device.makeCommandQueue() else { return nil }
@@ -158,22 +160,31 @@ final class MetalShapeRasterizer {
 
     /// 一辺 `pixels` のタイルに描いて PNG にする。描けなければ nil で、呼び出し側は CPU へ落ちる。
     func renderPng(instances: [Instance], pixels: Int) -> Data? {
-        guard !instances.isEmpty, pixels > 0 else { return nil }
-        return queue.sync { draw(instances: instances, pixels: pixels) }
+        guard !instances.isEmpty, pixels > 0, let target = acquire(pixels) else { return nil }
+        defer { release(target, pixels) }
+        return draw(instances: instances, pixels: pixels, target: target)
     }
 
-    private func draw(instances: [Instance], pixels: Int) -> Data? {
-        let target: MTLTexture
-        if let existing = targets[pixels] {
-            target = existing
-        } else {
-            let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-                pixelFormat: .rgba8Unorm, width: pixels, height: pixels, mipmapped: false)
-            descriptor.usage = [.renderTarget, .shaderRead]
-            guard let fresh = device.makeTexture(descriptor: descriptor) else { return nil }
-            targets[pixels] = fresh
-            target = fresh
+    private func acquire(_ pixels: Int) -> MTLTexture? {
+        targetsLock.lock()
+        if let idle = idleTargets[pixels]?.popLast() {
+            targetsLock.unlock()
+            return idle
         }
+        targetsLock.unlock()
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm, width: pixels, height: pixels, mipmapped: false)
+        descriptor.usage = [.renderTarget, .shaderRead]
+        return device.makeTexture(descriptor: descriptor)
+    }
+
+    private func release(_ target: MTLTexture, _ pixels: Int) {
+        targetsLock.lock()
+        idleTargets[pixels, default: []].append(target)
+        targetsLock.unlock()
+    }
+
+    private func draw(instances: [Instance], pixels: Int, target: MTLTexture) -> Data? {
         guard let instanceBuffer = device.makeBuffer(
             bytes: instances,
             length: MemoryLayout<Instance>.stride * instances.count,
