@@ -74,9 +74,11 @@ public final class OverlayAddedTracker {
     /// way an exception could on Android or the web.
     public static func notify<S: OverlayAddedNotifying>(_ states: [S]) async {
         if states.isEmpty { return }
+        let listening = OverlayAddedListeners.isActive
         // Skip the hop when nobody listens (the common case with markers).
-        guard states.contains(where: { $0.hasOnAdded }) else { return }
+        guard listening || states.contains(where: { $0.hasOnAdded }) else { return }
         await MainActor.run {
+            if listening { OverlayAddedListeners.notify(states.map { $0 as AnyObject }) }
             for state in states { state.callOnAdded() }
         }
     }
@@ -84,6 +86,42 @@ public final class OverlayAddedTracker {
     /// ``admit(_:)`` then ``notify(_:)``.
     public func admitAndNotify<S: OverlayAddedNotifying>(_ states: [S]) async where S.ID == String {
         await Self.notify(admit(states))
+    }
+}
+
+/// Hears every batch of states ``OverlayAddedTracker/notify(_:)`` reports, on the
+/// main actor, before their `onAdded` calls. For the framework layer (the
+/// collections count their own states with it), not for apps.
+@_spi(MapConductorDriver)
+public enum OverlayAddedListeners {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var listeners: [UUID: @MainActor ([AnyObject]) -> Void] = [:]
+
+    static var isActive: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return !listeners.isEmpty
+    }
+
+    /// Adds `listener`; call the returned function (from any thread) to remove it.
+    public static func add(_ listener: @escaping @MainActor ([AnyObject]) -> Void) -> () -> Void {
+        let key = UUID()
+        lock.lock()
+        listeners[key] = listener
+        lock.unlock()
+        return {
+            lock.lock()
+            listeners[key] = nil
+            lock.unlock()
+        }
+    }
+
+    @MainActor
+    static func notify(_ states: [AnyObject]) {
+        lock.lock()
+        let current = Array(listeners.values)
+        lock.unlock()
+        for listener in current { listener(states) }
     }
 }
 

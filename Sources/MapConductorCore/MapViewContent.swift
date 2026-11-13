@@ -67,6 +67,8 @@ public struct MapViewContent {
     /// to provide a direct polygon sync function, ensuring those polygons are committed before
     /// marker animations start rather than through SwiftUI's deferred recomposition path.
     public var polygonSyncHandlers: [any PolygonSyncHandler] = []
+    /// The collections that asked for ``AddProgressCallbacks``; ``MapViewBase`` keeps their count.
+    var addProgressRequests: [AddProgressRequest] = []
 
     public init() {}
 
@@ -88,6 +90,7 @@ public struct MapViewContent {
         Self.append(other.rasterLayers, to: &rasterLayers)
         Self.append(other.views, to: &views)
         polygonSyncHandlers.append(contentsOf: other.polygonSyncHandlers)
+        addProgressRequests.append(contentsOf: other.addProgressRequests)
         // An explicit setting wins over an unset one, whether it enables tiling or not;
         // between two explicit settings the later one wins.
         if let tiling = other.explicitMarkerTilingOptions {
