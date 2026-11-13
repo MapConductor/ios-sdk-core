@@ -119,4 +119,22 @@ final class MarkerHitTestPickTests: XCTestCase {
         XCTAssertEqual(MarkerHitTest.pickIndex(touch: CGPoint(x: 170, y: 105), rects: [far, near], tolerance: 40), 1)
         XCTAssertNil(MarkerHitTest.pickIndex(touch: CGPoint(x: 400, y: 400), rects: [far, near], tolerance: 14))
     }
+
+    /// A projection that rounds to whole pixels (ArcGIS's 3D SceneView does): zoomed out,
+    /// 1e-4° is under a pixel, and the scale must still be measured. Without that the
+    /// search area could not be made and no marker tap was recognised.
+    func testSearchBoundsWorksWithAProjectionRoundedToWholePixels() throws {
+        let worldPx = 512.0 * pow(2.0, 9.0) // zoom 9: 728 px a degree
+        func project(_ p: GeoPointProtocol) -> CGPoint? {
+            let x = (p.longitude + 180) / 360 * worldPx
+            let s = sin(p.latitude * .pi / 180)
+            let y = (0.5 - log((1 + s) / (1 - s)) / (4 * .pi)) * worldPx
+            return CGPoint(x: x.rounded(), y: y.rounded())
+        }
+        let tap = GeoPoint(latitude: 21.31, longitude: -157.86)
+        let bounds = try XCTUnwrap(MarkerHitTest.searchBounds(position: tap, touchScreen: project(tap)!, project: project, searchRadius: 512),
+                                   "bounds were not made")
+        let halfLon = (bounds.northEast!.longitude - bounds.southWest!.longitude) / 2
+        XCTAssert(halfLon > 0.63 && halfLon < 0.77, "half width \(halfLon)") // 512 px is about 0.70°
+    }
 }
