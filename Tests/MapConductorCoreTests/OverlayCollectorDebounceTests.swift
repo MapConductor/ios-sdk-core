@@ -186,4 +186,99 @@ final class OverlayCollectorDebounceTests: XCTestCase {
         XCTAssertEqual(updates, 0)
         XCTAssertTrue(collector.values().isEmpty)
     }
+
+    // MARK: - Who belongs
+
+    /// A state that left stops reporting its writes; one that joined starts.
+    func testAStateThatLeftStopsReportingAndOneThatJoinedStarts() async {
+        let collector = OverlayCollector<TestState>()
+        var emissions: [[String]] = []
+        var updates: [String] = []
+        collector.onMembershipChange { emissions.append($0.map(\.id)) }
+        collector.onStateChange { updates.append($0.id) }
+        let (a, b, c) = (TestState(id: "a"), TestState(id: "b"), TestState(id: "c"))
+        collector.sync([a, b])
+        await waitForWindow()
+        collector.sync([b, c])
+        await waitForWindow()
+        XCTAssertEqual(emissions, [["a", "b"], ["b", "c"]])
+        a.mutate()
+        b.mutate()
+        c.mutate()
+        await waitForWindow()
+        XCTAssertEqual(Set(updates), ["b", "c"])
+        XCTAssertNil(collector.get("a"))
+        XCTAssertTrue(collector.get("c") === c)
+    }
+
+    /// Another object with an id already held is a membership change, and only
+    /// the new object reports.
+    func testANewObjectForAnIdIsAMembershipChange() async {
+        let collector = OverlayCollector<TestState>()
+        var emissions = 0
+        var updates: [ObjectIdentifier] = []
+        collector.onMembershipChange { _ in emissions += 1 }
+        collector.onStateChange { updates.append(ObjectIdentifier($0)) }
+        let a = TestState(id: "a")
+        collector.sync([a])
+        await waitForWindow()
+        let a2 = TestState(id: "a")
+        collector.sync([a2])
+        await waitForWindow()
+        XCTAssertEqual(emissions, 2)
+        a.mutate()
+        a2.mutate()
+        await waitForWindow()
+        XCTAssertEqual(updates, [ObjectIdentifier(a2)])
+    }
+
+    /// The same states in another order are not a membership change.
+    func testReorderingIsNotAMembershipChange() async {
+        let collector = OverlayCollector<TestState>()
+        var emissions = 0
+        collector.onMembershipChange { _ in emissions += 1 }
+        let states = (0..<5).map { TestState(id: "s\($0)") }
+        collector.sync(states)
+        await waitForWindow()
+        collector.sync(states.reversed())
+        await waitForWindow()
+        XCTAssertEqual(emissions, 1)
+        XCTAssertEqual(collector.values().map(\.id), ["s4", "s3", "s2", "s1", "s0"])
+    }
+
+    /// A state handed to another collector reports there, and the first one
+    /// still counts it as a member it lost.
+    func testAStateTakenByAnotherCollectorReportsThere() async {
+        let first = OverlayCollector<TestState>()
+        let second = OverlayCollector<TestState>()
+        var firstUpdates = 0, secondUpdates = 0
+        var firstEmissions = 0
+        first.onStateChange { _ in firstUpdates += 1 }
+        second.onStateChange { _ in secondUpdates += 1 }
+        first.onMembershipChange { _ in firstEmissions += 1 }
+        let a = TestState(id: "a")
+        first.sync([a])
+        second.sync([a])
+        await waitForWindow()
+        a.mutate()
+        await waitForWindow()
+        XCTAssertEqual(firstUpdates, 0)
+        XCTAssertEqual(secondUpdates, 1)
+        first.sync([a, TestState(id: "b")])
+        await waitForWindow()
+        XCTAssertEqual(firstEmissions, 2)
+    }
+
+    /// A write from another thread is delivered on the main thread.
+    func testAWriteFromAnotherThreadArrivesOnTheMainThread() async {
+        let collector = OverlayCollector<TestState>()
+        var onMain: [Bool] = []
+        collector.onStateChange { _ in onMain.append(Thread.isMainThread) }
+        let a = TestState(id: "a")
+        collector.sync([a])
+        await waitForWindow()
+        await Task.detached { a.mutate() }.value
+        await waitForWindow()
+        XCTAssertEqual(onMain, [true])
+    }
 }

@@ -28,13 +28,43 @@ import Foundation
 ///   android-sdk の `sample(updateDebounce)` と同じ。
 @MainActor
 public final class OverlayCollector<S: OverlayCollectableState> {
-    private var statesById: [String: S] = [:]
-    private var order: [String] = []
-    /// Who is currently reporting mutations. A state reports to at most one
-    /// collector, so leaving a stale listener on a dropped state would send its
-    /// writes to a collector that no longer holds it.
-    private var listening: [String: S] = [:]
+    /// One state's place in this collector: the listener its signal calls,
+    /// holding the pass of ``sync(_:)`` the state was last listed in. Telling
+    /// who joined and who left is then a read per state, not sets and
+    /// dictionaries of ids: those cost 1.4 s on the main thread for a filter
+    /// over 723,800 circles on an iPad Pro.
+    /// Read and written on the main thread only (a write from elsewhere hops there).
+    private final class Member: StateMutationListener, @unchecked Sendable {
+        // Unowned, not weak: a weak reference would give every state a side
+        // table, and its retains and releases would all take the slow path.
+        unowned let state: S
+        weak var collector: OverlayCollector<S>?
+        let owner: ObjectIdentifier?
+        var pass: UInt32
+
+        init(state: S, collector: OverlayCollector<S>, pass: UInt32) {
+            self.state = state
+            self.collector = collector
+            owner = ObjectIdentifier(collector)
+            self.pass = pass
+        }
+
+        func stateMutated() {
+            if Thread.isMainThread {
+                MainActor.assumeIsolated { collector?.memberMutated(self) }
+            } else {
+                DispatchQueue.main.async { [self] in collector?.memberMutated(self) }
+            }
+        }
+    }
+
+    /// The current pass of ``sync(_:)``; 0 is none.
+    private var pass: UInt32 = 0
+    /// How many states the current pass holds.
+    private var memberCount = 0
     private var latest: [S] = []
+    /// The latest list by id, for ``get(_:)`` and ``values()``; built when asked for.
+    private var byId: [String: S]?
 
     private var membershipHandler: (([S]) -> Void)?
     private var updateHandler: ((S) -> Void)?
@@ -90,49 +120,63 @@ public final class OverlayCollector<S: OverlayCollectableState> {
         // which made every pan run at 5 fps. The same instances in the same order
         // cannot have changed membership, and their listeners are already in place.
         if isSameList(states) { return }
-        let newIds = Set(states.map { $0.id })
-        let oldIds = Set(statesById.keys)
-        var membershipChanged = newIds != oldIds
-
-        var next: [String: S] = [:]
+        let previous = pass
+        pass = pass == .max ? 1 : pass + 1
+        var stayed = 0
+        var joined = false
+        var count = 0
         for state in states {
-            if let existing = statesById[state.id], existing !== state {
-                // Same id, new instance → stop listening to the old one and
-                // treat it as a membership change so the renderer re-adds it.
-                existing.mutations.listen(nil)
-                membershipChanged = true
+            if let member = member(of: state) {
+                if member.pass == pass { continue } // listed twice
+                if member.pass == previous { stayed += 1 } else { joined = true }
+                member.pass = pass
+            } else {
+                // A new state, or a new instance of an id (the old one leaves
+                // below): either way the renderer has to add it.
+                joined = true
+                state.mutations.listen(target: Member(state: state, collector: self, pass: pass))
             }
-            next[state.id] = state
+            count += 1
         }
-        statesById = next
-        order = states.map { $0.id }
+        // A state reports to at most one collector, so leaving a stale listener
+        // on a dropped state would send its writes to a collector that no longer
+        // holds it.
+        for state in latest {
+            if let member = member(of: state), member.pass == previous { state.mutations.listen(target: nil) }
+        }
+        let membershipChanged = joined || stayed != memberCount
+        memberCount = count
         latest = states
-
-        for id in oldIds.subtracting(newIds) {
-            listening.removeValue(forKey: id)?.mutations.listen(nil)
-        }
+        byId = nil
 
         if membershipChanged {
             scheduleMembership()
         }
+    }
 
-        for state in listening.values where next[state.id] !== state {
-            state.mutations.listen(nil)
-        }
-        listening = next
-        for state in states {
-            // The state is found again by id rather than held weakly. A weak
-            // reference gives the object a side table, and from then on every
-            // retain and release of it takes the slow path: with 100,000 polygons
-            // rebuilt into the map content on every camera frame, that was a
-            // third of a pan's main-thread time on the iPad.
-            let id = state.id
-            let identity = ObjectIdentifier(state)
-            state.mutations.listen { [weak self] in
-                guard let self, let current = self.statesById[id], ObjectIdentifier(current) == identity else { return }
-                self.scheduleUpdate(current)
-            }
-        }
+    /// The state's membership here, if it listens to this collector.
+    private func member(of state: S) -> Member? {
+        guard let target = state.mutations.target, target.owner == ObjectIdentifier(self) else { return nil }
+        return unsafeDowncast(target, to: Member.self)
+    }
+
+    /// In the latest list.
+    private func holds(_ state: S) -> Bool {
+        member(of: state)?.pass == pass
+    }
+
+    private func memberMutated(_ member: Member) {
+        guard member.pass == pass else { return }
+        scheduleUpdate(member.state)
+    }
+
+    private func statesById() -> [String: S] {
+        if let byId { return byId }
+        var map: [String: S] = [:]
+        map.reserveCapacity(latest.count)
+        for state in latest { map[state.id] = state }
+        byId = map
+        return map
     }
 
     /// The same instances in the same order. `S` is a class, so each element is
@@ -200,7 +244,7 @@ public final class OverlayCollector<S: OverlayCollectableState> {
             self.emitMembershipIfPending()
             let batch = self.pendingUpdates
             self.pendingUpdates.removeAll()
-            for (id, state) in batch where self.statesById[id] === state {
+            for state in batch.values where self.holds(state) {
                 self.updateHandler?(state)
             }
         }
@@ -216,18 +260,29 @@ public final class OverlayCollector<S: OverlayCollectableState> {
 
     /// Current states in declaration order.
     public func values() -> [S] {
-        order.compactMap { statesById[$0] }
+        let byId = statesById()
+        return latest.compactMap { byId[$0.id] }
     }
 
     public func get(_ id: String) -> S? {
-        statesById[id]
+        statesById()[id]
+    }
+
+    deinit {
+        // A listener of ours left on a state would keep this collector's
+        // identity, which a new collector could be given.
+        for state in latest {
+            if let target = state.mutations.target, target.owner == ObjectIdentifier(self) {
+                state.mutations.listen(target: nil)
+            }
+        }
     }
 
     public func clear() {
-        listening.values.forEach { $0.mutations.listen(nil) }
-        listening.removeAll()
-        statesById.removeAll()
-        order.removeAll()
+        for state in latest where holds(state) { state.mutations.listen(target: nil) }
+        pass = pass == .max ? 1 : pass + 1
+        memberCount = 0
+        byId = nil
         latest.removeAll()
         updateFlushTask?.cancel()
         updateFlushTask = nil
