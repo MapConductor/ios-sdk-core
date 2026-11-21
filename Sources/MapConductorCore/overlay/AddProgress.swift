@@ -5,20 +5,26 @@ import Foundation
 /// shows nothing until they are drawn, and these say that work is going on.
 ///
 /// "On the map" is what each state's `onAdded` means: drawn natively, or, for a
-/// state drawn in tiles, its tiles handed to the map (their images may still be
-/// loading).
+/// state drawn in tiles, its tiles handed to the map. The work does not end
+/// there for tiles, so the collection also counts as busy while its tiles are
+/// being drawn: after a filter change, and while the camera moves to where
+/// tiles are not drawn yet.
 ///
-/// - `onAddStart(total)`: a list brought states that are not on the map yet;
-///   `total` is how many.
+/// - `onAddStart(total)`: a list was handed over, or tiles have been drawn for
+///   0.2 s without one; `total` is how many states the list brought that are
+///   not on the map yet (0 when it only removed or updated states, or for
+///   tiles alone). An empty list after an empty one calls nothing.
 /// - `onAddProgress(added, total)`: how many of them are on the map so far, at
-///   most every 100 ms, and once more with `added == total` before the end.
-/// - `onAddEnd(total)`: all of them are on the map. A state taken out of the
-///   list before it got there no longer counts against the end.
+///   most every 100 ms, and once more with `added == total` before the end
+///   when `total` is not 0.
+/// - `onAddEnd(total)`: all of them are on the map and nothing has been drawn
+///   for 0.4 s. A state taken out of the list before it got there no longer
+///   counts against the end.
 ///
 /// A list that brings new states while an earlier one is still being added
 /// starts over: a new `onAddStart` with only the new states, and no `onAddEnd`
-/// for the earlier list. A list that only updates or removes states calls
-/// nothing. All three run on the main actor, never during a view update.
+/// for the earlier list. All three run on the main actor, never during a view
+/// update.
 ///
 /// A collection is told apart from the others on the same map by where it is
 /// written in the content closure, the way SwiftUI tells views apart. It
@@ -55,6 +61,10 @@ struct AddProgressRequest {
     /// the list changed. Holds the list, so its storage cannot be reused while
     /// ``identity`` is remembered.
     let entries: () -> [(id: String, state: AnyObject)]
+    /// The map's tilers for this kind, busy while they take a list or draw
+    /// tiles. Filled in by the collection when it joins the content.
+    var activity: [TileActivity] = []
+    let kind: String
 
     init<S: Identifiable & AnyObject>(
         kind: String,
@@ -65,6 +75,7 @@ struct AddProgressRequest {
         column: UInt
     ) where S.ID == String {
         site = "\(kind) \(fileID):\(line):\(column)"
+        self.kind = kind
         self.callbacks = callbacks
         identity = states.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) }
         count = states.count
@@ -84,26 +95,47 @@ final class AddProgressTracker {
     private var pending: [ObjectIdentifier: (id: String, state: AnyObject)] = [:]
     private var total = 0
     private var added = 0
-    private var started = true
+    /// Between an onAddStart and its onAddEnd.
+    private var busy = false
+    /// This stretch's onAddStart has been called (it waits for the view update to end).
+    private var announced = true
+    /// The collection's tiles are being drawn (or its tiler is taking a list).
+    private var drawing = false
+    /// Cancels what an earlier stretch scheduled (its start, its progress).
     private var generation = 0
+    private var settleToken = 0
+    private var drawStartToken = 0
     private var lastProgressAt = -TimeInterval.infinity
     private var progressScheduled = false
     private let now: () -> TimeInterval
+    private let settleDelay: TimeInterval
+    private let drawStartDelay: TimeInterval
+    private var observed: [ObjectIdentifier] = []
+    private var stopObserving: [() -> Void] = []
 
-    init(now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+    init(
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        settleDelay: TimeInterval = 0.4,
+        drawStartDelay: TimeInterval = 0.2
+    ) {
         self.now = now
+        self.settleDelay = settleDelay
+        self.drawStartDelay = drawStartDelay
     }
 
     /// The collection's list in this content pass. Calls nothing itself (this
-    /// runs during a view update); the start and an end it causes come right after.
+    /// runs during a view update); the start it causes comes right after.
     func sync(_ request: AddProgressRequest) {
         callbacks = request.callbacks
+        observe(request.activity)
         if let last, last.identity == request.identity, last.count == request.count { return }
         last = request
         let entries = request.entries()
         let nextIds = Set(entries.map(\.id))
+        let hadStates = !ids.isEmpty
         let fresh = entries.filter { !ids.contains($0.id) }
         ids = nextIds
+        if entries.isEmpty && !hadStates { return }
         if !pending.isEmpty {
             let before = pending.count
             pending = pending.filter { nextIds.contains($0.value.id) }
@@ -117,17 +149,20 @@ final class AddProgressTracker {
                     rekeyed[ObjectIdentifier(entry.state)] = entry
                 }
                 pending = rekeyed
-                if pending.isEmpty { later { $0.finishIfDone() } }
             }
         }
-        guard !fresh.isEmpty else { return }
-        generation += 1
-        pending = Dictionary(fresh.map { (ObjectIdentifier($0.state), $0) }, uniquingKeysWith: { a, _ in a })
-        total = pending.count
-        added = 0
-        started = false
-        lastProgressAt = -.infinity
-        later { $0.announceStart() }
+        if !fresh.isEmpty {
+            pending = Dictionary(fresh.map { (ObjectIdentifier($0.state), $0) }, uniquingKeysWith: { a, _ in a })
+            total = pending.count
+            added = 0
+            lastProgressAt = -.infinity
+            begin()
+        } else if !busy {
+            total = 0
+            added = 0
+            begin()
+        }
+        scheduleSettle()
     }
 
     /// States reached the map (any collection's, any map's: only ours count).
@@ -140,12 +175,45 @@ final class AddProgressTracker {
         }
         guard hit else { return }
         announceStart()
-        if pending.isEmpty { finishIfDone() } else { reportProgress() }
+        if pending.isEmpty { scheduleSettle() } else { reportProgress() }
+    }
+
+    /// Whether the collection's tiles are being drawn now.
+    func drawingChanged(_ drawing: Bool) {
+        if drawing == self.drawing { return }
+        self.drawing = drawing
+        if drawing {
+            settleToken += 1
+            if !busy {
+                drawStartToken += 1
+                let token = drawStartToken
+                DispatchQueue.main.asyncAfter(deadline: .now() + drawStartDelay) { [weak self] in
+                    guard let self, self.drawStartToken == token, self.drawing, !self.busy else { return }
+                    self.total = 0
+                    self.added = 0
+                    self.begin()
+                }
+            }
+        } else {
+            drawStartToken += 1
+            scheduleSettle()
+        }
     }
 
     func dispose() {
         generation += 1
+        settleToken += 1
+        drawStartToken += 1
         pending = [:]
+        observe([])
+    }
+
+    private func begin() {
+        generation += 1
+        busy = true
+        announced = false
+        drawStartToken += 1
+        later { $0.announceStart() }
     }
 
     private func later(_ body: @escaping @MainActor (AddProgressTracker) -> Void) {
@@ -157,17 +225,32 @@ final class AddProgressTracker {
     }
 
     private func announceStart() {
-        if started { return }
-        started = true
+        if announced { return }
+        announced = true
         callbacks.onAddStart?(total)
     }
 
-    private func finishIfDone() {
-        guard pending.isEmpty else { return }
+    /// Every reason to be busy that ends schedules this anew, so it runs once
+    /// nothing has come, been handed over or drawn for the whole delay.
+    private func scheduleSettle() {
+        guard busy else { return }
+        settleToken += 1
+        let token = settleToken
+        DispatchQueue.main.asyncAfter(deadline: .now() + settleDelay) { [weak self] in
+            guard let self, self.settleToken == token else { return }
+            self.finishIfIdle()
+        }
+    }
+
+    private func finishIfIdle() {
+        guard busy, !drawing, pending.isEmpty else { return }
         announceStart()
-        let total = self.total
+        busy = false
         generation += 1
-        callbacks.onAddProgress?(total, total)
+        let total = self.total
+        self.total = 0
+        added = 0
+        if total > 0 { callbacks.onAddProgress?(total, total) }
         callbacks.onAddEnd?(total)
     }
 
@@ -192,6 +275,29 @@ final class AddProgressTracker {
         if pending.isEmpty { return }
         lastProgressAt = now()
         callbacks.onAddProgress?(added, total)
+    }
+
+    /// Follows `activity` (the same tilers are a no-op), off the view update.
+    private func observe(_ activity: [TileActivity]) {
+        let identifiers = activity.map(ObjectIdentifier.init)
+        if identifiers == observed { return }
+        observed = identifiers
+        for stop in stopObserving { stop() }
+        stopObserving = activity.map { tiler in
+            tiler.observe { [weak self] _ in
+                DispatchQueue.main.async { self?.activityChanged(activity) }
+            }
+        }
+        if activity.isEmpty {
+            drawingChanged(false)
+        } else {
+            DispatchQueue.main.async { [weak self] in self?.activityChanged(activity) }
+        }
+    }
+
+    private func activityChanged(_ activity: [TileActivity]) {
+        guard activity.map(ObjectIdentifier.init) == observed else { return }
+        drawingChanged(activity.contains { $0.active })
     }
 }
 

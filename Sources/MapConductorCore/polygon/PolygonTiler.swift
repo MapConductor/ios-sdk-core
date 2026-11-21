@@ -39,6 +39,9 @@ public final class PolygonTiler {
     public let options: PolygonTilingOptions
 
     let tileSet: PolygonTileSet
+
+    /// Busy while this tiler takes a list or its tiles are drawn.
+    var activity: TileActivity { tileSet.renderer.activity }
     private let core: ShapeTiler<PolygonState>
 
     public init(options: PolygonTilingOptions = .Default) {

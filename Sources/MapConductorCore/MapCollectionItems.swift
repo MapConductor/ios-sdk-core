@@ -63,7 +63,12 @@ public struct Circles: MapOverlayItemProtocol {
     public func append(to content: inout MapViewContent) {
         let items = states.map { Circle(state: $0) }
         if content.circles.isEmpty { content.circles = items } else { content.circles.append(contentsOf: items) }
-        if let progress { content.addProgressRequests.append(progress) }
+        if var progress {
+            // The content is assembled on the main actor, inside the provider's registry scope.
+            let kind = progress.kind
+            progress.activity = MainActor.assumeIsolated { overlayTileActivity(MapServiceRegistryScope.current, kind: kind) }
+            content.addProgressRequests.append(progress)
+        }
     }
 }
 
@@ -115,7 +120,12 @@ public struct Polylines: MapOverlayItemProtocol {
     public func append(to content: inout MapViewContent) {
         let items = states.map { Polyline(state: $0) }
         if content.polylines.isEmpty { content.polylines = items } else { content.polylines.append(contentsOf: items) }
-        if let progress { content.addProgressRequests.append(progress) }
+        if var progress {
+            // The content is assembled on the main actor, inside the provider's registry scope.
+            let kind = progress.kind
+            progress.activity = MainActor.assumeIsolated { overlayTileActivity(MapServiceRegistryScope.current, kind: kind) }
+            content.addProgressRequests.append(progress)
+        }
     }
 }
 
@@ -167,7 +177,12 @@ public struct Polygons: MapOverlayItemProtocol {
     public func append(to content: inout MapViewContent) {
         let items = states.map { Polygon(state: $0) }
         if content.polygons.isEmpty { content.polygons = items } else { content.polygons.append(contentsOf: items) }
-        if let progress { content.addProgressRequests.append(progress) }
+        if var progress {
+            // The content is assembled on the main actor, inside the provider's registry scope.
+            let kind = progress.kind
+            progress.activity = MainActor.assumeIsolated { overlayTileActivity(MapServiceRegistryScope.current, kind: kind) }
+            content.addProgressRequests.append(progress)
+        }
     }
 }
 

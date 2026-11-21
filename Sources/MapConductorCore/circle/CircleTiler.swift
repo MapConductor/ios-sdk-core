@@ -55,6 +55,9 @@ public final class CircleTiler {
     }
 
     let tileSet: CircleTileSet
+
+    /// Busy while this tiler takes a list or its tiles are drawn.
+    var activity: TileActivity { tileSet.renderer.activity }
     private let core: ShapeTiler<CircleState>
 
     public init(options: CircleTilingOptions = .Default) {
