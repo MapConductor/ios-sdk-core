@@ -294,6 +294,28 @@ final class AddProgressTests: XCTestCase {
         XCTAssertEqual(Array(calls.suffix(2)), ["progress 120/120", "end 120"])
     }
 
+    /// A carrier that comes back brings its cells all over the list. Each of them
+    /// scanned to the end of the last list: 3 to 10 s over 723,800 circles.
+    func testNewStatesSpreadThroughALongListAreCountedQuickly() {
+        let tracker = tracker()
+        let states = (0..<60_000).map { circle("s\($0)") }
+        let kept = states.indices.filter { $0 % 3 != 0 }.map { states[$0] }
+        tracker.sync(request(kept))
+        drain()
+        tracker.arrived(kept)
+        settleDown()
+        calls.removeAll()
+        let start = Date()
+        tracker.sync(request(states))
+        let elapsed = Date().timeIntervalSince(start)
+        drain()
+        XCTAssertEqual(calls, ["start 20000"])
+        XCTAssertLessThan(elapsed, 1.0)
+        tracker.arrived(states)
+        settleDown()
+        XCTAssertEqual(Array(calls.suffix(2)), ["progress 20000/20000", "end 20000"])
+    }
+
     func testTheSameStatesInAnotherOrderAreNotNew() {
         let tracker = tracker()
         let states = (0..<300).map { circle("s\($0)") }
