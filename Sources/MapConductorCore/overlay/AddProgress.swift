@@ -193,7 +193,13 @@ final class AddProgressTracker {
     /// side, and nothing is hashed for the states that line up: a filter over
     /// 723,800 circles built two sets of ids for 0.5 to 0.8 s on the main thread.
     ///
-    /// The walk can take an object that is further on in `previous` for a new
+    /// Past the 64 states ahead, the walk scans on to the end of `previous`, until
+    /// it has scanned as many states as `previous` has; then it looks objects up
+    /// in an index of `previous` instead. New states spread through the list (a
+    /// carrier that comes back, its cells all over the list) each scanned to the
+    /// end, and held the main thread for 3 to 10 s over 723,800 circles.
+    ///
+    /// The scan can take an object that is further on in `previous` for a new
     /// one; that object then shows as removed too, with the same id, and the id
     /// comparison below sorts it out. Only the speed depends on the walk.
     private static func compare(_ next: AddProgressList, _ previous: AddProgressList) -> (
@@ -206,6 +212,8 @@ final class AddProgressTracker {
         // Where a scan to the end last found nothing: objects missing there are
         // taken as new without scanning again (a run of new states).
         var exhaustedAt = -1
+        var scanned = 0
+        var index: [ObjectIdentifier: Int]?
         for (i, object) in next.objects.enumerated() {
             var k = cursor
             let near = min(old.count, cursor + 64)
@@ -216,15 +224,25 @@ final class AddProgressTracker {
                     added.append(i)
                     continue
                 }
-                while k < old.count, old[k] !== object { k += 1 }
+                if index == nil, scanned < old.count {
+                    let start = k
+                    while k < old.count, old[k] !== object { k += 1 }
+                    scanned += k - start
+                    if k == old.count { exhaustedAt = cursor }
+                } else {
+                    if index == nil {
+                        index = Dictionary(old.indices.map { (ObjectIdentifier(old[$0]), $0) }, uniquingKeysWith: { a, _ in a })
+                    }
+                    k = index?[ObjectIdentifier(object)] ?? old.count
+                    if k < old.count, matched[k] { k = old.count }
+                }
                 if k == old.count {
-                    exhaustedAt = cursor
                     added.append(i)
                     continue
                 }
             }
             matched[k] = true
-            cursor = k + 1
+            cursor = max(cursor, k + 1)
         }
         var removed: Set<ObjectIdentifier> = []
         var removedIds: Set<String> = []
