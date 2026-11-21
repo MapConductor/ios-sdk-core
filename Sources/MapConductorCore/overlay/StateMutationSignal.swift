@@ -18,7 +18,9 @@ import Foundation
 /// there from the opposite direction — one observer reading every state, rather
 /// than one subscription per state.
 public final class StateMutationSignal {
-    private var listener: (() -> Void)?
+    /// An object rather than a closure: ``OverlayCollector`` keeps what it
+    /// knows of the state on it, and finds it again on the next sync.
+    private(set) var target: StateMutationListener?
 
     public init() {}
 
@@ -27,11 +29,30 @@ public final class StateMutationSignal {
     /// A state belongs to at most one collector, so there is one listener
     /// rather than a list.
     public func listen(_ listener: (() -> Void)?) {
-        self.listener = listener
+        target = listener.map(ClosureListener.init)
+    }
+
+    func listen(target: StateMutationListener?) {
+        self.target = target
     }
 
     /// Reports a write.
     public func notifyMutated() {
-        listener?()
+        target?.stateMutated()
     }
+}
+
+/// Hears the writes to one state (``StateMutationSignal``).
+protocol StateMutationListener: AnyObject {
+    /// The collector this listener belongs to, so that it can find its own
+    /// listeners without a cast; nil for a plain closure.
+    var owner: ObjectIdentifier? { get }
+    func stateMutated()
+}
+
+private final class ClosureListener: StateMutationListener {
+    private let body: () -> Void
+    init(_ body: @escaping () -> Void) { self.body = body }
+    var owner: ObjectIdentifier? { nil }
+    func stateMutated() { body() }
 }

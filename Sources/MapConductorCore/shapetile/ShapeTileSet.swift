@@ -12,7 +12,7 @@ import UIKit
  renumbering the rest, and the teardown. What a state looks like in a tile is
  the caller's: it passes the conversion to ``ShapeTileRenderer/Shape``.
  */
-final class ShapeTileSet<State> {
+final class ShapeTileSet<State: AnyObject> {
     /// In-place changes arriving within this window become one new template.
     static var updateCoalesceMs: Int { 16 }
 
@@ -33,14 +33,33 @@ final class ShapeTileSet<State> {
     private let fileBackedCircles: Bool
     /// Where a state is, for storing a large set by place (see ``CircleGeometryFile``).
     private let spatialKeyOf: ((State) -> Int)?
+    /// A state's revision (it moves on every write to the state), for telling
+    /// an unchanged state by identity without reading its properties. Only
+    /// circles give one.
+    private let revisionOf: ((State) -> UInt64)?
     private let lock = NSLock()
     private var indexById: [String: Int] = [:]
+    /// The state registered in each slot; nil once it was removed. A slot left
+    /// out by ``reuse(_:sortedZ:slots:registration:)`` keeps its state, so that
+    /// the state can be matched to it again: ``sourceActive`` says which are drawn.
     private var sourceStates: [State?] = []
+    /// Which slots are drawn; empty when all are.
+    private var sourceActive: [Bool] = []
     private var sourceZ: [Int] = []
+    /// Each slot's state's revision when it was registered, or
+    /// ``unknownRevision`` once the slot was changed or removed. Empty without
+    /// ``revisionOf``.
+    private var sourceRevisions: [UInt64] = []
+    private static var unknownRevision: UInt64 { .max }
+
+    /// Called with ``lock`` held.
+    private func isDrawnLocked(_ slot: Int) -> Bool {
+        sourceActive.isEmpty || sourceActive[slot]
+    }
 
     func source(_ id: String) -> State? {
         lock.lock(); defer { lock.unlock() }
-        guard let index = indexById[id] else { return nil }
+        guard let index = indexById[id], isDrawnLocked(index) else { return nil }
         return sourceStates[index]
     }
 
@@ -53,7 +72,7 @@ final class ShapeTileSet<State> {
         defer { lock.unlock() }
         var states: [State] = []
         var seen = Set<String>()
-        for slot in slots where Int(slot) < sourceStates.count {
+        for slot in slots where Int(slot) < sourceStates.count && isDrawnLocked(Int(slot)) {
             guard let state = sourceStates[Int(slot)] else { continue }
             if seen.insert(idOf(state)).inserted { states.append(state) }
         }
@@ -64,8 +83,10 @@ final class ShapeTileSet<State> {
     }
 
     func visitSources(_ action: (State) -> Void) {
-        lock.lock(); let sources = sourceStates; lock.unlock()
-        for state in sources { if let state { action(state) } }
+        lock.lock(); let sources = sourceStates; let active = sourceActive; lock.unlock()
+        for (slot, state) in sources.enumerated() where active.isEmpty || active[slot] {
+            if let state { action(state) }
+        }
     }
     private var version = 0
     private var registration = 0
@@ -81,6 +102,7 @@ final class ShapeTileSet<State> {
         zIndex: @escaping (State) -> Int,
         fileBackedCircles: Bool = false,
         spatialKey: ((State) -> Int)? = nil,
+        revision: ((State) -> UInt64)? = nil,
         shape: @escaping (State) -> ShapeTileRenderer.Shape?
     ) {
         routeId = "\(routePrefix)-\(UUID().uuidString.prefix(8).lowercased())"
@@ -90,6 +112,7 @@ final class ShapeTileSet<State> {
         shapeOf = shape
         self.fileBackedCircles = fileBackedCircles
         spatialKeyOf = spatialKey
+        revisionOf = revision
     }
 
     deinit {
@@ -99,22 +122,33 @@ final class ShapeTileSet<State> {
     /// Registers `states` (replacing whatever was registered) and returns the URL
     /// template of their tiles. The states are read and projected off the
     /// calling thread.
-    func setStates(_ states: [State]) async -> String? {
+    ///
+    /// `slots` (from ``registeredSlots(_:)``, one per state) lets the states
+    /// already registered and unchanged skip being read again.
+    func setStates(_ states: [State], slots: [Int32]? = nil) async -> String? {
         cancelPending()
         let registration = nextRegistration()
         let renderer = self.renderer
         let idOf = self.idOf, zIndexOf = self.zIndexOf, shapeOf = self.shapeOf
         let fileBackedCircles = self.fileBackedCircles
         let spatialKeyOf = self.spatialKeyOf
+        let revisionOf = self.revisionOf
         let work = Task.detached(priority: .userInitiated) { () -> Bool in
+            // A filter over the registered states: all of them unchanged and in
+            // the registered order, which is already the draw order.
+            if fileBackedCircles, let slots, self.reuse(states, slots: slots, registration: registration) { return true }
             // Draw order is list order: zIndex, then the order given. Each zIndex
             // is read once: a state's properties are not free to read, and a
             // sort reads them n log n times.
-            let zIndex = states.map(zIndexOf)
-            let order = states.indices.sorted { zIndex[$0] != zIndex[$1] ? zIndex[$0] < zIndex[$1] : $0 < $1 }
-            let ordered = order.map { states[$0] }
-            let sortedZ = fileBackedCircles ? order.map { zIndex[$0] } : []
-            if fileBackedCircles, self.reuse(ordered, sortedZ: sortedZ, registration: registration) { return true }
+            let zIndex = self.zIndices(states, slots: slots, zIndexOf: zIndexOf)
+            // Usually already in order (the app keeps its own), and then the
+            // sort is not needed.
+            let inOrder = zIndex.indices.dropFirst().allSatisfy { zIndex[$0 - 1] <= zIndex[$0] }
+            let order = inOrder ? Array(states.indices) : states.indices.sorted { zIndex[$0] != zIndex[$1] ? zIndex[$0] < zIndex[$1] : $0 < $1 }
+            let ordered = inOrder ? states : order.map { states[$0] }
+            let sortedZ = fileBackedCircles ? (inOrder ? zIndex : order.map { zIndex[$0] }) : []
+            let orderedSlots = slots.map { slots in inOrder ? slots : order.map { slots[$0] } }
+            if fileBackedCircles, self.reuse(ordered, sortedZ: sortedZ, slots: orderedSlots, registration: registration) { return true }
             var indexById: [String: Int] = [:]
             indexById.reserveCapacity(ordered.count)
             for (i, state) in ordered.enumerated() {
@@ -137,7 +171,7 @@ final class ShapeTileSet<State> {
             let install = renderer.prepareStorage(storage)
             return self.publish(
                 registration: registration, indexById: indexById, sources: ordered.map { Optional($0) },
-                sortedZ: sortedZ, install: install
+                sortedZ: sortedZ, revisions: revisionOf.map { ordered.map($0) } ?? [], install: install
             )
         }
         let published = await withTaskCancellationHandler(operation: { await work.value }, onCancel: { work.cancel() })
@@ -152,7 +186,8 @@ final class ShapeTileSet<State> {
     }
 
     private func publish(
-        registration: Int, indexById: [String: Int], sources: [State?], sortedZ: [Int], install: () -> Void
+        registration: Int, indexById: [String: Int], sources: [State?], sortedZ: [Int], revisions: [UInt64],
+        install: () -> Void
     ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -162,13 +197,78 @@ final class ShapeTileSet<State> {
         server.register(routeId: routeId, provider: renderer)
         self.indexById = indexById
         self.sourceStates = sources
+        self.sourceActive = []
         self.sourceZ = sortedZ
+        self.sourceRevisions = revisions
         registered = true
         version += 1
         return true
     }
 
-    private func reuse(_ ordered: [State], sortedZ: [Int], registration: Int) -> Bool {
+    /// For each of `states`, the slot it is registered in when it is the very
+    /// object registered there and has not been written to since, or -1. Nil
+    /// when there is nothing to match against. Reads no state's properties: a
+    /// filter over hundreds of thousands of circles spent seconds reading them
+    /// to find that nothing had changed.
+    func registeredSlots(_ states: [State]) -> [Int32]? {
+        guard let revisionOf else { return nil }
+        lock.lock()
+        defer { lock.unlock() }
+        guard registered, sourceStates.count > 2_000, sourceRevisions.count == sourceStates.count else { return nil }
+        let count = sourceStates.count
+        var slots = [Int32](repeating: -1, count: states.count)
+        // The list usually keeps the registered order, so the slot is found a
+        // little after the last one; past that, by id.
+        var next = 0
+        for (i, state) in states.enumerated() {
+            var slot = -1
+            var k = next
+            let end = min(count, next + 64)
+            while k < end {
+                if sourceStates[k] === state { slot = k; break }
+                k += 1
+            }
+            if slot < 0, let byId = indexById[idOf(state)], sourceStates[byId] === state { slot = byId }
+            guard slot >= 0 else { continue }
+            next = slot + 1
+            if sourceRevisions[slot] == revisionOf(state) { slots[i] = Int32(slot) }
+        }
+        return slots
+    }
+
+    /// Each state's zIndex, from its slot when it is registered and unchanged.
+    private func zIndices(_ states: [State], slots: [Int32]?, zIndexOf: (State) -> Int) -> [Int] {
+        guard let slots else { return states.map(zIndexOf) }
+        lock.lock()
+        let z = sourceZ
+        lock.unlock()
+        return states.indices.map { i in
+            let slot = Int(slots[i])
+            return slot >= 0 && slot < z.count ? z[slot] : zIndexOf(states[i])
+        }
+    }
+
+    /// Shows `states` (all registered and unchanged, `slots` from
+    /// ``registeredSlots(_:)``) by switching slots on and off, when they are in
+    /// the registered order.
+    private func reuse(_ states: [State], slots: [Int32], registration: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard registered, sourceStates.count > 2_000, self.registration == registration, !Task.isCancelled else { return false }
+        var previous: Int32 = -1
+        for slot in slots {
+            guard slot > previous else { return false }
+            previous = slot
+        }
+        var active = [Bool](repeating: false, count: sourceStates.count)
+        for slot in slots { active[Int(slot)] = true }
+        guard renderer.reuseCircleSlots(active: active) else { return false }
+        sourceActive = active
+        version += 1
+        return true
+    }
+
+    private func reuse(_ ordered: [State], sortedZ: [Int], slots knownSlots: [Int32]?, registration: Int) -> Bool {
         guard let circles = ordered as? [CircleState] else { return false }
         lock.lock()
         defer { lock.unlock() }
@@ -176,15 +276,28 @@ final class ShapeTileSet<State> {
         var active = [Bool](repeating: false, count: sourceStates.count)
         var slots: [Int] = []
         slots.reserveCapacity(ordered.count)
+        // Slots whose circle is known unchanged need no comparing with the file.
+        var unchanged = [Bool](repeating: false, count: ordered.count)
         for (i, state) in ordered.enumerated() {
-            guard let slot = indexById[idOf(state)], slot > (slots.last ?? -1),
-                  sortedZ[i] == sourceZ[slot] else { return false }
+            let known = knownSlots.map { Int($0[i]) } ?? -1
+            let slot: Int
+            if known >= 0 {
+                slot = known
+                unchanged[i] = true
+            } else {
+                guard let byId = indexById[idOf(state)] else { return false }
+                slot = byId
+            }
+            guard slot > (slots.last ?? -1), sortedZ[i] == sourceZ[slot] else { return false }
             slots.append(slot)
             active[slot] = true
         }
-        guard renderer.reuseCircles(circles, slots: slots, active: active) else { return false }
-        for i in sourceStates.indices where !active[i] { sourceStates[i] = nil }
-        for (state, slot) in zip(ordered, slots) { sourceStates[slot] = state }
+        guard renderer.reuseCircles(circles, slots: slots, active: active, unchanged: unchanged) else { return false }
+        for (i, (state, slot)) in zip(ordered, slots).enumerated() where !unchanged[i] {
+            sourceStates[slot] = state
+            if !sourceRevisions.isEmpty { sourceRevisions[slot] = revisionOf?(state) ?? Self.unknownRevision }
+        }
+        sourceActive = active
         version += 1
         return true
     }
@@ -192,7 +305,7 @@ final class ShapeTileSet<State> {
     func has(_ id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return indexById[id].map { sourceStates[$0] != nil } ?? false
+        return indexById[id].map { sourceStates[$0] != nil && isDrawnLocked($0) } ?? false
     }
 
     /// One state changed in place. A change of zIndex reorders the list and
@@ -205,7 +318,9 @@ final class ShapeTileSet<State> {
             return
         }
         pending[id] = state
-        sourceStates[indexById[id]!] = state
+        let slot = indexById[id]!
+        sourceStates[slot] = state
+        if !sourceRevisions.isEmpty { sourceRevisions[slot] = Self.unknownRevision }
         scheduleFlushLocked()
     }
 
@@ -220,6 +335,7 @@ final class ShapeTileSet<State> {
         }
         pending[id] = nil
         sourceStates[index] = nil
+        if !sourceRevisions.isEmpty { sourceRevisions[index] = Self.unknownRevision }
         pendingRemovals.append(index)
         scheduleFlushLocked()
     }
@@ -254,7 +370,9 @@ final class ShapeTileSet<State> {
         registered = false
         indexById.removeAll()
         sourceStates.removeAll()
+        sourceActive.removeAll()
         sourceZ.removeAll()
+        sourceRevisions.removeAll()
         lock.unlock()
         if wasRegistered { TileServerRegistry.get().unregister(routeId: routeId) }
         renderer.clear()

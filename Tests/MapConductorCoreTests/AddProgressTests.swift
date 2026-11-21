@@ -257,4 +257,69 @@ final class AddProgressTests: XCTestCase {
         Circles([circle("a")], onAddEnd: { _ in }).append(to: &content)
         XCTAssertEqual(content.addProgressRequests.count, 1)
     }
+
+    // MARK: - Comparing lists
+
+    func testAFilterThatDropsALongRunStartsAndEndsWithZeroAndTheRunComesBackAsNew() {
+        let tracker = tracker()
+        let states = (0..<300).map { circle("s\($0)") }
+        tracker.sync(request(states))
+        drain()
+        tracker.arrived(states)
+        settleDown()
+        calls.removeAll()
+        tracker.sync(request(Array(states[..<50]) + Array(states[250...])))
+        settleDown()
+        XCTAssertEqual(calls, ["start 0", "end 0"])
+        calls.removeAll()
+        tracker.sync(request(states))
+        drain()
+        XCTAssertEqual(calls, ["start 200"])
+    }
+
+    func testARunOfNewStatesInTheMiddleIsCounted() {
+        let tracker = tracker()
+        let states = (0..<300).map { circle("s\($0)") }
+        tracker.sync(request(states))
+        drain()
+        tracker.arrived(states)
+        settleDown()
+        calls.removeAll()
+        let inserted = (0..<120).map { circle("n\($0)") }
+        tracker.sync(request(Array(states[..<100]) + inserted + Array(states[100...])))
+        drain()
+        XCTAssertEqual(calls, ["start 120"])
+        tracker.arrived(inserted)
+        settleDown()
+        XCTAssertEqual(Array(calls.suffix(2)), ["progress 120/120", "end 120"])
+    }
+
+    func testTheSameStatesInAnotherOrderAreNotNew() {
+        let tracker = tracker()
+        let states = (0..<300).map { circle("s\($0)") }
+        tracker.sync(request(states))
+        drain()
+        tracker.arrived(states)
+        settleDown()
+        calls.removeAll()
+        tracker.sync(request(states.reversed()))
+        settleDown()
+        XCTAssertEqual(calls, ["start 0", "end 0"])
+    }
+
+    /// The settle timer comes late when the main thread was held (by the
+    /// hand-over itself, typically); it then waits once more instead of ending
+    /// before the work the hand-over queued has shown up.
+    func testALateSettleTimerWaitsOnceMore() {
+        let tracker = tracker()
+        let a = circle("a")
+        tracker.sync(request([a]))
+        drain()
+        tracker.arrived([a])
+        Thread.sleep(forTimeInterval: settle + 0.2)
+        drain()
+        XCTAssertEqual(calls, ["start 1"], "late: waits once more")
+        settleDown()
+        XCTAssertEqual(calls, ["start 1", "progress 1/1", "end 1"])
+    }
 }

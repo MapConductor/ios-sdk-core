@@ -83,3 +83,21 @@ func overlayTileActivity(_ registry: MapServiceRegistry, kind: String) -> [TileA
         return provider.tileActivity
     }
 }
+
+/// Keeps a ``TileActivity`` busy from a controller's `add` until its tiler has
+/// handed the map the new tiles (``release()``), or until the hold goes away.
+final class TileActivityHold {
+    private var activity: TileActivity?
+
+    init(_ activity: TileActivity?) {
+        activity?.begin()
+        self.activity = activity
+    }
+
+    func release() {
+        activity?.end()
+        activity = nil
+    }
+
+    deinit { release() }
+}

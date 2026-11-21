@@ -55,6 +55,12 @@ where Renderer.ActualPolyline == ActualPolyline {
 
     open func add(data: [PolylineState]) async {
         if polylineManager.isDestroyed { return }
+        // Busy from here, not only while the tiler routes: the list waits for
+        // the controller and its bookkeeping, and the collection's onAddEnd
+        // must not come in that gap. Once the map has the tiles, drawing them
+        // is what keeps the tiler busy.
+        let hold = TileActivityHold(tiler?.activity)
+        defer { hold.release() }
         let landed: [PolylineState] = await semaphore.withPermit {
             if polylineManager.isDestroyed { return [] }
             // The app's list: anything it no longer has can be added again later.
@@ -64,6 +70,7 @@ where Renderer.ActualPolyline == ActualPolyline {
             // `route` returns once the tile layer's URL template has been handed
             // to the map (the provider's `onTemplate` awaits its raster upsert).
             let tiled = await tiler?.route(data) ?? []
+            hold.release()
             if polylineManager.isDestroyed { return [] }
             tiledIds = tiled
             if !tiled.isEmpty, let tiler {

@@ -10,7 +10,7 @@ import Foundation
  ``refreshIfServerMoved()`` is called from the map's content update on the main
  thread) is read and written under ``lock``.
  */
-final class ShapeTiler<State> {
+final class ShapeTiler<State: AnyObject> {
     var onTemplate: ((String?, Int) async -> Void)?
 
     let tileSet: ShapeTileSet<State>
@@ -50,24 +50,32 @@ final class ShapeTiler<State> {
         let activity = tileSet.renderer.activity
         activity.begin()
         defer { activity.end() }
+        // A state registered and unchanged since could be tiled then and still can.
+        let registered = tileSet.registeredSlots(data)
         var tileable: [State] = []
         tileable.reserveCapacity(data.count)
+        var slots: [Int32] = []
+        if registered != nil { slots.reserveCapacity(data.count) }
         var vertices = 0
-        for state in data where canTile(state) {
+        for (i, state) in data.enumerated() {
+            let slot = registered?[i] ?? -1
+            guard slot >= 0 || canTile(state) else { continue }
             tileable.append(state)
+            if registered != nil { slots.append(slot) }
             vertices += vertexCountOf(state)
         }
         let useTiles = shouldUseTiles(tileable.count, vertices)
-        let template = useTiles ? await tileSet.setStates(tileable) : nil
+        let template = useTiles ? await tileSet.setStates(tileable, slots: registered == nil ? nil : slots) : nil
         if let template {
-            let ids = Set(tileable.map(idOf))
             let baseUrl = TileServerRegistry.get().baseUrl
             withLock {
-                tiled = ids
                 states = tileable
                 shownBaseUrl = baseUrl
             }
+            // The map starts asking for tiles here; the ids are only bookkeeping.
             await onTemplate?(template, tileSet.tileSize)
+            let ids = Set(tileable.map(idOf))
+            withLock { tiled = ids }
             return ids
         }
         await clear()

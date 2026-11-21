@@ -18,6 +18,9 @@ struct ShapeTileStorage {
 
     var count: Int { file?.count ?? memory.count }
 
+    /// Circles kept in a ``CircleGeometryFile``: the storage ``ShapeTileRenderer/reuseCircles(_:slots:active:unchanged:)`` reuses.
+    var isFileBacked: Bool { file != nil }
+
     /// Stored position -> index, when the file is stored by place (see
     /// ``CircleGeometryFile``). A pass over every shape walks this order.
     var storageOrder: [Int32]? { file?.indexAt }

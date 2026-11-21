@@ -336,10 +336,27 @@ final class ShapeTileRenderer: TileProvider {
         }
     }
 
-    func reuseCircles(_ states: [CircleState], slots: [Int], active: [Bool]) -> Bool {
+    /// `unchanged[i]` says the circle in `slots[i]` is known to be `states[i]`
+    /// as it was registered, so it is not compared with the file.
+    func reuseCircles(_ states: [CircleState], slots: [Int], active: [Bool], unchanged: [Bool]) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        for (state, slot) in zip(states, slots) where !data.shapes.matches(state, at: slot) { return false }
+        for (i, (state, slot)) in zip(states, slots).enumerated() where !unchanged[i] && !data.shapes.matches(state, at: slot) {
+            return false
+        }
+        guard data.shapes.isFileBacked else { return false }
+        data.shapes.active = active
+        data.generation += 1
+        dropAllTilesLocked()
+        return true
+    }
+
+    /// Draws only the circles of `active`, each still the one registered in its
+    /// slot (the caller knows them unchanged).
+    func reuseCircleSlots(active: [Bool]) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard data.shapes.isFileBacked, data.shapes.count == active.count else { return false }
         data.shapes.active = active
         data.generation += 1
         dropAllTilesLocked()
