@@ -41,6 +41,9 @@ import UIKit
  because the URL's version changed, gets every other tile from the cache.
  */
 final class ShapeTileRenderer: TileProvider {
+    /// Busy while a tile is drawn; the owning tiler adds its own work.
+    let activity = TileActivity()
+
     /// Cells of the shape index, in Web Mercator units: one z12 tile.
     static let cellSize = 1.0 / 4096.0
     /// Simplified copies kept, most recent zooms first.
@@ -389,6 +392,8 @@ final class ShapeTileRenderer: TileProvider {
     }
 
     func renderTile(request: TileRequest, isCancelled: () -> Bool) throws -> Foundation.Data? {
+        activity.begin()
+        defer { activity.end() }
         let z = request.z
         let worldTiles = 1 << z
         guard z >= 0, z < 31, request.y >= 0, request.y < worldTiles else { return nil }

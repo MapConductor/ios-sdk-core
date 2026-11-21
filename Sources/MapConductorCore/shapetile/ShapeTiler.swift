@@ -47,6 +47,9 @@ final class ShapeTiler<State> {
     /// Re-decides tiling for `data` with `shouldUseTiles(count, vertices)` and
     /// returns the ids drawn as tiles.
     func route(_ data: [State], shouldUseTiles: (Int, Int) -> Bool) async -> Set<String> {
+        let activity = tileSet.renderer.activity
+        activity.begin()
+        defer { activity.end() }
         var tileable: [State] = []
         tileable.reserveCapacity(data.count)
         var vertices = 0

@@ -53,6 +53,9 @@ public final class PolylineTiler {
     }
 
     let tileSet: PolylineTileSet
+
+    /// Busy while this tiler takes a list or its tiles are drawn.
+    var activity: TileActivity { tileSet.renderer.activity }
     private let core: ShapeTiler<PolylineState>
 
     public init(options: PolylineTilingOptions = .Default) {
