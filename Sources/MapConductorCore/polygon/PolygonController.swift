@@ -43,6 +43,12 @@ where Renderer.ActualPolygon == ActualPolygon {
 
     open func add(data: [PolygonState]) async {
         if polygonManager.isDestroyed { return }
+        // Busy from here, not only while the tiler routes: the list waits for
+        // the controller and its bookkeeping, and the collection's onAddEnd
+        // must not come in that gap. Once the map has the tiles, drawing them
+        // is what keeps the tiler busy.
+        let hold = TileActivityHold(tiler?.activity)
+        defer { hold.release() }
         let landed: [PolygonState] = await semaphore.withPermit {
             if polygonManager.isDestroyed { return [] }
             // The app's list: anything it no longer has can be added again later.
@@ -52,6 +58,7 @@ where Renderer.ActualPolygon == ActualPolygon {
             // `route` returns once the tile layer's URL template has been handed
             // to the map (the provider's `onTemplate` awaits its raster upsert).
             let tiled = await tiler?.route(data) ?? []
+            hold.release()
             tiledIds = tiled
             if !tiled.isEmpty, let tiler {
                 // Tiled polygons are on the map now. Report them before the

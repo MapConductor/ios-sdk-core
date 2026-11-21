@@ -57,10 +57,10 @@ struct AddProgressRequest {
     /// the content is rebuilt on every camera frame.
     let identity: UnsafeRawPointer?
     let count: Int
-    /// The list's ids and state objects. Walks the whole list; called only when
-    /// the list changed. Holds the list, so its storage cannot be reused while
-    /// ``identity`` is remembered.
-    let entries: () -> [(id: String, state: AnyObject)]
+    /// The list's state objects and a way to their ids. Walks the whole list;
+    /// called only when the list changed. Holds the list, so its storage
+    /// cannot be reused while ``identity`` is remembered.
+    let list: () -> AddProgressList
     /// The map's tilers for this kind, busy while they take a list or draw
     /// tiles. Filled in by the collection when it joins the content.
     var activity: [TileActivity] = []
@@ -79,8 +79,17 @@ struct AddProgressRequest {
         self.callbacks = callbacks
         identity = states.withUnsafeBufferPointer { UnsafeRawPointer($0.baseAddress) }
         count = states.count
-        entries = { states.map { (id: $0.id, state: $0 as AnyObject) } }
+        list = { AddProgressList(objects: states.map { $0 as AnyObject }, id: { states[$0].id }) }
     }
+}
+
+/// A collection's list as ``AddProgressTracker`` compares it with the last one.
+struct AddProgressList {
+    static let empty = AddProgressList(objects: [], id: { _ in "" })
+
+    let objects: [AnyObject]
+    /// The id of `objects[i]`.
+    let id: (Int) -> String
 }
 
 /// The states one collection handed over and how many of them are on the map.
@@ -90,7 +99,7 @@ final class AddProgressTracker {
 
     private var callbacks = AddProgressCallbacks()
     private var last: AddProgressRequest?
-    private var ids: Set<String> = []
+    private var lastList = AddProgressList.empty
     /// State objects handed over and not on the map yet.
     private var pending: [ObjectIdentifier: (id: String, state: AnyObject)] = [:]
     private var total = 0
@@ -130,26 +139,38 @@ final class AddProgressTracker {
         observe(request.activity)
         if let last, last.identity == request.identity, last.count == request.count { return }
         last = request
-        let entries = request.entries()
-        let nextIds = Set(entries.map(\.id))
-        let hadStates = !ids.isEmpty
-        let fresh = entries.filter { !ids.contains($0.id) }
-        ids = nextIds
-        if entries.isEmpty && !hadStates { return }
-        if !pending.isEmpty {
-            let before = pending.count
-            pending = pending.filter { nextIds.contains($0.value.id) }
-            total -= before - pending.count
+        let next = request.list()
+        let previous = lastList
+        lastList = next
+        let hadStates = !previous.objects.isEmpty
+        if next.objects.isEmpty && !hadStates { return }
+        let change = Self.compare(next, previous)
+        // States the list brought: not in the last list, not even as another
+        // object with the same id (that is an update).
+        let fresh: [(id: String, state: AnyObject)] = change.added.compactMap { i in
+            let id = next.id(i)
+            return change.removedIds.contains(id) ? nil : (id: id, state: next.objects[i])
+        }
+        if !pending.isEmpty, !change.removed.isEmpty {
+            // A state still coming that left the list no longer counts; one handed
+            // over again as a new object with the same id is followed by that
+            // object, which is the one the map reports.
+            var replacement: [String: AnyObject] = [:]
             if fresh.isEmpty {
-                // A state that is still coming may be handed over again as a new
-                // object with the same id; the map reports that object.
-                let pendingIds = Set(pending.values.map(\.id))
-                var rekeyed: [ObjectIdentifier: (id: String, state: AnyObject)] = [:]
-                for entry in entries where pendingIds.contains(entry.id) {
-                    rekeyed[ObjectIdentifier(entry.state)] = entry
-                }
-                pending = rekeyed
+                for i in change.added { replacement[next.id(i)] = next.objects[i] }
             }
+            let before = pending.count
+            var kept: [ObjectIdentifier: (id: String, state: AnyObject)] = [:]
+            for (key, entry) in pending {
+                if !change.removed.contains(key) {
+                    kept[key] = entry
+                } else if change.addedIds.contains(entry.id) {
+                    let state = replacement[entry.id] ?? entry.state
+                    kept[ObjectIdentifier(state)] = (id: entry.id, state: state)
+                }
+            }
+            pending = kept
+            total -= before - pending.count
         }
         if !fresh.isEmpty {
             pending = Dictionary(fresh.map { (ObjectIdentifier($0.state), $0) }, uniquingKeysWith: { a, _ in a })
@@ -163,6 +184,57 @@ final class AddProgressTracker {
             begin()
         }
         scheduleSettle()
+    }
+
+    /// How `next` differs from `previous`, by identity: which of `next` are new
+    /// objects (`added`, their indices), which objects of `previous` left
+    /// (`removed`), and the ids of each. A list changes by a filter or by new
+    /// states far more often than by reordering, so the two are walked side by
+    /// side, and nothing is hashed for the states that line up: a filter over
+    /// 723,800 circles built two sets of ids for 0.5 to 0.8 s on the main thread.
+    ///
+    /// The walk can take an object that is further on in `previous` for a new
+    /// one; that object then shows as removed too, with the same id, and the id
+    /// comparison below sorts it out. Only the speed depends on the walk.
+    private static func compare(_ next: AddProgressList, _ previous: AddProgressList) -> (
+        added: [Int], addedIds: Set<String>, removed: Set<ObjectIdentifier>, removedIds: Set<String>
+    ) {
+        let old = previous.objects
+        var matched = [Bool](repeating: false, count: old.count)
+        var added: [Int] = []
+        var cursor = 0
+        // Where a scan to the end last found nothing: objects missing there are
+        // taken as new without scanning again (a run of new states).
+        var exhaustedAt = -1
+        for (i, object) in next.objects.enumerated() {
+            var k = cursor
+            let near = min(old.count, cursor + 64)
+            while k < near, old[k] !== object { k += 1 }
+            if k == near {
+                // Past a run of removed states, or a new one.
+                guard exhaustedAt != cursor else {
+                    added.append(i)
+                    continue
+                }
+                while k < old.count, old[k] !== object { k += 1 }
+                if k == old.count {
+                    exhaustedAt = cursor
+                    added.append(i)
+                    continue
+                }
+            }
+            matched[k] = true
+            cursor = k + 1
+        }
+        var removed: Set<ObjectIdentifier> = []
+        var removedIds: Set<String> = []
+        for (p, object) in old.enumerated() where !matched[p] {
+            removed.insert(ObjectIdentifier(object))
+            // Only a new object can share an id with one that left.
+            if !added.isEmpty { removedIds.insert(previous.id(p)) }
+        }
+        let addedIds = removed.isEmpty ? [] : Set(added.map(next.id))
+        return (added, addedIds, removed, removedIds)
     }
 
     /// States reached the map (any collection's, any map's: only ours count).
@@ -236,8 +308,16 @@ final class AddProgressTracker {
         guard busy else { return }
         settleToken += 1
         let token = settleToken
-        DispatchQueue.main.asyncAfter(deadline: .now() + settleDelay) { [weak self] in
+        let due = DispatchTime.now() + settleDelay
+        DispatchQueue.main.asyncAfter(deadline: due) { [weak self] in
             guard let self, self.settleToken == token else { return }
+            // Late because the main thread was held: the hand-over that held it
+            // may have queued the work that keeps the map busy, so give that
+            // work the whole delay to show up.
+            if DispatchTime.now().uptimeNanoseconds > due.uptimeNanoseconds + 100_000_000 {
+                self.scheduleSettle()
+                return
+            }
             self.finishIfIdle()
         }
     }

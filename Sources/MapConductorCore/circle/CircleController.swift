@@ -55,15 +55,24 @@ where Renderer.ActualCircle == ActualCircle {
 
     open func add(data: [CircleState]) async {
         if circleManager.isDestroyed { return }
+        // Busy from here, not only while the tiler routes: the list waits for
+        // the controller and its bookkeeping, and the collection's onAddEnd
+        // must not come in that gap. Once the map has the tiles, drawing them
+        // is what keeps the tiler busy.
+        let hold = TileActivityHold(tiler?.activity)
+        defer { hold.release() }
         let landed: [CircleState] = await semaphore.withPermit {
             if circleManager.isDestroyed { return [] }
-            // The app's list: anything it no longer has can be added again later.
-            addedTracker.retain(Set(data.map(\.id)))
             var landed: [CircleState] = []
             let wasTiled = tiledIds
             // `route` returns once the tile layer's URL template has been handed
             // to the map (the provider's `onTemplate` awaits its raster upsert).
             let tiled = await tiler?.route(data) ?? []
+            hold.release()
+            // The app's list: anything it no longer has can be added again later.
+            // After the route, which the map's tiles wait for; before anything is
+            // admitted.
+            addedTracker.retain(Set(data.map(\.id)))
             circleManager.setTiledSource(tiler)
             if circleManager.isDestroyed { return [] }
             tiledIds = tiled
