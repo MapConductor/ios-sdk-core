@@ -415,4 +415,82 @@ final class CircleTilingTests: XCTestCase {
         XCTAssertEqual(controller.resolveTap(position: north(12))?.kind, .circle)
         await controller.clear()
     }
+
+    // MARK: - A filter over registered circles
+
+    /// The slots of the tile set the circles are in, as the next route would find them.
+    private func slots(_ tiler: CircleTiler, _ states: [CircleState]) -> [Int32] {
+        tiler.tileSet.core.registeredSlots(states) ?? []
+    }
+
+    /// A filter switches slots off instead of registering the circles again, and
+    /// the circles left out are neither drawn nor found; bringing them back
+    /// switches them on again. With zIndex in list order, as the antenna sample
+    /// has it, nothing about the circles is read.
+    func testAFilterSwitchesSlotsAndBringsTheCirclesBack() async {
+        let tiler = CircleTiler()
+        var templates: [String?] = []
+        tiler.onTemplate = { template, _ in templates.append(template) }
+        defer { tiler.dispose() }
+        let all = circles(4_500)
+        for (i, state) in all.enumerated() { state.zIndex = i }
+        _ = await tiler.route(all)
+        XCTAssertEqual(slots(tiler, all), all.indices.map(Int32.init))
+        let kept = all.enumerated().filter { $0.offset % 3 != 0 }.map(\.element)
+        let ids = await tiler.route(kept)
+        XCTAssertEqual(ids, Set(kept.map(\.id)))
+        // Still in the slots they were registered in: nothing was registered again.
+        XCTAssertEqual(slots(tiler, kept), all.indices.filter { $0 % 3 != 0 }.map(Int32.init))
+        XCTAssertNil(tiler.state("c0"))
+        XCTAssertTrue(tiler.state("c1") === all[1])
+        XCTAssertNotEqual(templates[templates.count - 1], templates[templates.count - 2], "a new version, so the map asks again")
+        let manager = CircleManager<NSObject>()
+        manager.setTiledSource(tiler)
+        XCTAssertNil(manager.find(position: all[0].center))
+        XCTAssertTrue(manager.find(position: all[1].center)?.state === all[1])
+
+        _ = await tiler.route(all)
+        XCTAssertEqual(slots(tiler, all), all.indices.map(Int32.init))
+        XCTAssertTrue(tiler.state("c0") === all[0])
+        XCTAssertTrue(manager.find(position: all[0].center)?.state === all[0])
+        manager.clear()
+    }
+
+    /// A circle written to since it was registered is read again, so its tiles
+    /// and taps follow the new values.
+    func testACircleWrittenToBetweenFiltersIsReadAgain() async throws {
+        let tiler = CircleTiler()
+        tiler.onTemplate = { _, _ in }
+        defer { tiler.dispose() }
+        let all = circles(3_000)
+        _ = await tiler.route(all)
+        all[5].radiusMeters = 30
+        XCTAssertEqual(slots(tiler, all)[5], -1, "written to: not taken as unchanged")
+        _ = await tiler.route(Array(all.dropFirst()))
+        // 25 m north: outside the radius it was registered with, inside the new
+        // one. The renderer draws what its storage holds there.
+        let center = all[5].center
+        let north = ShapeTileRenderer.toMercator([center.latitude + 25 / 111_320, center.longitude])
+        let drawnThere = tiler.tileSet.core.renderer.candidates(minX: north[0], minY: north[1], maxX: north[0], maxY: north[1])
+        let slot = try XCTUnwrap(slots(tiler, [all[5]]).first)
+        XCTAssertGreaterThanOrEqual(slot, 0)
+        XCTAssertTrue(drawnThere.contains(slot), "drawn with the new radius")
+    }
+
+    /// New objects with the same ids and values are compared with what is
+    /// drawn, and the tiles are kept (the circles stay in their slots).
+    func testNewObjectsWithTheSameValuesKeepTheTiles() async {
+        let tiler = CircleTiler()
+        tiler.onTemplate = { _, _ in }
+        defer { tiler.dispose() }
+        let all = circles(3_000)
+        _ = await tiler.route(all)
+        let registered = slots(tiler, all)
+        let again = circles(3_000)
+        XCTAssertTrue(slots(tiler, again).allSatisfy { $0 == -1 }, "other objects: not taken as registered")
+        _ = await tiler.route(Array(again.prefix(2_500)))
+        XCTAssertEqual(slots(tiler, Array(again.prefix(2_500))), Array(registered.prefix(2_500)))
+        XCTAssertTrue(tiler.state("c7") === again[7])
+        XCTAssertNil(tiler.state("c2600"))
+    }
 }

@@ -119,6 +119,7 @@ public final class CircleTileSet {
             zIndex: CircleTileSet.effectiveZIndex,
             fileBackedCircles: true,
             spatialKey: { CircleGeometryFile.mortonCellKey(latitude: $0.center.latitude, longitude: normalizeLngDegrees($0.center.longitude)) },
+            revision: { $0.revision },
             shape: { ShapeTileRenderer.Shape(CircleTileShape(state: $0)) }
         )
     }
