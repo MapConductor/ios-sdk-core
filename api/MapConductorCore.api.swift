@@ -287,9 +287,11 @@ public struct MapViewContent {
 public protocol TileProvider : AnyObject {
   func renderTile(request: MapConductorCore::TileRequest) -> Foundation::Data?
   func renderTile(request: MapConductorCore::TileRequest, isCancelled: () -> Swift::Bool) throws -> Foundation::Data?
+  func prepareTile(request: MapConductorCore::TileRequest, isCancelled: () -> Swift::Bool)
 }
 extension MapConductorCore::TileProvider {
   public func renderTile(request: MapConductorCore::TileRequest, isCancelled: () -> Swift::Bool) throws -> Foundation::Data?
+  public func prepareTile(request: MapConductorCore::TileRequest, isCancelled: () -> Swift::Bool)
 }
 public struct TileRequest : Swift::Hashable {
   public let x: Swift::Int

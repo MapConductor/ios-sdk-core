@@ -44,6 +44,17 @@ public final class LocalTileServer: @unchecked Sendable {
     private let renderGate: DispatchSemaphore
     private let renderWidth: Int
 
+    /**
+     How many tiles may be gathering their data at once, outside the render
+     lane (``TileProvider/prepareTile(request:isCancelled:)``).
+
+     Wider than the lane because preparing is waiting, not computing: a
+     viewport of tiles waiting on one slow connection costs threads, not CPU.
+     Bounded all the same, so a pinch that asks for a hundred tiles does not
+     park a hundred threads.
+     */
+    private let prepareGate = DispatchSemaphore(value: 32)
+
     /// Counters behind the once-a-second summary log.
     private let statsLock = NSLock()
     private var statsWindowStart = DispatchTime.now().uptimeNanoseconds
@@ -177,6 +188,9 @@ public final class LocalTileServer: @unchecked Sendable {
         isCancelled: @escaping @Sendable () -> Bool = { false }
     ) -> Data? {
         guard url.absoluteString.hasPrefix(baseUrl + "/") else { return nil }
+
+        prepareTile(path: url.path, sourceZoomOffset: Self.sourceZoomOffset(in: url.absoluteString), isCancelled: isCancelled)
+        if isCancelled() { return nil }
 
         let queuedAt = DispatchTime.now().uptimeNanoseconds
         while renderGate.wait(timeout: .now() + .milliseconds(10)) != .success {
@@ -443,6 +457,15 @@ public final class LocalTileServer: @unchecked Sendable {
             // gesture is generating tiles faster than the lane drains them,
             // which is the intended trade — the UI stays smooth and the tiles
             // arrive a beat later.
+            let gone = { @Sendable in
+                switch connection.state {
+                case .cancelled, .failed: return true
+                default: return false
+                }
+            }
+            // Data first, outside the lane: a tile waiting on the network
+            // must not hold a slot a tile on the device could draw in.
+            self.prepareTile(path: path, sourceZoomOffset: sourceZoomOffset, isCancelled: gone)
             self.renderGate.wait()
             let waitNanos = DispatchTime.now().uptimeNanoseconds - queuedAt
             self.statsLock.lock()
@@ -451,12 +474,6 @@ public final class LocalTileServer: @unchecked Sendable {
             self.statsLock.unlock()
 
             let renderStart = DispatchTime.now().uptimeNanoseconds
-            let gone = { @Sendable in
-                switch connection.state {
-                case .cancelled, .failed: return true
-                default: return false
-                }
-            }
             let outcome = self.resolveTile(path: path, sourceZoomOffset: sourceZoomOffset, isCancelled: gone)
             let renderNanos = DispatchTime.now().uptimeNanoseconds - renderStart
             self.renderGate.signal()
@@ -761,6 +778,37 @@ public final class LocalTileServer: @unchecked Sendable {
         let value = URLComponents(string: url)?.queryItems?
             .first(where: { $0.name == "sourceZoomOffset" })?.value
         return max(0, min(8, Int(value ?? "0") ?? 0))
+    }
+
+    /// Runs the provider's ``TileProvider/prepareTile(request:isCancelled:)``
+    /// for a tile path, under ``prepareGate``. Anything that is not a tile of a
+    /// registered route is left for ``resolveTile`` to answer.
+    private func prepareTile(path: String, sourceZoomOffset: Int, isCancelled: @escaping @Sendable () -> Bool) {
+        guard let (provider, request) = tileTarget(path: path, sourceZoomOffset: sourceZoomOffset) else { return }
+        while prepareGate.wait(timeout: .now() + .milliseconds(10)) != .success {
+            if isCancelled() { return }
+        }
+        defer { prepareGate.signal() }
+        provider.prepareTile(request: request, isCancelled: isCancelled)
+    }
+
+    /// The provider and request a tile path names, read the way ``resolveTile`` reads it.
+    private func tileTarget(path: String, sourceZoomOffset: Int) -> (TileProvider, TileRequest)? {
+        let segments = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .split(separator: "/").map(String.init)
+        guard segments.count >= 6, segments[0] == "tiles" else { return nil }
+        let hasCacheKey = segments.count >= 7
+        let zIndex = hasCacheKey ? 4 : 3
+        guard
+            Int(segments[2]) != nil,
+            let z = Int(segments[zIndex]),
+            let x = Int(segments[zIndex + 1]),
+            let coordinate = parseTileCoordinate(segments[zIndex + 2]),
+            let provider = getProvider(routeId: segments[1])
+        else { return nil }
+        return (provider, TileRequest(
+            x: x, y: coordinate.y, z: z, pixelRatio: coordinate.pixelRatio, sourceZoomOffset: sourceZoomOffset
+        ))
     }
 
     private func resolveTile(

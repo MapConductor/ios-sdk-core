@@ -34,6 +34,21 @@ public protocol TileProvider: AnyObject {
      requirement, so nothing already written needs to change.
      */
     func renderTile(request: TileRequest, isCancelled: () -> Bool) throws -> Data?
+
+    /**
+     Gathers what the tile needs from elsewhere -- source data, fonts -- before
+     it is drawn.
+
+     The server calls this *outside* its render lane and then ``renderTile``
+     inside it. A provider that has to wait on the network should wait here:
+     the lane is a handful of slots sized for CPU work, and a tile parked in
+     one for a slow round trip holds back tiles that could be drawn at once
+     from what is already on the device. Waiting here lets each tile be drawn
+     once, complete, instead of drawn early and replaced.
+
+     Optional; most providers have nothing to fetch.
+     */
+    func prepareTile(request: TileRequest, isCancelled: () -> Bool)
 }
 
 public extension TileProvider {
@@ -42,4 +57,7 @@ public extension TileProvider {
     func renderTile(request: TileRequest, isCancelled: () -> Bool) throws -> Data? {
         renderTile(request: request)
     }
+
+    /// Nothing to gather: everything is drawn from what the provider holds.
+    func prepareTile(request: TileRequest, isCancelled: () -> Bool) {}
 }
