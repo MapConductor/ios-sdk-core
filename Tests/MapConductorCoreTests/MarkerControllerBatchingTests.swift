@@ -114,7 +114,7 @@ final class MarkerControllerBatchingTests: XCTestCase {
         await controller.add(data: initial)
 
         // 位置を動かして fingerPrint を変える
-        let moved = initial.map { $0.copy(position: GeoPoint(latitude: 36.0, longitude: 140.0)) }
+        let moved = initial.map { $0.copy(id: $0.id, position: GeoPoint(latitude: 36.0, longitude: 140.0)) }
         await controller.add(data: moved)
 
         XCTAssertEqual(renderer.changeBatchSizes, [500, 500, 250])

@@ -175,6 +175,12 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
     ///
     /// The double optional is the same trick `zIndex` uses: `nil` means "not
     /// passed, keep mine", `.some(nil)` means "explicitly clear the animation".
+    ///
+    /// `id` is not carried over: it is recomputed from the copied contents
+    /// unless one is passed. Keeping it made the renderer, which keys markers by
+    /// id, treat the copy as an update of the original, so a marker added with
+    /// `copy()` replaced the original instead of appearing next to it. Pass
+    /// `id: state.id` to move the same marker.
     public func copy(
         id: String? = nil,
         position: GeoPoint? = nil,
@@ -194,7 +200,7 @@ public final class MarkerState: ObservableObject, Identifiable, Equatable, Hasha
     ) -> MarkerState {
         // 各プロパティを個別の変数に展開する
         // これによりコンパイラの型推論の負荷を分散させます
-        let finalId = id ?? self.id
+        let finalId = id
         let finalPosition = position ?? self.position
         let finalExtra = extra ?? self.extra
         let finalIcon = icon ?? self.icon

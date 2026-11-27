@@ -107,6 +107,11 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         self.onAdded = onAdded
     }
 
+    /// `id` is not carried over: it is recomputed from the copied contents
+    /// unless one is passed. Keeping it made the renderer, which keys overlays
+    /// by id, treat the copy as an update of the original, so a polygon added
+    /// with `copy()` replaced the original instead of appearing next to it.
+    /// Pass `id: state.id` to update the same overlay.
     public func copy(
         points: [GeoPointProtocol]? = nil,
         holes: [[GeoPointProtocol]]? = nil,
@@ -123,7 +128,7 @@ public final class PolygonState: ObservableObject, Identifiable, Equatable, Hash
         PolygonState(
             points: points ?? self.points,
             holes: holes ?? self.holes,
-            id: id ?? self.id,
+            id: id,
             strokeColor: strokeColor ?? self.strokeColor,
             strokeWidth: strokeWidth ?? self.strokeWidth,
             fillColor: fillColor ?? self.fillColor,
