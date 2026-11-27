@@ -9,7 +9,7 @@ public extension PolygonState {
     /// who need geometrically-correct polygon data.
     func unionHoles() -> PolygonState {
         guard let merged = unionHoleRings(holes) else { return self }
-        return copy(holes: merged.map { $0.map { $0 as GeoPointProtocol } })
+        return copy(holes: merged.map { $0.map { $0 as GeoPointProtocol } }, id: id)
     }
 
     /// ``unionHoles()`` を MainActor の外で回すバックグラウンド版。
@@ -30,7 +30,7 @@ public extension PolygonState {
             unionHoleRings(snapshot.map { $0.map { $0 as GeoPointProtocol } })
         }.value
         guard let merged else { return self }
-        return copy(holes: merged.map { $0.map { $0 as GeoPointProtocol } })
+        return copy(holes: merged.map { $0.map { $0 as GeoPointProtocol } }, id: id)
     }
 
     /// In-place variant: mutates `holes` to the merged result and returns self.

@@ -288,7 +288,7 @@ final class CircleTileRendererTests: XCTestCase {
         let p1 = try await pixel([a, b], overlap.0, overlap.1)
         XCTAssertTrue(p1.0 > 200 && p1.2 < 50, "\(p1)")
         // The same zIndex: the order given.
-        let a0 = a.copy(zIndex: 0)
+        let a0 = a.copy(id: a.id, zIndex: 0)
         let p2 = try await pixel([a0, b], overlap.0, overlap.1)
         XCTAssertTrue(p2.2 > 200 && p2.0 < 50, "\(p2)")
         // No zIndex: the automatic one from the centre, the southern circle on top, whatever the order.

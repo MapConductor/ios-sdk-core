@@ -86,6 +86,11 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
         self.onAdded = onAdded
     }
 
+    /// `id` is not carried over: it is recomputed from the copied contents
+    /// unless one is passed. Keeping it made the renderer, which keys overlays
+    /// by id, treat the copy as an update of the original, so a polyline added
+    /// with `copy()` replaced the original instead of appearing next to it.
+    /// Pass `id: state.id` to update the same overlay.
     public func copy(
         points: [GeoPointProtocol]? = nil,
         id: String? = nil,
@@ -99,7 +104,7 @@ public final class PolylineState: ObservableObject, Identifiable, Equatable, Has
     ) -> PolylineState {
         PolylineState(
             points: points ?? self.points,
-            id: id ?? self.id,
+            id: id,
             strokeColor: strokeColor ?? self.strokeColor,
             strokeWidth: strokeWidth ?? self.strokeWidth,
             geodesic: geodesic ?? self.geodesic,

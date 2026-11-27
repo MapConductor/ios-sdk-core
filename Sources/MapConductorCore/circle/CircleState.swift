@@ -114,6 +114,11 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
         changedFields = 0
     }
 
+    /// `id` is not carried over: it is recomputed from the copied contents
+    /// unless one is passed. Keeping it made the renderer, which keys overlays
+    /// by id, treat the copy as an update of the original, so a circle added
+    /// with `copy()` replaced the original instead of appearing next to it.
+    /// Pass `id: state.id` to update the same overlay.
     public func copy(
         center: GeoPointProtocol? = nil,
         radiusMeters: Double? = nil,
@@ -136,7 +141,7 @@ public final class CircleState: ObservableObject, Identifiable, Equatable, Hasha
             strokeColor: strokeColor ?? self.strokeColor,
             strokeWidth: strokeWidth ?? self.strokeWidth,
             fillColor: fillColor ?? self.fillColor,
-            id: id ?? self.id,
+            id: id,
             zIndex: zIndex ?? self.zIndex,
             extra: extra ?? self.extra,
             onClick: onClick ?? self.onClick,

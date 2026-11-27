@@ -52,10 +52,32 @@ final class MarkerStateCopyTests: XCTestCase {
         )
         let copied = original.copy()
 
-        XCTAssertEqual(copied.id, "m1")
         XCTAssertEqual(copied.zIndex, 7)
         XCTAssertFalse(copied.clickable)
         XCTAssertTrue(copied.draggable)
         XCTAssertEqual(copied.getAnimation(), .Bounce)
+    }
+
+    /// id は引き継がず、新しい中身から計算し直す。描画側はマーカーを id で区別するので、
+    /// 引き継ぐと copy で増やしたマーカーが元のマーカーを上書きし、1 個にしか見えなかった。
+    func testCopyRecomputesId() {
+        let base = MarkerState(position: GeoPoint(latitude: 35.0, longitude: 139.0))
+        let moved = base.copy(position: GeoPoint(latitude: 36.0, longitude: 140.0))
+
+        XCTAssertNotEqual(moved.id, base.id)
+        XCTAssertEqual(moved.id, MarkerState(position: GeoPoint(latitude: 36.0, longitude: 140.0)).id)
+    }
+
+    func testCopyDoesNotCarryExplicitIdOver() {
+        let moved = makeState().copy(position: GeoPoint(latitude: 36.0, longitude: 140.0))
+
+        XCTAssertNotEqual(moved.id, "m1")
+    }
+
+    func testCopyUsesPassedId() {
+        let original = makeState()
+
+        XCTAssertEqual(original.copy(id: "m1", position: GeoPoint(latitude: 36.0, longitude: 140.0)).id, "m1")
+        XCTAssertEqual(original.copy(id: "m2").id, "m2")
     }
 }

@@ -177,6 +177,12 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
     }
 
     /// `image` を変えなければ、`imageUrl` も引き継ぐ（読み込み中なら写しの方でも読み終えたら入る）。
+    ///
+    /// `id` is not carried over: it is recomputed from the copied contents
+    /// unless one is passed. Keeping it made the renderer, which keys overlays
+    /// by id, treat the copy as an update of the original, so a ground image added
+    /// with `copy()` replaced the original instead of appearing next to it.
+    /// Pass `id: state.id` to update the same overlay.
     public func copy(
         bounds: GeoRectBounds? = nil,
         image: UIImage? = nil,
@@ -192,7 +198,7 @@ public final class GroundImageState: ObservableObject, Identifiable, Equatable, 
             image: image ?? self.image,
             opacity: opacity ?? self.opacity,
             tileSize: tileSize ?? self.tileSize,
-            id: id ?? self.id,
+            id: id,
             extra: extra ?? self.extra,
             onClick: onClick ?? self.onClick,
             onAdded: onAdded ?? self.onAdded

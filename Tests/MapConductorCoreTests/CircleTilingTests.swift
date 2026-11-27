@@ -51,7 +51,7 @@ final class CircleTilingTests: XCTestCase {
         XCTAssertTrue(manager.getEntity("shared-123")?.state === states[123])
         XCTAssertTrue(manager.find(position: states[123].center)?.state === states[123])
         XCTAssertTrue(manager.nativeEntities().isEmpty)
-        let replacement = states[25].copy(radiusMeters: 8)
+        let replacement = states[25].copy(radiusMeters: 8, id: states[25].id)
         tiler.update(replacement)
         XCTAssertTrue(manager.getEntity("shared-25")?.state === replacement)
         tiler.remove("shared-123")
